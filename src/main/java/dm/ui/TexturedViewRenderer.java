@@ -253,13 +253,13 @@ public final class TexturedViewRenderer implements ViewRenderer {
 
     /**
      * Decorations that sit at the foot of the wall rather than around its
-     * middle: the drain grate (34), checked against the original, and the
+     * middle: the moss tuft (33) and the drain grate (34), checked against the original, and the
      * full-height pictures (the cracked and creature walls, 56-58), which
      * would otherwise hang below the floor line. DM keeps a coordinate set per
      * decoration in its program; until more are known, everything else uses
      * the zone centres.
      */
-    private static final Set<Integer> FLOOR_LEVEL_ORNAMENTS = Set.of(34);
+    private static final Set<Integer> FLOOR_LEVEL_ORNAMENTS = Set.of(33, 34);
 
     private static boolean standsOnFloor(int ornament, BufferedImage img) {
         return FLOOR_LEVEL_ORNAMENTS.contains(ornament) || img.getHeight() >= FRONT[1].height * 0.9;
