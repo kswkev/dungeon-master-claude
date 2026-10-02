@@ -317,6 +317,11 @@ public final class TexturedViewRenderer implements ViewRenderer {
     static final int FIRST_DOOR_ORNAMENT = 441;
     /** The button set into the right-hand door pillar. */
     static final int DOOR_BUTTON = 125;
+    /** Button size at D1 relative to its graphic, and its height up the pillar (0 = top of the panel). */
+    private static final double DOOR_BUTTON_SCALE = 0.6;
+    private static final double DOOR_BUTTON_HEIGHT = 0.35;
+    /** How far right of the pillar's centre the button sits at D1, in pixels (scaled with distance). */
+    private static final int DOOR_BUTTON_RIGHT = 4;
 
     /**
      * Door frame pillars and lintel, plus the panel unless the door is open or
@@ -362,11 +367,14 @@ public final class TexturedViewRenderer implements ViewRenderer {
             paste(g, DOOR_PILLAR[d], panel.x + panel.width + shift, DOOR_PILLAR_Y[d], true);
             BufferedImage buttonImg = button ? art.sprite(DOOR_BUTTON) : null;
             if (buttonImg != null) {
-                double scale = panel.width / (double) DOOR_PANEL[1].width;
-                int w = (int) Math.round(buttonImg.getWidth() * scale);
-                int h = (int) Math.round(buttonImg.getHeight() * scale);
-                int px = panel.x + panel.width + shift + (pillar.getWidth() - w) / 2;
-                g.drawImage(buttonImg, px, panel.y + panel.height / 2 - h / 2, w, h, null);
+                double scale = DOOR_BUTTON_SCALE * panel.width / (double) DOOR_PANEL[1].width;
+                int w = Math.max(1, (int) Math.round(buttonImg.getWidth() * scale));
+                int h = Math.max(1, (int) Math.round(buttonImg.getHeight() * scale));
+                double distance = panel.width / (double) DOOR_PANEL[1].width;
+                int px = panel.x + panel.width + shift + (pillar.getWidth() - w) / 2
+                        + (int) Math.round(DOOR_BUTTON_RIGHT * distance);
+                int py = panel.y + (int) Math.round(panel.height * DOOR_BUTTON_HEIGHT) - h / 2;
+                g.drawImage(buttonImg, px, py, w, h, null);
             }
         }
         if (DOOR_LINTEL[d] >= 0) {
