@@ -2,6 +2,7 @@ package dm.ui;
 
 import dm.data.GraphicsFile;
 import dm.data.IndexedImage;
+import dm.data.Sound;
 import dm.model.Item;
 
 import java.awt.Color;
@@ -12,7 +13,7 @@ import java.util.List;
 import java.util.Map;
 
 /**
- * Original artwork from GRAPHICS.DAT, converted to Java images on demand.
+ * Original artwork and sounds from GRAPHICS.DAT, images converted to Java images on demand.
  * When the file is missing every accessor returns null and callers draw
  * placeholders instead, so the game still runs.
  */
@@ -60,6 +61,11 @@ public final class Art {
 
     public boolean available() {
         return gfx != null;
+    }
+
+    /** Sound entry {@code index}, or null when it isn't available. */
+    public Sound sound(int index) {
+        return gfx == null ? null : gfx.sound(index);
     }
 
     /** Entry {@code index} as an opaque image, or null. */

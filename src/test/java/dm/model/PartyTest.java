@@ -5,6 +5,7 @@ import org.junit.jupiter.api.Test;
 import java.util.ArrayList;
 import java.util.List;
 
+import static org.junit.jupiter.api.Assertions.assertArrayEquals;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -126,6 +127,26 @@ class PartyTest {
         assertTrue(p.recruit(hall.mirrors().get(0)));
         assertFalse(p.recruit(hall.mirrors().get(0)));
         assertEquals(1, p.members().size());
+    }
+
+    @Test
+    void bumpHurtsOnlyTheFrontRow() {
+        DungeonMap hall = hallWithMirrors(3);
+        Party p = new Party(hall, 1, 1, Direction.NORTH);
+        for (ChampionMirror m : hall.mirrors()) {
+            p.recruit(m);
+        }
+        int[] damage = p.bump();
+        assertArrayEquals(new int[] {1, 1, 0}, damage);
+        assertEquals(59, p.members().get(0).health());
+        assertEquals(59, p.members().get(1).health());
+        assertEquals(60, p.members().get(2).health(), "back row is untouched");
+    }
+
+    @Test
+    void bumpWithNoPartyDoesNothing() {
+        Party p = new Party(MAP, 1, 1, Direction.NORTH);
+        assertEquals(0, p.bump().length);
     }
 
     @Test

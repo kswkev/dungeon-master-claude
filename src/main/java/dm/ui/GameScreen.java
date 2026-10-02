@@ -1,5 +1,7 @@
 package dm.ui;
 
+import dm.data.GraphicsFile;
+import dm.data.Sound;
 import dm.model.ChampionMirror;
 import dm.model.Party;
 
@@ -7,6 +9,7 @@ import java.awt.BasicStroke;
 import java.awt.Color;
 import java.awt.Graphics2D;
 import java.awt.Rectangle;
+import java.util.function.LongSupplier;
 
 /**
  * The 320x200 game screen: what to draw and how clicks are routed, with no
@@ -20,6 +23,8 @@ public final class GameScreen {
 
     public static final int WIDTH = 320;
     public static final int HEIGHT = 200;
+    /** How long the damage burst stays on a champion's box after a bump. */
+    public static final int DAMAGE_SHOWN_MS = 900;
 
     private final Party party;
     private final boolean debug;
@@ -27,20 +32,42 @@ public final class GameScreen {
     private final MovementPanel arrows = new MovementPanel();
     private final ChampionBars bars;
     private final CharacterSheet sheet;
+    private final SoundPlayer sounds;
+    private final Sound bumpSound;
+    private LongSupplier clock = System::currentTimeMillis;
     private Runnable onBump = () -> { };
     private boolean bumped;
 
     public GameScreen(Party party, Art art, boolean debug) {
+        this(party, art, SoundPlayer.silent(), debug);
+    }
+
+    public GameScreen(Party party, Art art, SoundPlayer sounds, boolean debug) {
         this.party = party;
         this.debug = debug;
         this.view = new DungeonViewRenderer(art);
         this.bars = new ChampionBars(art);
         this.sheet = new CharacterSheet(art);
+        this.sounds = sounds;
+        this.bumpSound = art.sound(GraphicsFile.SOUND_BUMP);
     }
 
-    /** Called when a blocked move starts the red flash; the caller clears it with {@link #clearBump}. */
+    /**
+     * Called when a move is blocked. The caller clears the red flash with
+     * {@link #clearBump} and repaints once the damage burst has expired
+     * ({@link #DAMAGE_SHOWN_MS}).
+     */
     public void setOnBump(Runnable onBump) {
         this.onBump = onBump;
+    }
+
+    /** Replaces the millisecond clock, for tests. */
+    public void setClock(LongSupplier clock) {
+        this.clock = clock;
+    }
+
+    public ChampionBars bars() {
+        return bars;
     }
 
     public void clearBump() {
@@ -125,8 +152,7 @@ public final class GameScreen {
             case STRAFE_RIGHT -> party.move(Party.Move.RIGHT);
         };
         if (!moved) {
-            bumped = true;
-            onBump.run();
+            bump();
         }
         if (debug) {
             System.out.printf("%s -> (%d,%d) facing %s%s%n", action, party.x(), party.y(), party.facing(),
@@ -134,12 +160,31 @@ public final class GameScreen {
         }
     }
 
+    /** DM's wall bump: the thud, damage to the front row with a burst on their boxes, plus the red flash. */
+    private void bump() {
+        sounds.play(bumpSound);
+        int[] damage = party.bump();
+        long until = clock.getAsLong() + DAMAGE_SHOWN_MS;
+        for (int i = 0; i < damage.length; i++) {
+            if (damage[i] > 0) {
+                bars.showDamage(i, damage[i], until);
+                if (debug) {
+                    System.out.printf("%s takes %d damage (health %d)%n",
+                            party.members().get(i).name(), damage[i], party.members().get(i).health());
+                }
+            }
+        }
+        bumped = true;
+        onBump.run();
+    }
+
     public void render(Graphics2D g) {
         g.setColor(Color.BLACK);
         g.fillRect(0, 0, WIDTH, HEIGHT);
         drawPlaceholders(g);
         ChampionMirror viewed = sheet.candidate();
-        bars.draw(g, party.members(), sheet.champion(), viewed == null ? null : viewed.champion());
+        bars.draw(g, party.members(), sheet.champion(), viewed == null ? null : viewed.champion(),
+                clock.getAsLong());
         if (sheet.isOpen()) {
             sheet.draw(g);
         } else {

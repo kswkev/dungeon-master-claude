@@ -21,7 +21,8 @@ import java.util.Map;
  *   entries     back to back
  * </pre>
  * Images are decoded on demand by {@link ImageDecoder}. Non-image entries
- * (sounds, tables) live at the end of the file.
+ * live at the end of the file: sounds ({@link #sound}), the object names,
+ * and data tables.
  */
 public final class GraphicsFile {
 
@@ -35,7 +36,17 @@ public final class GraphicsFile {
     public static final int ICON_SHEET_COUNT = 7;
     public static final int PORTRAITS = 26;
     public static final int MIRROR_FRONT = 346;
+    /** 32x29 red burst drawn over a champion's status box when they take damage. */
+    public static final int DAMAGE_TO_CHAMPION = 16;
     public static final int OBJECT_NAMES = 694;
+
+    /** Sound entries: 8-bit PCM with a big-endian sample count in front. */
+    public static final int FIRST_SOUND = 671;
+    public static final int LAST_SOUND = 712;
+    /** The thud when the party walks into a wall; confirmed by ear against the original. */
+    public static final int SOUND_BUMP = 687;
+    /** Playback rate of the PC samples. */
+    public static final int SOUND_SAMPLE_RATE = 5500;
 
     private final byte[] data;
     private final int[] offsets;
@@ -96,6 +107,25 @@ public final class GraphicsFile {
                 return null;
             }
         });
+    }
+
+    /**
+     * Decodes entry {@code index} as a sound, or returns null if it isn't one.
+     * Layout: big-endian sample count, then that many unsigned 8-bit samples
+     * (the entry may be padded by a byte or two after them).
+     */
+    public Sound sound(int index) {
+        if (index < FIRST_SOUND || index > LAST_SOUND || index >= offsets.length || sizes[index] < 2) {
+            return null;
+        }
+        int start = offsets[index];
+        int count = ((data[start] & 0xFF) << 8) | (data[start + 1] & 0xFF);
+        if (count == 0 || 2 + count > sizes[index]) {
+            return null;
+        }
+        byte[] pcm = new byte[count];
+        System.arraycopy(data, start + 2, pcm, 0, count);
+        return new Sound(pcm, SOUND_SAMPLE_RATE);
     }
 
     /** Object names indexed by icon number (several icons can share a name). */

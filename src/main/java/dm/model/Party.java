@@ -20,6 +20,13 @@ public final class Party {
     }
 
     public static final int MAX_MEMBERS = 4;
+    /** Champions in the front row; the first two recruits stand there, as in DM. */
+    public static final int FRONT_ROW = 2;
+    /**
+     * Damage for walking into a wall. In DM this is 1 point reduced by torso
+     * and leg armour; armour values aren't modelled yet, so it is a flat 1.
+     */
+    public static final int BUMP_DAMAGE = 1;
 
     private final DungeonMap map;
     private final List<Champion> members = new ArrayList<>();
@@ -72,6 +79,18 @@ public final class Party {
     public ChampionMirror facingMirror() {
         ChampionMirror m = map.mirrorAt(x + facing.dx, y + facing.dy, facing.opposite());
         return m == null || m.taken() ? null : m;
+    }
+
+    /**
+     * Walking into a wall hurts the front row, who hit it. Returns the damage
+     * each member took, indexed like {@link #members()} (0 for the back row).
+     */
+    public int[] bump() {
+        int[] damage = new int[members.size()];
+        for (int i = 0; i < Math.min(FRONT_ROW, members.size()); i++) {
+            damage[i] = members.get(i).takeDamage(BUMP_DAMAGE);
+        }
+        return damage;
     }
 
     public void turnLeft() {

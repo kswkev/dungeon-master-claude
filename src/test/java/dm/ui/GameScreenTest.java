@@ -29,6 +29,9 @@ class GameScreenTest {
     private ChampionMirror mirror;
     private Party party;
     private GameScreen screen;
+    private int soundsPlayed;
+    private int bumps;
+    private long now = 1_000;
 
     @BeforeEach
     void setUp() {
@@ -41,8 +44,51 @@ class GameScreenTest {
         }
         mirror = new ChampionMirror(1, 0, Direction.SOUTH, Champion.parse(ELIJA, 0));
         party = new Party(new DungeonMap(0, squares, List.of(mirror)), 1, 1, Direction.NORTH);
-        screen = new GameScreen(party, Art.none(), false);
+        screen = new GameScreen(party, Art.none(), sound -> soundsPlayed++, false);
+        screen.setClock(() -> now);
+        screen.setOnBump(() -> bumps++);
         render();
+    }
+
+    private void pressForward() {
+        screen.press(MovementPanel.AREA.x + 40, MovementPanel.AREA.y + 10);
+        screen.release();
+    }
+
+    private void recruitElija() {
+        clickPortrait();
+        screen.press(VIEW.x + 120, VIEW.y + 128); // RESURRECT
+        render();
+    }
+
+    @Test
+    void bumpWithNoPartyOnlyPlaysTheThud() {
+        pressForward(); // the mirror wall is straight ahead
+        assertEquals(1, soundsPlayed);
+        assertEquals(1, bumps, "red flash still triggers");
+        assertEquals(1, party.y());
+    }
+
+    @Test
+    void bumpDamagesTheFrontRowAndShowsTheBurst() {
+        recruitElija();
+        Champion elija = party.members().get(0);
+        pressForward();
+        assertEquals(1, soundsPlayed);
+        assertEquals(elija.maxHealth() - 1, elija.health());
+        assertEquals(1, screen.bars().damageShown(0, now));
+        now += GameScreen.DAMAGE_SHOWN_MS;
+        assertEquals(0, screen.bars().damageShown(0, now), "burst expires");
+    }
+
+    @Test
+    void successfulMovesDoNotBump() {
+        party.turnRight();
+        party.turnRight(); // face south, down the corridor
+        pressForward();
+        assertEquals(2, party.y());
+        assertEquals(0, soundsPlayed);
+        assertEquals(0, bumps);
     }
 
     private void render() {

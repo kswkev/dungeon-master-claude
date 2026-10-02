@@ -25,10 +25,10 @@ public final class GameWindow extends JFrame {
     private static final int DEFAULT_SCALE = 3;
     private static final int BUMP_FLASH_MS = 150;
 
-    public GameWindow(Party party, Art art, boolean debug) {
+    public GameWindow(Party party, Art art, SoundPlayer sounds, boolean debug) {
         super("Dungeon Master - Level " + (party.map().level() + 1));
         setDefaultCloseOperation(EXIT_ON_CLOSE);
-        add(new Screen(new GameScreen(party, art, debug)));
+        add(new Screen(new GameScreen(party, art, sounds, debug)));
         pack();
         setLocationRelativeTo(null);
     }
@@ -48,7 +48,13 @@ public final class GameWindow extends JFrame {
                 repaint();
             });
             bumpTimer.setRepeats(false);
-            game.setOnBump(bumpTimer::restart);
+            // Repaint once more when the damage burst on the champion boxes expires.
+            Timer damageTimer = new Timer(GameScreen.DAMAGE_SHOWN_MS + 20, e -> repaint());
+            damageTimer.setRepeats(false);
+            game.setOnBump(() -> {
+                bumpTimer.restart();
+                damageTimer.restart();
+            });
 
             MouseAdapter mouse = new MouseAdapter() {
                 @Override
