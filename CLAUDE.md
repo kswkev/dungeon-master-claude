@@ -14,8 +14,9 @@ A Java/Swing remake of FTL's *Dungeon Master* (1988), built sprint by sprint.
 - Sprint 7: up/down stair graphics fixed (#8), champion mirrors drawn on side walls (#9), and moving items between inventory cells with the item icon as the mouse pointer.
 - Sprint 8: items on the floor. They are drawn at DM's own positions (decoded from GRAPHICS.DAT's zone table), can be picked up from and dropped on the party's square, and can be thrown.
 - Sprint 9: wall interaction (switches, buttons, keyholes, coin slots, torch holders, alcoves, door buttons, AND/OR gates, pits as targets), front wall decorations at DM's positions, and hand clicks in the status boxes (#12).
+- Sprint 10: stairs between levels.
 
-Stairs, pit and teleporter behaviour, combat and spells are not implemented yet.
+Pit and teleporter behaviour, combat and spells are not implemented yet.
 
 ## Commands
 
@@ -50,6 +51,7 @@ Code lives under `src/main/java/dm/`, in three layers.
   - the party starts on a walkable square.
 - Add new format knowledge as further checks rather than special cases for one platform.
 - The javadoc on `DungeonFile` documents the file layout.
+- Each map definition carries the map's X/Y offset (two bytes after the first 4 skipped bytes), its position in dungeon-wide coordinates (`DungeonMap.offsetX/offsetY`). Every staircase's partner is at the same dungeon-wide position one level up or down.
 - Squares are stored column-major (`[x][y]`), one byte each. Bits 5-7 hold the element type and bits 0-4 hold attributes. Bit 4 means the square has a thing list.
 - **Things** (`Thing`, `Thing.Store`):
   - A thing id packs the cell (bits 14-15), type (10-13) and index (0-9). Each record's first word links to the next thing, and 0xFFFE ends the list.
@@ -110,6 +112,12 @@ Code lives under `src/main/java/dm/`, in three layers.
 - `DungeonMap` returns `Square.SOLID` for out-of-bounds squares. `DungeonMap.fromAscii` / `toAscii` build test maps and produce the debug dump. Its character legend is used by the tests.
 - `Direction` follows DM's encoding: 0 = north, numbered clockwise. North is -Y.
 - `Party.Move` is relative to the facing (forward, right, back, left).
+- **Stairs:** `Party` holds every map (`Party(maps, index, …)`; the single-map constructor is for tests).
+  - Stepping onto stairs finds the partner stairs one level up or down at the same dungeon-wide position.
+  - The party lands on that staircase's `stairsExit`: the open neighbour along its axis (`Square.runsNorthSouth`), facing away from the stairs.
+  - Floor sensors run on the square left and on the square arrived at. `StepResult.levelChanged` is set.
+  - Stairs without a partner block like a wall.
+  - Only the current map ticks.
 - `Party` holds up to 4 `Champion`s. `recruit(mirror)` adds the champion and marks the `ChampionMirror` as taken, so it renders empty. `facingMirror()` is the untaken mirror on the adjacent wall straight ahead.
 - **Formation:** `members()` is the recruit order, which is also the colour and status-box order. `at(position)` is the formation, using DM's cells: `FRONT_LEFT` 0, `FRONT_RIGHT` 1, `BACK_RIGHT` 2, `BACK_LEFT` 3. `bump(move)` damages the two positions on the side that hit the wall.
 - **Doors and sensors in `DungeonMap`:**

@@ -486,6 +486,29 @@ class GameScreenTest {
     }
 
     @Test
+    void theForwardArrowTakesTheStairs() {
+        // Level 0: down stairs at (1,1), running north-south, entered from (1,2).
+        DungeonMap top = DungeonMap.fromAscii(0, "###", "#.#", "#.#", "###");
+        Square[][] a = new Square[3][4];
+        Square[][] b = new Square[3][4];
+        for (int x = 0; x < 3; x++) {
+            for (int y = 0; y < 4; y++) {
+                a[x][y] = x == 1 && y == 1 ? new Square((3 << 5) | 8) : top.get(x, y);
+                b[x][y] = x == 1 && y == 1 ? new Square((3 << 5) | 4 | 8) : top.get(x, y);
+            }
+        }
+        DungeonMap upper = new DungeonMap(0, a);
+        DungeonMap lower = new DungeonMap(1, b);
+        Party p = new Party(List.of(upper, lower), 0, 1, 2, Direction.NORTH);
+        GameScreen s = new GameScreen(p, Art.none(), sound -> soundsPlayed++, false);
+        s.press(MovementPanel.AREA.x + 40, MovementPanel.AREA.y + 10);
+        assertSame(lower, p.map());
+        assertEquals(1, p.level());
+        assertEquals(2, p.y(), "beside the up stairs, at the open end");
+        assertEquals(Direction.SOUTH, p.facing(), "facing away from them");
+    }
+
+    @Test
     void arrowsAreIgnoredWhileSheetIsOpen() {
         clickPortrait();
         party.turnRight();

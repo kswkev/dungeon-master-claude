@@ -125,12 +125,14 @@ public final class DungeonFile {
         int[] graphicsSets = new int[mapCount];
         int[] ornamentCounts = new int[mapCount];
         int[] otherCounts = new int[mapCount];
+        int[] offsetX = new int[mapCount];
+        int[] offsetY = new int[mapCount];
         int columnCount = 0;
         for (int m = 0; m < mapCount; m++) {
             offsets[m] = r.u16();
             r.skip(4);
-            r.u8(); // X offset within the level
-            r.u8(); // Y offset within the level
+            offsetX[m] = r.u8(); // where the map sits in dungeon-wide coordinates; stairs line up through these
+            offsetY[m] = r.u8();
             int dims = r.u16();
             ornamentCounts[m] = r.u16();
             otherCounts[m] = r.u16();
@@ -179,6 +181,7 @@ public final class DungeonFile {
             List<List<Thing>>[] squareThings = store.listsFor(squares, columnFirstThing, columnBase);
             DungeonMap map = new DungeonMap(levels[m], squares, ChampionFinder.find(squareThings, text),
                     doorStyles(squares, squareThings, graphicsSets[m]));
+            map.setOffset(offsetX[m], offsetY[m]);
             OrnamentLists lists = OrnamentLists.read(data, base + widths[m] * heights[m],
                     rawStart + rawMapBytes, ornamentCounts[m], otherCounts[m]);
             FloorSensorFinder.find(squares, squareThings, lists.floor()).forEach(map::addSensor);

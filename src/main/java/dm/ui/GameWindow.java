@@ -31,20 +31,31 @@ public final class GameWindow extends JFrame {
             new BufferedImage(16, 16, BufferedImage.TYPE_INT_ARGB), new Point(0, 0), "blank");
 
     public GameWindow(Party party, Art art, SoundPlayer sounds, boolean debug) {
-        super("Dungeon Master - Level " + (party.map().level() + 1));
+        super(title(party));
         setDefaultCloseOperation(EXIT_ON_CLOSE);
-        add(new Screen(new GameScreen(party, art, sounds, debug)));
+        add(new Screen(new GameScreen(party, art, sounds, debug), () -> {
+            String title = title(party);
+            if (!title.equals(getTitle())) {
+                setTitle(title); // the party took the stairs
+            }
+        }));
         pack();
         setLocationRelativeTo(null);
     }
 
+    private static String title(Party party) {
+        return "Dungeon Master - Level " + (party.level() + 1);
+    }
+
     private static final class Screen extends JPanel {
         private final GameScreen game;
+        private final Runnable afterPaint;
         private final BufferedImage buffer =
                 new BufferedImage(GameScreen.WIDTH, GameScreen.HEIGHT, BufferedImage.TYPE_INT_RGB);
 
-        Screen(GameScreen game) {
+        Screen(GameScreen game, Runnable afterPaint) {
             this.game = game;
+            this.afterPaint = afterPaint;
             setPreferredSize(new Dimension(GameScreen.WIDTH * DEFAULT_SCALE, GameScreen.HEIGHT * DEFAULT_SCALE));
             setBackground(Color.BLACK);
 
@@ -145,6 +156,7 @@ public final class GameWindow extends JFrame {
             g2.setRenderingHint(RenderingHints.KEY_INTERPOLATION, RenderingHints.VALUE_INTERPOLATION_NEAREST_NEIGHBOR);
             Rectangle t = target();
             g2.drawImage(buffer, t.x, t.y, t.width, t.height, null);
+            afterPaint.run();
         }
     }
 }

@@ -4,7 +4,7 @@ import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
 
-/** Party position and facing on the current map. */
+/** The party: its champions, and its position and facing on the current map. */
 public final class Party {
 
     /** Relative moves offered by the movement arrow panel. */
@@ -40,7 +40,9 @@ public final class Party {
      */
     public static final int THROW_RANGE = 4;
 
-    private final DungeonMap map;
+    /** Every level of the dungeon; stairs move the party between them. */
+    private final List<DungeonMap> maps;
+    private DungeonMap map;
     private final List<Champion> members = new ArrayList<>();
     private final Champion[] positions = new Champion[MAX_MEMBERS];
     private int x;
@@ -49,15 +51,28 @@ public final class Party {
     /** The item on the mouse pointer (DM's leader hand), shared by the whole party. */
     private Item held;
 
+    /** A party on a single map; its stairs lead nowhere and block like walls. */
     public Party(DungeonMap map, int x, int y, Direction facing) {
-        this.map = map;
+        this(List.of(map), 0, x, y, facing);
+    }
+
+    /** A party on {@code maps.get(mapIndex)}, able to take stairs to the other maps. */
+    public Party(List<DungeonMap> maps, int mapIndex, int x, int y, Direction facing) {
+        this.maps = List.copyOf(maps);
+        this.map = maps.get(mapIndex);
         this.x = x;
         this.y = y;
         this.facing = facing;
     }
 
+    /** The map the party is on. */
     public DungeonMap map() {
         return map;
+    }
+
+    /** The current dungeon level, 0 for the first. */
+    public int level() {
+        return map.level();
     }
 
     public int x() {
@@ -171,6 +186,10 @@ public final class Party {
     /**
      * Attempts a step and runs the floor sensors on the squares left and
      * entered. Returns null if the move was blocked.
+     *
+     * Stepping onto stairs takes the party to the level above or below, as
+     * in DM: onto the square beside the matching stairs there, facing away
+     * from them. Stairs with no matching stairs on the next level block.
      */
     public DungeonMap.StepResult step(Move move) {
         Direction d = Direction.fromIndex(facing.ordinal() + move.turns);
@@ -179,10 +198,58 @@ public final class Party {
         if (!map.isPassable(nx, ny)) {
             return null;
         }
+        Square target = map.get(nx, ny);
+        Arrival arrival = null;
+        if (target.type() == SquareType.STAIRS) {
+            arrival = stairsDestination(nx, ny, target.stairsUp());
+            if (arrival == null) {
+                return null;
+            }
+        }
         int fromX = x;
         int fromY = y;
         x = nx;
         y = ny;
-        return map.partyMoved(this, fromX, fromY);
+        DungeonMap.StepResult left = map.partyMoved(this, fromX, fromY);
+        if (arrival == null) {
+            return left;
+        }
+        map = arrival.map();
+        x = arrival.exit().x();
+        y = arrival.exit().y();
+        facing = arrival.exit().facing();
+        DungeonMap.StepResult arrived = map.partyMoved(this, arrival.stairsX(), arrival.stairsY());
+        return new DungeonMap.StepResult(left.doorStarted() || arrived.doorStarted(),
+                left.click() || arrived.click(), true);
+    }
+
+    /** Where taking the stairs at (sx, sy) on the current map leads. */
+    private record Arrival(DungeonMap map, int stairsX, int stairsY, DungeonMap.StairsExit exit) {
+    }
+
+    /**
+     * The stairs one level up or down at the same dungeon-wide position:
+     * every DM staircase has its partner directly above or below it once the
+     * maps' offsets are applied.
+     */
+    private Arrival stairsDestination(int sx, int sy, boolean up) {
+        int level = map.level() + (up ? -1 : 1);
+        int ax = sx + map.offsetX();
+        int ay = sy + map.offsetY();
+        for (DungeonMap m : maps) {
+            if (m == map || m.level() != level) {
+                continue;
+            }
+            int tx = ax - m.offsetX();
+            int ty = ay - m.offsetY();
+            if (m.get(tx, ty).type() != SquareType.STAIRS) {
+                continue;
+            }
+            DungeonMap.StairsExit exit = m.stairsExit(tx, ty);
+            if (exit != null) {
+                return new Arrival(m, tx, ty, exit);
+            }
+        }
+        return null;
     }
 }

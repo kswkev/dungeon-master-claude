@@ -62,14 +62,19 @@ class PartyTest {
     }
 
     @Test
-    void pitsStairsAndTeleportersAreWalkable() {
-        Party p = new Party(MAP, 2, 3, Direction.EAST);
-        assertTrue(p.move(Party.Move.FORWARD)); // stairs
-        assertTrue(p.move(Party.Move.FORWARD));
+    void pitsAndTeleportersAreWalkable() {
+        Party p = new Party(MAP, 4, 3, Direction.EAST);
         assertTrue(p.move(Party.Move.FORWARD)); // teleporter
         assertTrue(p.move(Party.Move.LEFT));    // pit
         assertEquals(5, p.x());
         assertEquals(2, p.y());
+    }
+
+    @Test
+    void stairsWithNowhereToGoBlock() {
+        Party p = new Party(MAP, 2, 3, Direction.EAST); // a single map: no level below
+        assertFalse(p.move(Party.Move.FORWARD));
+        assertEquals(2, p.x());
     }
 
     @Test

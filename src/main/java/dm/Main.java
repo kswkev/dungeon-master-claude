@@ -59,7 +59,7 @@ public final class Main {
         Art art = Art.load(graphicsPath);
 
         DungeonMap level = dungeon.firstLevel();
-        Party party = new Party(level, dungeon.startX(), dungeon.startY(), dungeon.startFacing());
+        Party party = new Party(dungeon.maps(), 0, dungeon.startX(), dungeon.startY(), dungeon.startFacing());
         if (debug) {
             System.out.printf("Loaded %s: %d maps (%s). Level 1 is %dx%d.%n",
                     path, dungeon.maps().size(), dungeon.format(), level.width(), level.height());
