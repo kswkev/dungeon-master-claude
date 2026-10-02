@@ -1,5 +1,9 @@
 package dm.model;
 
+import java.util.ArrayList;
+import java.util.Collections;
+import java.util.List;
+
 /** Party position and facing on the current map. */
 public final class Party {
 
@@ -15,7 +19,10 @@ public final class Party {
         }
     }
 
-    private DungeonMap map;
+    public static final int MAX_MEMBERS = 4;
+
+    private final DungeonMap map;
+    private final List<Champion> members = new ArrayList<>();
     private int x;
     private int y;
     private Direction facing;
@@ -41,6 +48,30 @@ public final class Party {
 
     public Direction facing() {
         return facing;
+    }
+
+    public List<Champion> members() {
+        return Collections.unmodifiableList(members);
+    }
+
+    public boolean isFull() {
+        return members.size() >= MAX_MEMBERS;
+    }
+
+    /** Resurrects the mirror's champion into the party; false if the party is full or the mirror is empty. */
+    public boolean recruit(ChampionMirror mirror) {
+        if (isFull() || mirror.taken()) {
+            return false;
+        }
+        members.add(mirror.champion());
+        mirror.markTaken();
+        return true;
+    }
+
+    /** The mirror straight ahead on the adjacent wall, if there is one with a champion still in it. */
+    public ChampionMirror facingMirror() {
+        ChampionMirror m = map.mirrorAt(x + facing.dx, y + facing.dy, facing.opposite());
+        return m == null || m.taken() ? null : m;
     }
 
     public void turnLeft() {

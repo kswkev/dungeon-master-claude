@@ -1,7 +1,11 @@
 package dm.data;
 
+import dm.model.Champion;
+import dm.model.ChampionMirror;
 import dm.model.Direction;
 import dm.model.DungeonMap;
+import dm.model.Item;
+import dm.model.Slot;
 import dm.model.SquareType;
 import org.junit.jupiter.api.Test;
 
@@ -10,6 +14,7 @@ import java.io.IOException;
 import java.nio.file.Path;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
@@ -18,14 +23,21 @@ class DungeonFileTest {
     private static final int WALL = 0x00;
     private static final int FLOOR = 0x20;
     private static final int CLOSED_DOOR = 0x84;
+    private static final int HAS_THINGS = 0x10;
 
-    /** 4 wide, 3 high: a corridor along y=1 with a closed door at x=2. */
+    /**
+     * 4 wide, 3 high: a corridor along y=1 with a closed door at x=2. Wall
+     * (1,0) has a champion mirror on its south side; the champion's text is
+     * on the floor square (1,1) below it.
+     */
     private static final int[][] MAP0 = {
             {WALL, WALL, WALL},
-            {WALL, FLOOR, WALL},
+            {WALL | HAS_THINGS, FLOOR | HAS_THINGS, WALL},
             {WALL, CLOSED_DOOR, WALL},
             {WALL, FLOOR, WALL},
     };
+
+    static final String HALK = "HALK\nTHE BARBARIAN\n\nM\nAAFKACOOAAAA\nCIDHCLBOCOCGDA\nEAEAAAAAAAAAAAAA";
 
     /** 2x2 second map, to exercise multiple map definitions. */
     private static final int[][] MAP1 = {
@@ -91,6 +103,23 @@ class DungeonFileTest {
         assertEquals(Direction.EAST, f.startFacing());
         assertEquals(1, f.maps().get(1).level());
         assertEquals(SquareType.WALL, f.maps().get(1).get(1, 1).type());
+
+        assertEquals(1, m.mirrors().size());
+        ChampionMirror mirror = m.mirrorAt(1, 0, Direction.SOUTH);
+        assertNotNull(mirror);
+        Champion halk = mirror.champion();
+        assertEquals("HALK", halk.name());
+        assertEquals("THE BARBARIAN", halk.title());
+        assertEquals(5, halk.portrait());
+        assertEquals(90, halk.maxHealth());
+        assertEquals(Item.Category.WEAPON, halk.items().get(Slot.ACTION_HAND).category());
+        assertEquals("CLUB", halk.items().get(Slot.ACTION_HAND).name());
+        assertTrue(f.maps().get(1).mirrors().isEmpty());
+    }
+
+    /** Thing ids: bits 14-15 cell, 10-13 type, 0-9 index. */
+    private static int thingId(int cell, int type, int index) {
+        return (cell << 14) | (type << 10) | index;
     }
 
     /** Builds a minimal but structurally complete DUNGEON.DAT. */
@@ -99,17 +128,20 @@ class DungeonFileTest {
         int map0Bytes = 4 * 3;
         int map1Bytes = 2 * 2;
         int rawBytes = map0Bytes + map1Bytes + 3; // trailing per-map tables
-        int textWords = 3;
+        int[] text = TextDecoderTest.encode(HALK);
         int squareFirstThings = 2;
         int[] thingCounts = new int[16];
         thingCounts[0] = 1;  // one door (4 bytes)
+        thingCounts[2] = 1;  // the champion's text (4 bytes)
+        thingCounts[3] = 1;  // the portrait sensor (8 bytes)
         thingCounts[4] = 2;  // two creature groups (16 bytes each)
+        thingCounts[5] = 1;  // the champion's club (4 bytes)
 
         out.u16(0x1234);            // ornament seed
         out.u16(rawBytes);
         out.u8(2);                  // map count
         out.u8(0);
-        out.u16(textWords);
+        out.u16(text.length);
         out.u16(1 | (1 << 5) | (1 << 10)); // start (1,1) facing east
         out.u16(squareFirstThings);
         for (int c : thingCounts) {
@@ -119,13 +151,26 @@ class DungeonFileTest {
         mapDef(out, 0, 4, 3, 0);
         mapDef(out, map0Bytes, 2, 2, 1);
 
-        for (int i = 0; i < 4 + 2; i++) {
-            out.u16(0);             // column cumulative counts
+        // Squares with things before each column: map 0 has two, both in column 1.
+        int[] columnCounts = {0, 0, 2, 2, 2, 2};
+        for (int c : columnCounts) {
+            out.u16(c);
         }
-        for (int i = 0; i < squareFirstThings + textWords; i++) {
-            out.u16(0xFFFE);
+        out.u16(thingId(2, 3, 0));  // wall (1,0): sensor on its south side
+        out.u16(thingId(0, 2, 0));  // floor (1,1): the text
+        for (int w : text) {
+            out.u16(w);
         }
-        out.fill(1 * 4 + 2 * 16, 0xAA); // thing data
+        out.fill(4, 0xAA);          // door
+        out.u16(0xFFFE);            // text: end of list, offset 0 << 3, visible
+        out.u16(1);
+        out.u16(thingId(2, 5, 0));  // sensor -> club; type 127, portrait 5
+        out.u16((5 << 7) | 127);
+        out.u16(0);
+        out.u16(0);
+        out.fill(2 * 16, 0xAA);     // creature groups
+        out.u16(0xFFFE);            // club: end of list, weapon type 23
+        out.u16(23);
 
         writeSquares(out, MAP0);
         writeSquares(out, MAP1);

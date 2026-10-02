@@ -1,5 +1,7 @@
 package dm.ui;
 
+import dm.data.GraphicsFile;
+import dm.model.ChampionMirror;
 import dm.model.Direction;
 import dm.model.DungeonMap;
 import dm.model.Party;
@@ -11,6 +13,7 @@ import java.awt.Graphics2D;
 import java.awt.Polygon;
 import java.awt.Rectangle;
 import java.awt.Shape;
+import java.awt.image.BufferedImage;
 
 /**
  * Draws DM's first-person view: a 3-squares-deep cone of the map, rendered
@@ -43,8 +46,34 @@ public final class DungeonViewRenderer {
     private static final Color DOOR_FRAME = new Color(96, 96, 104);
     private static final Color TELEPORTER = new Color(80, 140, 255, 90);
 
+    /** Mirror graphic size, and where the 32x29 portrait sits inside it. */
+    private static final int MIRROR_W = 48;
+    private static final int MIRROR_H = 43;
+    private static final int GLASS_X = 8;
+    private static final int GLASS_Y = 6;
+    private static final int PORTRAIT_W = 32;
+    private static final int PORTRAIT_H = 29;
+
     private final double cx = VIEWPORT.x + VIEWPORT.width / 2.0;
     private final double cy = VIEWPORT.y + VIEWPORT.height / 2.0;
+
+    private final Art art;
+    private DungeonMap map;
+    private Direction fwd;
+    private Rectangle portraitHit;
+
+    public DungeonViewRenderer(Art art) {
+        this.art = art;
+    }
+
+    /**
+     * Screen rectangle of the champion portrait on the wall straight ahead,
+     * from the last {@link #draw}, or null. DM only lets you click a portrait
+     * from the adjacent square.
+     */
+    public Rectangle portraitHit() {
+        return portraitHit;
+    }
 
     public void draw(Graphics2D g, Party party) {
         Shape oldClip = g.getClip();
@@ -52,8 +81,9 @@ public final class DungeonViewRenderer {
 
         drawFloorAndCeiling(g);
 
-        DungeonMap map = party.map();
-        Direction fwd = party.facing();
+        map = party.map();
+        fwd = party.facing();
+        portraitHit = null;
         Direction right = fwd.turnRight();
         for (int d = MAX_DEPTH; d >= 0; d--) {
             int reach = LATERAL_REACH[d];
@@ -83,6 +113,10 @@ public final class DungeonViewRenderer {
     private void drawSquare(Graphics2D g, Square sq, int d, int l, int mx, int my) {
         if (sq.looksSolid()) {
             drawWallBlock(g, d, l);
+            ChampionMirror mirror = d > 0 ? map.mirrorAt(mx, my, fwd.opposite()) : null;
+            if (mirror != null) {
+                drawMirror(g, d, l, mirror);
+            }
             return;
         }
         if (d == 0 && l == 0) {
@@ -143,6 +177,47 @@ public final class DungeonViewRenderer {
             }
         }
         g.drawRect(left, top, right - left - 1, bottom - top - 1);
+    }
+
+    // ---- champion mirrors -------------------------------------------------
+
+    /** Draws the mirror ornament (and portrait, if still there) centred on a front wall face. */
+    private void drawMirror(Graphics2D g, int d, int l, ChampionMirror mirror) {
+        double z = d - 0.5;
+        double scale = (0.5 + EYE_BACK) / (z + EYE_BACK); // 1.0 on the adjacent wall
+        int w = (int) Math.round(MIRROR_W * scale);
+        int h = (int) Math.round(MIRROR_H * scale);
+        int x = sx(l, z) - w / 2;
+        int y = (int) Math.round(cy - h / 2.0 - 6 * scale);
+
+        BufferedImage frame = art.sprite(GraphicsFile.MIRROR_FRONT);
+        if (frame != null) {
+            g.drawImage(frame, x, y, w, h, null);
+        } else {
+            g.setColor(Art.PALETTE[5]);
+            g.fillRect(x, y, w, h);
+            g.setColor(Art.PALETTE[4]);
+            g.fillRect(x + scaled(GLASS_X, scale), y + scaled(GLASS_Y, scale),
+                    scaled(PORTRAIT_W, scale), scaled(PORTRAIT_H, scale));
+        }
+        if (mirror.taken()) {
+            return;
+        }
+        Rectangle glass = new Rectangle(x + scaled(GLASS_X, scale), y + scaled(GLASS_Y, scale),
+                scaled(PORTRAIT_W, scale), scaled(PORTRAIT_H, scale));
+        BufferedImage portrait = art.portrait(mirror.champion().portrait());
+        if (portrait != null) {
+            g.drawImage(portrait, glass.x, glass.y, glass.width, glass.height, null);
+        } else {
+            Placeholders.portrait(g, mirror.champion(), glass);
+        }
+        if (d == 1 && l == 0) {
+            portraitHit = glass;
+        }
+    }
+
+    private static int scaled(int v, double scale) {
+        return (int) Math.round(v * scale);
     }
 
     // ---- doors, pits, stairs, teleporters --------------------------------

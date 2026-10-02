@@ -32,7 +32,8 @@ import java.util.List;
  *   square first things (words), text data (words), thing data per type
  *   raw map data: one byte per square, column-major, then per-map extra tables
  * </pre>
- * Only the square grid is kept for now. Things, text and ornaments are skipped.
+ * Squares with bit 4 set own a thing list; see {@link Thing}. So far only the
+ * Hall of Champions mirrors are built from the things ({@link ChampionFinder}).
  */
 public final class DungeonFile {
 
@@ -101,9 +102,11 @@ public final class DungeonFile {
         int textWords = r.u16();
         int start = r.u16();
         int squareFirstThings = r.u16();
+        int[] thingCounts = new int[THING_SIZES.length];
         long thingBytes = 0;
-        for (int size : THING_SIZES) {
-            thingBytes += (long) r.u16() * size;
+        for (int t = 0; t < THING_SIZES.length; t++) {
+            thingCounts[t] = r.u16();
+            thingBytes += (long) thingCounts[t] * THING_SIZES[t];
         }
 
         if (mapCount < 1 || mapCount > MAX_MAPS) {
@@ -139,16 +142,22 @@ public final class DungeonFile {
             throw new IOException("party start (" + startX + "," + startY + ") outside first map");
         }
 
-        r.skip(columnCount * 2L);
-        r.skip(squareFirstThings * 2L);
-        r.skip(textWords * 2L);
-        r.skip(thingBytes);
-        int rawStart = r.position();
-        if (rawStart + rawMapBytes > data.length) {
-            throw new IOException("raw map data (" + rawMapBytes + " bytes at " + rawStart + ") runs past end of file");
+        long sectionEnd = r.position() + columnCount * 2L + squareFirstThings * 2L + textWords * 2L + thingBytes;
+        if (sectionEnd + rawMapBytes > data.length) {
+            throw new IOException("raw map data (" + rawMapBytes + " bytes at " + sectionEnd + ") runs past end of file");
         }
+        int[] columnFirstThing = words(r, columnCount);
+        int[] firstThings = words(r, squareFirstThings);
+        int[] text = words(r, textWords);
+        int[][] things = new int[THING_SIZES.length][];
+        for (int t = 0; t < THING_SIZES.length; t++) {
+            things[t] = words(r, thingCounts[t] * THING_SIZES[t] / 2);
+        }
+        int rawStart = r.position();
 
+        Thing.Store store = new Thing.Store(things, THING_SIZES, firstThings);
         List<DungeonMap> maps = new ArrayList<>(mapCount);
+        int columnBase = 0;
         for (int m = 0; m < mapCount; m++) {
             Square[][] squares = new Square[widths[m]][heights[m]];
             int base = rawStart + offsets[m];
@@ -157,13 +166,23 @@ public final class DungeonFile {
                     squares[x][y] = new Square(data[base + x * heights[m] + y] & 0xFF);
                 }
             }
-            maps.add(new DungeonMap(levels[m], squares));
+            List<List<Thing>>[] squareThings = store.listsFor(squares, columnFirstThing, columnBase);
+            maps.add(new DungeonMap(levels[m], squares, ChampionFinder.find(squareThings, text)));
+            columnBase += widths[m];
         }
 
         if (!maps.get(0).isPassable(startX, startY)) {
             throw new IOException("party start (" + startX + "," + startY + ") is not walkable");
         }
         return new DungeonFile(List.copyOf(maps), startX, startY, facing, label);
+    }
+
+    private static int[] words(ByteReader r, int count) throws IOException {
+        int[] out = new int[count];
+        for (int i = 0; i < count; i++) {
+            out[i] = r.u16();
+        }
+        return out;
     }
 
     public List<DungeonMap> maps() {

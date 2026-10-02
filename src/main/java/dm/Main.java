@@ -1,8 +1,11 @@
 package dm;
 
 import dm.data.DungeonFile;
+import dm.model.Champion;
+import dm.model.ChampionMirror;
 import dm.model.DungeonMap;
 import dm.model.Party;
+import dm.ui.Art;
 import dm.ui.GameWindow;
 
 import javax.swing.JOptionPane;
@@ -12,7 +15,9 @@ import java.nio.file.Path;
 /**
  * Entry point. The DUNGEON.DAT path comes from the first argument, then the
  * {@code dm.dungeon} system property, then {@code data/DUNGEON.DAT}.
- * Run with {@code -Ddm.debug=true} to print the level map and log every move.
+ * GRAPHICS.DAT is read from the same folder unless {@code dm.graphics} says
+ * otherwise; without it the game runs with placeholder art.
+ * Run with {@code -Ddm.debug=true} to print the level map and champions and log every move.
  */
 public final class Main {
 
@@ -37,14 +42,29 @@ public final class Main {
             return;
         }
 
+        Path graphicsPath = Path.of(System.getProperty("dm.graphics",
+                path.resolveSibling("GRAPHICS.DAT").toString()));
+        Art art = Art.load(graphicsPath);
+
         DungeonMap level = dungeon.firstLevel();
         Party party = new Party(level, dungeon.startX(), dungeon.startY(), dungeon.startFacing());
         if (debug) {
             System.out.printf("Loaded %s: %d maps (%s). Level 1 is %dx%d.%n",
                     path, dungeon.maps().size(), dungeon.format(), level.width(), level.height());
             System.out.print(level.toAscii(party));
+            printChampions(level);
         }
 
-        SwingUtilities.invokeLater(() -> new GameWindow(party, debug).setVisible(true));
+        SwingUtilities.invokeLater(() -> new GameWindow(party, art, debug).setVisible(true));
+    }
+
+    private static void printChampions(DungeonMap level) {
+        System.out.println(level.mirrors().size() + " champions:");
+        for (ChampionMirror m : level.mirrors()) {
+            Champion c = m.champion();
+            System.out.printf("  mirror (%d,%d) %-5s %-30s health %d stamina %d mana %d, %d items%n",
+                    m.x(), m.y(), m.side(), c.fullName(), c.maxHealth(), c.maxStamina(), c.maxMana(),
+                    c.items().size());
+        }
     }
 }
