@@ -29,8 +29,8 @@ class DungeonFileTest {
     /**
      * 4 wide, 3 high: a corridor along y=1 with a closed door at x=2. Wall
      * (1,0) has a champion mirror on its south side; the champion's text is
-     * on the floor square (1,1) below it. Floor (3,1) has a pressure plate
-     * that opens the door.
+     * on the floor square (1,1) below it, with a dagger lying in its
+     * south-west cell. Floor (3,1) has a pressure plate that opens the door.
      */
     private static final int[][] MAP0 = {
             {WALL, WALL, WALL},
@@ -135,6 +135,12 @@ class DungeonFileTest {
         assertEquals(1, plate.targetY());
         assertEquals(MAP0_FLOOR_ORNAMENT, m.floorOrnament(3, 1));
         assertTrue(f.maps().get(1).sensors().isEmpty());
+
+        // The dagger lies on the floor; the club on the mirror's wall belongs to Halk, not the floor.
+        assertEquals(1, m.itemsAt(1, 1, 3).size());
+        assertEquals("DAGGER", m.itemsAt(1, 1, 3).get(0).name());
+        assertTrue(m.itemsAt(1, 1, 0).isEmpty());
+        assertTrue(m.itemsAt(1, 0, 2).isEmpty());
     }
 
     @Test
@@ -168,7 +174,7 @@ class DungeonFileTest {
         thingCounts[2] = 1;  // the champion's text (4 bytes)
         thingCounts[3] = 2;  // the portrait sensor and the pressure plate (8 bytes each)
         thingCounts[4] = 2;  // two creature groups (16 bytes each)
-        thingCounts[5] = 1;  // the champion's club (4 bytes)
+        thingCounts[5] = 2;  // the champion's club and a dagger on the floor (4 bytes each)
 
         out.u16(0x1234);            // ornament seed
         out.u16(rawBytes);
@@ -198,7 +204,7 @@ class DungeonFileTest {
         }
         out.u16(0xFFFE);            // door: end of list, uses door set 1
         out.u16(1);
-        out.u16(0xFFFE);            // text: end of list, offset 0 << 3, visible
+        out.u16(thingId(3, 5, 1));  // text -> the dagger in the south-west cell; offset 0 << 3, visible
         out.u16(1);
         out.u16(thingId(2, 5, 0));  // sensor -> club; type 127, portrait 5
         out.u16((5 << 7) | 127);
@@ -211,6 +217,8 @@ class DungeonFileTest {
         out.fill(2 * 16, 0xAA);     // creature groups
         out.u16(0xFFFE);            // club: end of list, weapon type 23
         out.u16(23);
+        out.u16(0xFFFE);            // dagger: end of list, weapon type 8
+        out.u16(8);
 
         writeSquares(out, MAP0);
         out.u8(MAP0_FLOOR_ORNAMENT); // map 0's ornament lists (just one floor ornament)

@@ -22,7 +22,7 @@ import java.util.Map;
  * </pre>
  * Images are decoded on demand by {@link ImageDecoder}. Non-image entries
  * live at the end of the file: sounds ({@link #sound}), the object names,
- * and data tables.
+ * and data tables such as the screen layout ({@link Zones}).
  */
 public final class GraphicsFile {
 
@@ -39,6 +39,10 @@ public final class GraphicsFile {
     /** 32x29 red burst drawn over a champion's status box when they take damage. */
     public static final int DAMAGE_TO_CHAMPION = 16;
     public static final int OBJECT_NAMES = 694;
+    /** DM's screen layout table; see {@link Zones}. */
+    public static final int ZONES = 696;
+    /** Objects as seen lying in the dungeon (498-583); which item uses which is in {@link dm.model.ItemCatalog}. */
+    public static final int FIRST_FLOOR_OBJECT = 498;
 
     /** Sound entries: 8-bit PCM with a big-endian sample count in front. */
     public static final int FIRST_SOUND = 671;
@@ -57,12 +61,27 @@ public final class GraphicsFile {
     private final int[] sizes;
     private final Map<Integer, IndexedImage> cache = new HashMap<>();
     private final List<String> objectNames;
+    private final Zones zones;
 
     private GraphicsFile(byte[] data, int[] offsets, int[] sizes) {
         this.data = data;
         this.offsets = offsets;
         this.sizes = sizes;
         this.objectNames = readNames(OBJECT_NAMES);
+        Zones z = null;
+        if (ZONES < offsets.length) {
+            try {
+                z = Zones.parse(data, offsets[ZONES], sizes[ZONES]);
+            } catch (IOException e) {
+                z = null; // callers fall back to fitted positions
+            }
+        }
+        this.zones = z;
+    }
+
+    /** DM's screen layout from entry {@link #ZONES}, or null if it couldn't be read. */
+    public Zones zones() {
+        return zones;
     }
 
     public static GraphicsFile load(Path path) throws IOException {

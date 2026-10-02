@@ -309,6 +309,84 @@ class GameScreenTest {
         assertSame(SWORD, mirror.champion().items().get(Slot.ACTION_HAND));
     }
 
+    // ---- items on the floor ----
+
+    private static final Item APPLE = ItemCatalog.item(Item.Category.JUNK, 29);
+
+    /** Bottom of the view: the cells of the party's own square ahead of it. */
+    private void clickFloor(boolean right) {
+        screen.press(VIEW.x + (right ? 170 : 50), VIEW.y + 120);
+        screen.release();
+    }
+
+    /** Upper part of the view, clear of the mirror portrait in the middle. */
+    private void clickAir(boolean right) {
+        screen.press(VIEW.x + (right ? 210 : 14), VIEW.y + 20);
+        screen.release();
+    }
+
+    @Test
+    void clickingTheFloorPicksUpTheTopItemAndDropsTheHeldOne() {
+        DungeonMap map = party.map();
+        map.addItem(1, 1, Direction.NORTH.cellOf(1), SWORD);
+        map.addItem(1, 1, Direction.NORTH.cellOf(1), APPLE);
+        clickFloor(true);
+        assertSame(APPLE, party.held(), "the top of the pile");
+        assertTrue(screen.holding());
+        assertEquals(List.of(SWORD), map.itemsAt(1, 1, 1));
+        render();
+
+        clickFloor(false);
+        assertNull(party.held());
+        assertEquals(List.of(APPLE), map.itemsAt(1, 1, 0), "dropped on the far-left cell");
+    }
+
+    @Test
+    void clickingAnEmptyFloorOrTheAirWithNothingHeldDoesNothing() {
+        clickFloor(false);
+        clickAir(true);
+        assertNull(party.held());
+        assertTrue(party.map().projectiles().isEmpty());
+        assertFalse(screen.sheet().isOpen());
+    }
+
+    @Test
+    void throwingAtTheWallAheadDropsTheItemOnTheThrowersSquare() {
+        party.setHeld(SWORD);
+        clickAir(false);
+        assertNull(party.held());
+        assertEquals(1, party.map().projectiles().size());
+        render(); // drawn in flight
+        assertTrue(screen.tick());
+        assertTrue(party.map().projectiles().isEmpty());
+        assertEquals(List.of(SWORD), party.map().itemsAt(1, 1, 0), "north-west: far-left facing north");
+        assertFalse(screen.tick(), "nothing moves any more");
+    }
+
+    @Test
+    void aThrowFliesDownTheCorridorOneSquarePerTick() {
+        party.turnRight();
+        party.turnRight(); // face south: (1,2) is open, (1,3) is wall
+        party.setHeld(SWORD);
+        clickAir(false);
+        screen.tick();
+        assertEquals(2, party.map().projectiles().get(0).y(), "one square on");
+        screen.tick();
+        assertTrue(party.map().projectiles().isEmpty());
+        assertEquals(List.of(SWORD), party.map().itemsAt(1, 2, Direction.SOUTH.cellOf(0)),
+                "far-left facing south is the south-east cell");
+    }
+
+    @Test
+    void theFloorCannotBeReachedWhileASheetIsOpen() {
+        recruitElija();
+        party.map().addItem(1, 1, 0, APPLE);
+        screen.press(10, 10); // open Elija's sheet over the view
+        screen.press(VIEW.x + 110, VIEW.y + 104);
+        assertNull(party.held());
+        assertEquals(List.of(APPLE), party.map().itemsAt(1, 1, 0));
+    }
+
     @Test
     void arrowsAreIgnoredWhileSheetIsOpen() {
         clickPortrait();

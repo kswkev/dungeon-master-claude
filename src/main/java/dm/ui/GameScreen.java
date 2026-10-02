@@ -22,8 +22,10 @@ import java.util.function.LongSupplier;
  * Swing dependencies so it can be driven headlessly.
  *
  * Click order: an open character sheet first, then the champion bars, then
- * a mirror portrait in the dungeon view, then the movement arrows. While a
- * sheet is open the party can't move, as in DM.
+ * the formation box, then a mirror portrait in the dungeon view, then the
+ * rest of the view (floor: pick up or drop; above it: throw), then the
+ * movement arrows. While a sheet is open the party can't move or reach the
+ * floor, as in DM.
  */
 public final class GameScreen {
 
@@ -33,6 +35,8 @@ public final class GameScreen {
     public static final int DAMAGE_SHOWN_MS = 900;
     /** Length of a game tick: doors move one of their 4 steps per tick, roughly as fast as in DM. */
     public static final int TICK_MS = 170;
+    /** Viewport rows from here down are the floor of the party's own square (pick up and drop); above is for throwing. */
+    static final int FLOOR_CLICK_Y = 100;
 
     private final Party party;
     private final Art art;
@@ -83,7 +87,8 @@ public final class GameScreen {
         if (doors.rattled()) {
             sounds.play(doorSound);
         }
-        return doors.moved();
+        boolean flew = party.map().tickProjectiles();
+        return doors.moved() || flew;
     }
 
     /**
@@ -137,6 +142,10 @@ public final class GameScreen {
             sheet.openCandidate(mirror, party.isFull());
             return;
         }
+        if (ViewRenderer.VIEWPORT.contains(x, y)) {
+            clickView(x - ViewRenderer.VIEWPORT.x, y - ViewRenderer.VIEWPORT.y);
+            return;
+        }
         MovementPanel.Action action = arrows.hitTest(x, y);
         if (action != null) {
             arrows.setPressed(action);
@@ -188,6 +197,41 @@ public final class GameScreen {
             party.setHeld(champion.place(slot, held));
             if (debug) {
                 System.out.println("Placed " + held.name() + " in " + champion.name() + "'s " + slot);
+            }
+        }
+    }
+
+    /**
+     * A click in the dungeon view, in viewport coordinates. As in DM, the
+     * bottom of the view is the floor of the party's own square: its left and
+     * right halves are the two cells ahead of the party, where a click picks
+     * up the top item or drops the held one. Above that, a click with an item
+     * in hand throws it from that side.
+     */
+    private void clickView(int vx, int vy) {
+        boolean right = vx >= ViewRenderer.VIEWPORT.width / 2;
+        DungeonMap map = party.map();
+        Item held = party.held();
+        if (vy >= FLOOR_CLICK_Y) {
+            int cell = party.facing().cellOf(right ? 1 : 0);
+            if (held == null) {
+                Item taken = map.takeItem(party.x(), party.y(), cell);
+                party.setHeld(taken);
+                if (taken != null && debug) {
+                    System.out.println("Picked up " + taken.name() + " from the floor");
+                }
+            } else {
+                map.addItem(party.x(), party.y(), cell, held);
+                party.setHeld(null);
+                if (debug) {
+                    System.out.println("Dropped " + held.name());
+                }
+            }
+        } else if (held != null) {
+            map.throwItem(held, party.x(), party.y(), party.facing(), right, Party.THROW_RANGE);
+            party.setHeld(null);
+            if (debug) {
+                System.out.println("Threw " + held.name() + (right ? " from the right" : " from the left"));
             }
         }
     }

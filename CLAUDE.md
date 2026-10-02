@@ -12,8 +12,9 @@ A Java/Swing remake of FTL's *Dungeon Master* (1988), built sprint by sprint.
 - Sprint 5: floor sensors (pressure plates) that move doors, animated doors with sound, the party formation box, and bump damage by side.
 - Sprint 6: wall, floor and door decorations (issue #4). Explicit and DM-random placement, inscriptions with text, door decorations and buttons. Visual only.
 - Sprint 7: up/down stair graphics fixed (#8), champion mirrors drawn on side walls (#9), and moving items between inventory cells with the item icon as the mouse pointer.
+- Sprint 8: items on the floor. They are drawn at DM's own positions (decoded from GRAPHICS.DAT's zone table), can be picked up from and dropped on the party's square, and can be thrown.
 
-Door, pit, stairs and teleporter behaviour, picking items up from the floor, combat and spells are not implemented yet.
+Door, pit, stairs and teleporter behaviour, wall interaction (switches, alcoves), combat and spells are not implemented yet.
 
 ## Commands
 
@@ -63,7 +64,13 @@ Code lives under `src/main/java/dm/`, in three layers.
   - Entries 671 and up are sounds and data, not images. Entry 694 is the object name list, indexed by icon number.
   - Sounds (671–693 and 701–712) are a big-endian sample count followed by unsigned 8-bit mono PCM, played at `SOUND_SAMPLE_RATE` (5500 Hz).
   - `GraphicsFile.sound()` reads them. Which index is which effect has to be checked by ear with `-Ddm.soundtest`. The user confirmed 687 as the wall bump.
-  - The useful entry indexes are constants on `GraphicsFile` (inventory 17, portraits 26, icon sheets 42-48, mirror 346).
+  - The useful entry indexes are constants on `GraphicsFile` (inventory 17, portraits 26, icon sheets 42-48, mirror 346, floor objects 498-583).
+  - Icon sheets use colour 12 as their background; `Art.iconSprite` makes it transparent for the pointer.
+- **Screen layout** (`Zones`, entry 696): DM's "zones", so some screen coordinates *are* in the PC data after all.
+  - Layout: magic 0xFC0D, a range count, (first, last) id pairs, then a 4-word record (type, parent, a, b) per id.
+  - Type 9 is a size, types 1-4 anchor a rectangle by a corner, and type 7 is a point relative to its parent (viewport coordinates for the ids used here). Zone 7 places the 224×136 viewport at (0,33).
+  - 2500-2547: objects lying on the floor (bottom centre). 2900-2947: objects in flight (centre). The id is base + viewSquare×4 + viewCell. View squares run D3 C/L/R/far-L/far-R, D2 C/L/R, D1 C/L/R, D0. View cells run back-left, back-right, front-right, front-left. (0,0) means the cell isn't shown.
+  - 2548-2568 look like objects in wall alcoves; they aren't used yet. Other ranges (creatures? doors?) haven't been identified, and may replace the fitted door/stairs/pit positions later.
 - **Ornament lists** (`OrnamentLists`): each map's creature/wall/floor/door ornament lists come straight after its squares.
   - Counts are in map words B (wall bits 0-3, random wall 4-7, floor 8-11, random floor 12-15) and C (creatures bits 4-7, doors bits 0-3).
   - Things refer to decorations by a 1-based ordinal into these lists.
@@ -100,6 +107,12 @@ Code lives under `src/main/java/dm/`, in three layers.
   - `isPassable` uses the live state, so use it (not `Square.isPassable`) for doors.
   - `Party.step(move)` moves and then runs `partyMoved`: sensors on the entered square fire; HOLD or revert sensors on the left square undo.
   - Type-3 (party) sensors need ≥1 champion. In DM an empty party is the ghost Theron.
+- **Floor items:** `FloorItemFinder` puts every object thing on a non-wall square into `DungeonMap`'s piles (`itemsAt`/`addItem`/`takeItem`), one pile per cell (0 NW, 1 NE, 2 SE, 3 SW), with the top item last.
+  - `Direction.cellOf(viewCell)` / `viewCellOf(cell)` convert between absolute cells and view cells (0 back-left, 1 back-right, 2 front-right, 3 front-left).
+  - `ItemCatalog.floorGraphic` maps each item to its floor picture. This is hand-built reference data, matched by eye against the icons.
+- **Throwing:** `DungeonMap.throwItem` adds a `Projectile`, and `tickProjectiles()` (run from `GameScreen.tick()`) moves it one square per tick.
+  - It stops before a wall or closed door, or after `Party.THROW_RANGE` squares, and lands on the far cell of its side.
+  - There's no damage or strength-based range yet.
 - `Champion.addStartingItem` chooses slots the way DM does: worn items on the body, weapons in the action hand then the quiver or ready hand, potions in the pouches, everything else in the backpack.
 - **Moving items:**
   - `Item.fits(slot)` holds DM's slot rules: hands and backpack take anything; body slots only take what `wornOn` names; pouches take potions, scrolls and `ItemCatalog.POUCH_JUNK`; quiver 1 takes any weapon; quivers 2-4 take only missiles.
@@ -119,6 +132,7 @@ Code lives under `src/main/java/dm/`, in three layers.
 - `CharacterSheet` slot positions come from DM's inventory background (graphic 17).
   - On a party member's sheet, clicking a cell (`Action.SLOT`, `slotAt`) picks up, places or swaps through `GameScreen.clickSlot`. A candidate's items can't be touched.
   - An item that doesn't fit stays in hand.
+  - With no sheet open, a click in the bottom of the view (`GameScreen.FLOOR_CLICK_Y` and below) picks up from or drops onto the party square's left or right cell ahead. A click higher up with an item in hand throws it from that side.
   - While an item is held, `GameWindow` hides the OS cursor and `GameScreen` draws `Art.iconSprite` (the icon with background colour 12 transparent) centred on the pointer, on top of everything. Text uses `PixelFont`, a hand-made 5×5 font, because the PC GRAPHICS.DAT has no UI font image.
 - Blocked moves go through `GameScreen.bump()`:
   - it plays the thud through the injected `SoundPlayer` (`javaSound()` in the game, `silent()` or a lambda in tests);
@@ -132,9 +146,10 @@ Code lives under `src/main/java/dm/`, in three layers.
 - **`TexturedViewRenderer`** works like DM: no 3D maths, just pre-drawn pieces pasted at fixed viewport positions.
   - **Walls:** a table indexed by [depth][lateral+2] gives the graphic, x and y (D1 front 160×111 at (32,8), D2 106×74 at (59,18), D3 70×49 at (77,25)). These were measured from the art: each side piece contains its square's visible front face plus its side face, and each front face ends exactly where the next nearer centre piece begins.
   - **Flipping:** when (x + y + facing) is odd, the floor, ceiling and centre walls are mirrored, and each side uses the opposite side's piece mirrored.
-  - **Doors, stairs and pits:** their positions are fitted from mid-square perspective planes, because DM's coordinate tables live in the program file, not in GRAPHICS.DAT. Treat those constants as tunable.
+  - **Doors, stairs and pits:** their positions are fitted from mid-square perspective planes. Treat those constants as tunable. Sprint 8 found that GRAPHICS.DAT's zone table (entry 696) holds some of DM's coordinates; the ranges for these haven't been identified yet, so check there before fitting anything new.
   - **Stairs:** 108-113 are *up* stairs (steps climbing into darkness) and 115-120 are *down* stairs (a stairwell opening in the floor), in pairs of left then centre piece for D3, D2 and D1. The side-on pieces (114, 121, 123, 124) aren't drawn yet.
-  - **Pits** are graphics 50-55. **Floor ornaments** (pressure plates etc.) are 6 pieces each from graphic 385, centred on each depth's mid-square floor line. Graphics 415-420 are the black-flame-pit *ornament*, not pits.
+  - **Pits** are graphics 50-55.
+  - **Objects** use the zone points, scaled by DM's object scales: 32/32 at D0, then 27/21 (D1 near/far), 18/14 (D2), 12 (D3). Far cells are drawn before a door and near cells after it; items in flight come last. **Floor ornaments** (pressure plates etc.) are 6 pieces each from graphic 385, centred on each depth's mid-square floor line. Graphics 415-420 are the black-flame-pit *ornament*, not pits.
   - **Door design:** `DungeonMap.doorStyle` (bits 8-15 of the map's graphics-set word, chosen by bit 0 of the door thing) picks one of 4 designs (graphics 246 + style×3).
   - **Orientation:** bit 3 of a door or stairs square (`Square.runsNorthSouth`) decides whether it's seen head-on.
 - **`FlatViewRenderer`:**

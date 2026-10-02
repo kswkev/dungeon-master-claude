@@ -5,6 +5,7 @@ import dm.model.ChampionMirror;
 import dm.model.Direction;
 import dm.model.DungeonMap;
 import dm.model.Party;
+import dm.model.Projectile;
 import dm.model.Square;
 
 import java.awt.Color;
@@ -118,7 +119,8 @@ public final class FlatViewRenderer implements ViewRenderer {
             return;
         }
         if (d == 0 && l == 0) {
-            return; // the square the party stands in
+            drawItems(g, d, l, mx, my); // only the cells ahead of the party show
+            return;
         }
         if (map.floorOrnament(mx, my) >= 0) {
             drawPlate(g, d, l);
@@ -133,6 +135,33 @@ public final class FlatViewRenderer implements ViewRenderer {
             case DOOR -> drawDoor(g, d, l, map.isPassable(mx, my));
             case TELEPORTER -> drawTeleporter(g, d, l, mx, my);
             default -> { }
+        }
+        drawItems(g, d, l, mx, my);
+    }
+
+    /**
+     * Objects as small markers on their cells, far cells first: a lying item
+     * is a pebble on the floor, a thrown one a dot at eye level.
+     */
+    private void drawItems(Graphics2D g, int d, int l, int mx, int my) {
+        for (int viewCell : new int[] {0, 1, 3, 2}) {
+            boolean near = viewCell >= 2;
+            if (d == 0 && near) {
+                continue;
+            }
+            double x = l + (viewCell == 0 || viewCell == 3 ? -0.25 : 0.25);
+            double z = d + (near ? -0.25 : 0.25);
+            int r = Math.max(1, (int) Math.round(6 / (z + EYE_BACK)));
+            if (!map.itemsAt(mx, my, fwd.cellOf(viewCell)).isEmpty()) {
+                g.setColor(shade(new Color(200, 170, 90), z, 1));
+                g.fillOval(sx(x, z) - r, sy(-0.5, z) - r, 2 * r, r + 1);
+            }
+            for (Projectile p : map.projectiles()) {
+                if (p.x() == mx && p.y() == my && fwd.viewCellOf(p.cell()) == viewCell) {
+                    g.setColor(new Color(230, 230, 200));
+                    g.fillOval(sx(x, z) - r / 2, sy(0, z) - r / 2, r, r);
+                }
+            }
         }
     }
 

@@ -1,13 +1,18 @@
 package dm.ui;
 
 import dm.data.GraphicsFile;
+import dm.data.Zones;
 import dm.model.ChampionMirror;
 import dm.model.Direction;
 import dm.model.DungeonMap;
+import dm.model.Item;
+import dm.model.ItemCatalog;
 import dm.model.Party;
+import dm.model.Projectile;
 import dm.model.Square;
 
 import java.awt.Graphics2D;
+import java.awt.Point;
 import java.awt.Rectangle;
 import java.awt.image.BufferedImage;
 
@@ -109,6 +114,9 @@ public final class TexturedViewRenderer implements ViewRenderer {
                         }
                     } else if (Math.abs(l) <= 1) {
                         drawFeature(g, map, sq, d, l, fwd, mx, my);
+                    } else {
+                        drawItems(g, map, d, l, fwd, mx, my, true);
+                        drawItems(g, map, d, l, fwd, mx, my, false);
                     }
                 }
             }
@@ -198,8 +206,8 @@ public final class TexturedViewRenderer implements ViewRenderer {
 
     // ---- open squares: doors, stairs, pits, teleporters -------------------
     //
-    // Unlike walls, these pieces don't tile edge to edge, and the PC
-    // GRAPHICS.DAT doesn't carry DM's coordinate tables. Their positions are
+    // Unlike walls, these pieces don't tile edge to edge, and their entries in
+    // DM's zone table (Zones) haven't been identified yet. Their positions are
     // fitted to the wall geometry instead: doors stand on the plane halfway
     // through their square, pits are centred on that plane's floor line, and
     // stairs sit on their square's near floor edge. Depth index: [1]=D1 .. [3]=D3.
@@ -246,6 +254,14 @@ public final class TexturedViewRenderer implements ViewRenderer {
         if (ornament >= 0 && d > 0) {
             drawFloorOrnament(g, d, l, ornament);
         }
+        // Items in the far cells sit behind a door; the near ones in front of it.
+        drawItems(g, map, d, l, fwd, mx, my, true);
+        drawSquareFeature(g, map, sq, d, l, fwd, mx, my);
+        drawItems(g, map, d, l, fwd, mx, my, false);
+    }
+
+    private void drawSquareFeature(Graphics2D g, DungeonMap map, Square sq, int d, int l, Direction fwd,
+                                   int mx, int my) {
         switch (sq.type()) {
             case DOOR -> {
                 if (sq.facesAlong(fwd)) {
@@ -274,6 +290,82 @@ public final class TexturedViewRenderer implements ViewRenderer {
             }
             default -> { }
         }
+    }
+
+    // ---- objects on the floor and in the air ------------------------------
+    //
+    // Positions come from DM's own screen layout in GRAPHICS.DAT (Zones):
+    // the bottom centre of an object lying on a cell, and the centre of one
+    // in flight. The pictures are drawn full size on the party's own square
+    // and scaled down with distance, like DM's object scales (32/32 at D0,
+    // 27 and 21 for D1's near and far cells, 18 and 14 at D2, 12 at D3).
+
+    /** Object scale by [depth][near ? 0 : 1], in 32nds. */
+    private static final int[][] OBJECT_SCALE = {{32, 32}, {27, 21}, {18, 14}, {12, 12}};
+
+    /** DM's view square number for (depth, lateral), as used by the zone table, or -1 if not shown. */
+    static int viewSquare(int d, int l) {
+        return switch (d) {
+            case 3 -> switch (l) {
+                case 0 -> 0;
+                case -1 -> 1;
+                case 1 -> 2;
+                case -2 -> 3;
+                case 2 -> 4;
+                default -> -1;
+            };
+            case 2, 1 -> Math.abs(l) <= 1 ? (3 - d) * 3 + 2 + (l == 0 ? 0 : l < 0 ? 1 : 2) : -1;
+            case 0 -> l == 0 ? 11 : -1;
+            default -> -1;
+        };
+    }
+
+    /**
+     * Draws the piles on a square's far cells (view cells 0 and 1) or near
+     * cells (2 and 3), each pile bottom first. Items in flight over the
+     * square are drawn with the near cells, in front of everything on it.
+     */
+    private void drawItems(Graphics2D g, DungeonMap map, int d, int l, Direction fwd, int mx, int my, boolean far) {
+        int square = viewSquare(d, l);        if (square < 0) {
+            return;
+        }
+        int[] viewCells = far ? new int[] {0, 1} : new int[] {3, 2};
+        for (int viewCell : viewCells) {
+            Point at = art.zone(Zones.FLOOR_OBJECTS + square * 4 + viewCell);
+            if (at == null) {
+                continue;
+            }
+            for (Item item : map.itemsAt(mx, my, fwd.cellOf(viewCell))) {
+                drawObject(g, item, at, OBJECT_SCALE[d][viewCell >= 2 ? 0 : 1], true);
+            }
+        }
+        if (!far) {
+            for (Projectile p : map.projectiles()) {
+                if (p.x() == mx && p.y() == my) {
+                    int viewCell = fwd.viewCellOf(p.cell());
+                    Point at = art.zone(Zones.FLYING_OBJECTS + square * 4 + viewCell);
+                    if (at != null) {
+                        drawObject(g, p.item(), at, OBJECT_SCALE[d][viewCell >= 2 ? 0 : 1], false);
+                    }
+                }
+            }
+        }
+    }
+
+    private void drawObject(Graphics2D g, Item item, Point at, int scale32, boolean onFloor) {
+        int graphic = ItemCatalog.floorGraphic(item);
+        BufferedImage img = graphic < 0 ? null : art.sprite(graphic);
+        if (img == null) {
+            BufferedImage icon = art.iconSprite(item);
+            if (icon == null) {
+                return;
+            }
+            img = icon;
+        }
+        int w = Math.max(1, img.getWidth() * scale32 / 32);
+        int h = Math.max(1, img.getHeight() * scale32 / 32);
+        int y = onFloor ? at.y - h : at.y - h / 2;
+        g.drawImage(img, at.x - w / 2, y, w, h, null);
     }
 
     /**

@@ -6,6 +6,7 @@ import dm.data.Sound;
 import dm.model.Item;
 
 import java.awt.Color;
+import java.awt.Point;
 import java.awt.image.BufferedImage;
 import java.nio.file.Path;
 import java.util.HashMap;
@@ -63,6 +64,11 @@ public final class Art {
 
     public boolean available() {
         return gfx != null;
+    }
+
+    /** A point zone from DM's screen layout (viewport coordinates), or null. */
+    public Point zone(int id) {
+        return gfx == null || gfx.zones() == null ? null : gfx.zones().point(id);
     }
 
     /** Sound entry {@code index}, or null when it isn't available. */

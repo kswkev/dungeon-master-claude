@@ -34,6 +34,11 @@ public final class Party {
      * and leg armour; armour values aren't modelled yet, so it is a flat 1.
      */
     public static final int BUMP_DAMAGE = 1;
+    /**
+     * How many squares a thrown item flies. In DM it depends on the
+     * thrower's strength and the item's weight, which aren't modelled yet.
+     */
+    public static final int THROW_RANGE = 4;
 
     private final DungeonMap map;
     private final List<Champion> members = new ArrayList<>();
