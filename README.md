@@ -45,6 +45,16 @@ Without GRAPHICS.DAT the game still uses the flat-shaded view.
 - **Wall bumps:** now hurt the two champions on the side that hits the wall: the back row when backing into a wall, the left or right pair when sidestepping.
 - **Pits:** now use the original pit graphics.
 
+**Sprint 6: done.** Walls, floors and doors carry their original decorations:
+- **Placed explicitly by the dungeon:** alcoves, the VI altar, keyholes, switches and pictures, drawn where DUNGEON.DAT puts them.
+- **DM's "random" decorations:** iron rings, grates, moss, puddles, cracks and the like, chosen by the same seeded formula as the original.
+- **Inscriptions** such as "HALL OF CHAMPIONS" are carved in DM's inscription font on the wall straight ahead.
+- **Door decorations** (grilles, locks, the black entrance door) and door buttons.
+- **Not yet:** decorations are visual only; clicking switches, buttons, keyholes and alcoves comes later.
+- **Accuracy:** screen positions are fitted (the original coordinate tables aren't in the data files), and the random-placement rules were reconstructed from the ReDMCSB source.
+
+Run with `"-Ddm.debug=true"` to list every decoration on Level 1.
+
 ## Requirements
 
 - JDK 17 or newer

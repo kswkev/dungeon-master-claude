@@ -5,6 +5,8 @@ import dm.data.GraphicsFile;
 import dm.data.Sound;
 import dm.model.Champion;
 import dm.model.ChampionMirror;
+import dm.model.Decorations;
+import dm.model.Direction;
 import dm.model.DungeonMap;
 import dm.model.Party;
 import dm.ui.Art;
@@ -63,6 +65,7 @@ public final class Main {
                     path, dungeon.maps().size(), dungeon.format(), level.width(), level.height());
             System.out.print(level.toAscii(party));
             printChampions(level);
+            printDecorations(level);
         }
 
         SoundPlayer sounds = SoundPlayer.javaSound();
@@ -100,6 +103,30 @@ public final class Main {
             }
         }
         System.exit(0);
+    }
+
+    /** Every decoration on a wall side that faces an open square, plus floor and door decorations. */
+    private static void printDecorations(DungeonMap level) {
+        Decorations d = level.decorations();
+        System.out.println("Decorations (global ornament index):");
+        for (int x = 0; x < level.width(); x++) {
+            for (int y = 0; y < level.height(); y++) {
+                for (Direction side : Direction.values()) {
+                    String text = d.inscription(x, y, side);
+                    boolean faces = !level.get(x + side.dx, y + side.dy).looksSolid();
+                    if (faces && (d.wall(x, y, side) >= 0 || text != null)) {
+                        System.out.printf("  wall (%d,%d) %-5s %d%s%n", x, y, side, d.wall(x, y, side),
+                                text == null ? "" : " \"" + text.replace('\n', ' ') + "\"");
+                    }
+                }
+                if (level.floorOrnament(x, y) >= 0) {
+                    System.out.printf("  floor (%d,%d) %d%n", x, y, level.floorOrnament(x, y));
+                }
+                if (d.door(x, y) >= 0 || d.doorButton(x, y)) {
+                    System.out.printf("  door (%d,%d) %d%s%n", x, y, d.door(x, y), d.doorButton(x, y) ? " with button" : "");
+                }
+            }
+        }
     }
 
     private static void printChampions(DungeonMap level) {

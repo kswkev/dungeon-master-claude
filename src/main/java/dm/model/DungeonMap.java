@@ -31,6 +31,7 @@ public final class DungeonMap {
     private final int[][] doorState;
     private final int[][] doorTarget;
     private final List<FloorSensor> sensors = new ArrayList<>();
+    private Decorations decorations;
 
     public DungeonMap(int level, Square[][] squares) {
         this(level, squares, List.of());
@@ -50,6 +51,7 @@ public final class DungeonMap {
         this.height = width == 0 ? 0 : squares[0].length;
         this.mirrors = List.copyOf(mirrors);
         this.doorStyles = doorStyles;
+        this.decorations = Decorations.none(width, height);
         this.doorState = new int[width][height];
         this.doorTarget = new int[width][height];
         for (int x = 0; x < width; x++) {
@@ -181,14 +183,25 @@ public final class DungeonMap {
         return Collections.unmodifiableList(sensors);
     }
 
-    /** The floor ornament drawn on (x, y) (e.g. 1 = square pressure plate), or -1. */
+    /**
+     * The floor ornament drawn on (x, y) (e.g. 1 = square pressure plate), or -1.
+     * A sensor's own ornament wins over a random one, as in DM.
+     */
     public int floorOrnament(int x, int y) {
         for (FloorSensor s : sensors) {
             if (s.x() == x && s.y() == y && s.ornament() >= 0) {
                 return s.ornament();
             }
         }
-        return -1;
+        return decorations.floor(x, y);
+    }
+
+    public Decorations decorations() {
+        return decorations;
+    }
+
+    public void setDecorations(Decorations decorations) {
+        this.decorations = decorations;
     }
 
     /**
