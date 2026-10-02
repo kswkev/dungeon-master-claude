@@ -27,14 +27,16 @@ import java.util.List;
  *   map definitions (16 bytes each)
  *     word  raw map data offset, 4 unused bytes, byte X offset, byte Y offset
  *     word  bits 11-15 height-1, bits 6-10 width-1, bits 0-5 level
- *     2 words of ornament / creature counts
+ *     word  ornament counts: bits 8-11 floor, 0-3 wall (plus random-ornament counts)
+ *     word  bits 4-7 creature type count, 0-3 door ornament count
  *     word  graphics sets: bits 12-15 door set 1, 8-11 door set 0
  *   column cumulative square-thing counts (word per map column, all maps)
  *   square first things (words), text data (words), thing data per type
  *   raw map data: one byte per square, column-major, then per-map extra tables
  * </pre>
- * Squares with bit 4 set own a thing list; see {@link Thing}. So far only the
- * Hall of Champions mirrors are built from the things ({@link ChampionFinder}).
+ * Squares with bit 4 set own a thing list; see {@link Thing}. From the things
+ * we build the Hall of Champions mirrors ({@link ChampionFinder}), floor
+ * sensors such as pressure plates ({@link FloorSensorFinder}) and door styles.
  */
 public final class DungeonFile {
 
@@ -119,6 +121,8 @@ public final class DungeonFile {
         int[] heights = new int[mapCount];
         int[] levels = new int[mapCount];
         int[] graphicsSets = new int[mapCount];
+        int[] ornamentCounts = new int[mapCount];
+        int[] otherCounts = new int[mapCount];
         int columnCount = 0;
         for (int m = 0; m < mapCount; m++) {
             offsets[m] = r.u16();
@@ -126,7 +130,8 @@ public final class DungeonFile {
             r.u8(); // X offset within the level
             r.u8(); // Y offset within the level
             int dims = r.u16();
-            r.skip(4); // ornament and creature counts
+            ornamentCounts[m] = r.u16();
+            otherCounts[m] = r.u16();
             graphicsSets[m] = r.u16();
             widths[m] = ((dims >>> 6) & 0x1F) + 1;
             heights[m] = (dims >>> 11) + 1;
@@ -170,8 +175,12 @@ public final class DungeonFile {
                 }
             }
             List<List<Thing>>[] squareThings = store.listsFor(squares, columnFirstThing, columnBase);
-            maps.add(new DungeonMap(levels[m], squares, ChampionFinder.find(squareThings, text),
-                    doorStyles(squares, squareThings, graphicsSets[m])));
+            DungeonMap map = new DungeonMap(levels[m], squares, ChampionFinder.find(squareThings, text),
+                    doorStyles(squares, squareThings, graphicsSets[m]));
+            int[] floorOrnaments = floorOrnamentList(data, base + widths[m] * heights[m],
+                    rawStart + rawMapBytes, ornamentCounts[m], otherCounts[m]);
+            FloorSensorFinder.find(squares, squareThings, floorOrnaments).forEach(map::addSensor);
+            maps.add(map);
             columnBase += widths[m];
         }
 
@@ -201,6 +210,28 @@ public final class DungeonFile {
             }
         }
         return styles;
+    }
+
+    /**
+     * After each map's squares come its lists of creature types, wall ornaments,
+     * floor ornaments and door ornaments (one byte each, global indexes). Their
+     * counts are in the map definition: word B bits 0-3 wall, 8-11 floor;
+     * word C bits 4-7 creatures, 0-3 doors. Returns the floor ornament list.
+     */
+    private static int[] floorOrnamentList(byte[] data, int start, int end, int ornamentCounts, int otherCounts)
+            throws IOException {
+        int creatures = (otherCounts >>> 4) & 15;
+        int walls = ornamentCounts & 15;
+        int floors = (ornamentCounts >>> 8) & 15;
+        int from = start + creatures + walls;
+        if (from + floors > end) {
+            throw new IOException("floor ornament list runs past the raw map data");
+        }
+        int[] list = new int[floors];
+        for (int i = 0; i < floors; i++) {
+            list[i] = data[from + i] & 0xFF;
+        }
+        return list;
     }
 
     private static int[] words(ByteReader r, int count) throws IOException {

@@ -36,6 +36,15 @@ With no party yet, you only get the sound and the flash. Health can't drop below
 
 Without GRAPHICS.DAT the game still uses the flat-shaded view.
 
+**Sprint 5: done.**
+- **Pressure plates:** the original pressure plates work, read from DUNGEON.DAT.
+  - The plate just inside the Hall of Champions exit opens the exit door once you step on it with at least one champion. As in DM, an empty party can't press a party plate.
+  - Plates can open, close or toggle doors. Some only work while you stand on them, some only work once, and some click.
+- **Doors:** they slide open or shut over about half a second, with the original door sound.
+- **Party formation:** use the box in the top-right corner. Click a champion's icon, then any of the four positions, to move them there (swapping with whoever stands there). New recruits fill front-left, front-right, back-right, back-left.
+- **Wall bumps:** now hurt the two champions on the side that hits the wall: the back row when backing into a wall, the left or right pair when sidestepping.
+- **Pits:** now use the original pit graphics.
+
 ## Requirements
 
 - JDK 17 or newer

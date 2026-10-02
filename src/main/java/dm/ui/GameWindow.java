@@ -56,6 +56,14 @@ public final class GameWindow extends JFrame {
                 damageTimer.restart();
             });
 
+            // Game clock: animates doors; repaints only when something moved.
+            Timer tickTimer = new Timer(GameScreen.TICK_MS, e -> {
+                if (game.tick()) {
+                    repaint();
+                }
+            });
+            tickTimer.start();
+
             MouseAdapter mouse = new MouseAdapter() {
                 @Override
                 public void mousePressed(MouseEvent e) {

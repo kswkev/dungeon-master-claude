@@ -117,6 +117,9 @@ public final class FlatViewRenderer implements ViewRenderer {
         if (d == 0 && l == 0) {
             return; // the square the party stands in
         }
+        if (map.floorOrnament(mx, my) >= 0) {
+            drawPlate(g, d, l);
+        }
         switch (sq.type()) {
             case PIT -> {
                 if (sq.pitOpen()) {
@@ -124,7 +127,7 @@ public final class FlatViewRenderer implements ViewRenderer {
                 }
             }
             case STAIRS -> drawStairs(g, d, l, sq.stairsUp());
-            case DOOR -> drawDoor(g, d, l, sq.isDoorOpen());
+            case DOOR -> drawDoor(g, d, l, map.isPassable(mx, my));
             case TELEPORTER -> drawTeleporter(g, d, l, mx, my);
             default -> { }
         }
@@ -241,6 +244,15 @@ public final class FlatViewRenderer implements ViewRenderer {
         g.setColor(shade(new Color(60, 60, 60), z, 1));
         fillFace(g, x0, x1, 0.15, 0.2, z);
         fillFace(g, x0, x1, -0.25, -0.2, z);
+    }
+
+    /** A floor plate or other floor ornament, as a flat grey slab. */
+    private void drawPlate(Graphics2D g, int d, int l) {
+        Polygon plate = floorQuad(l - 0.3, l + 0.3, d - 0.3, d + 0.3, -0.5);
+        g.setColor(shade(new Color(150, 150, 150), d, 1));
+        g.fillPolygon(plate);
+        g.setColor(shade(MORTAR, d, 1));
+        g.drawPolygon(plate);
     }
 
     private void drawPit(Graphics2D g, int d, int l) {

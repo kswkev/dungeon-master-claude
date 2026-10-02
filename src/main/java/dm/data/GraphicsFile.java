@@ -45,6 +45,10 @@ public final class GraphicsFile {
     public static final int LAST_SOUND = 712;
     /** The thud when the party walks into a wall; confirmed by ear against the original. */
     public static final int SOUND_BUMP = 687;
+    /** A door starting to open or close; confirmed by ear. */
+    public static final int SOUND_DOOR = 673;
+    /** The click of an audible pressure plate (DM's switch sound); confirmed by ear. */
+    public static final int SOUND_CLICK = 672;
     /** Playback rate of the PC samples. */
     public static final int SOUND_SAMPLE_RATE = 5500;
 
