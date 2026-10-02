@@ -143,20 +143,32 @@ public final class DungeonMap {
         return isDoor(x, y) && moveDoor(x, y, doorTarget[x][y] != DOOR_OPEN);
     }
 
-    /** Moves every door that isn't at its target one step; returns true if any moved. */
-    public boolean tickDoors() {
+    /**
+     * What a door tick did: whether any door moved, and whether any door
+     * rattled. As in DM, a door rattles on every step except the last one,
+     * where it settles fully open or shut, so a full 4-step move rattles 3 times.
+     */
+    public record DoorTick(boolean moved, boolean rattled) {
+        public static final DoorTick NOTHING = new DoorTick(false, false);
+    }
+
+    /** Moves every door that isn't at its target one step. */
+    public DoorTick tickDoors() {
         boolean moved = false;
+        boolean rattled = false;
         for (int x = 0; x < width; x++) {
             for (int y = 0; y < height; y++) {
                 int state = doorState[x][y];
                 int target = doorTarget[x][y];
                 if (state != target && state != DOOR_BROKEN) {
-                    doorState[x][y] = state + Integer.signum(target - state);
+                    int next = state + Integer.signum(target - state);
+                    doorState[x][y] = next;
                     moved = true;
+                    rattled |= next != target;
                 }
             }
         }
-        return moved;
+        return moved ? new DoorTick(true, rattled) : DoorTick.NOTHING;
     }
 
     // ---- floor sensors -----------------------------------------------------

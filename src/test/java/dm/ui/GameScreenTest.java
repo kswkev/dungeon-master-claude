@@ -133,13 +133,14 @@ class GameScreenTest {
         GameScreen s = new GameScreen(p, Art.none(), sound -> soundsPlayed++, false);
 
         s.press(MovementPanel.AREA.x + 40, MovementPanel.AREA.y + 10); // forward onto the plate
-        assertEquals(1, soundsPlayed, "door sound");
+        assertEquals(0, soundsPlayed, "the door hasn't moved yet");
         assertFalse(map.isPassable(1, 1));
         int ticks = 0;
         while (s.tick()) {
             ticks++;
         }
         assertEquals(4, ticks);
+        assertEquals(3, soundsPlayed, "the door rattles 3 times while opening, as in DM");
         assertTrue(map.isPassable(1, 1));
         s.press(MovementPanel.AREA.x + 40, MovementPanel.AREA.y + 10);
         assertEquals(1, p.x(), "walked into the open doorway");

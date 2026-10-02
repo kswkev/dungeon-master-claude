@@ -70,7 +70,11 @@ public final class GameScreen {
      * {@link #TICK_MS} ms). Returns true if anything visible changed.
      */
     public boolean tick() {
-        return party.map().tickDoors();
+        DungeonMap.DoorTick doors = party.map().tickDoors();
+        if (doors.rattled()) {
+            sounds.play(doorSound);
+        }
+        return doors.moved();
     }
 
     /**
@@ -193,9 +197,7 @@ public final class GameScreen {
                 if (result.click()) {
                     sounds.play(clickSound);
                 }
-                if (result.doorStarted()) {
-                    sounds.play(doorSound);
-                }
+                // The door sound comes from tick(), once per door step.
             }
         }
         if (debug) {

@@ -65,12 +65,28 @@ class FloorSensorTest {
         party.recruit(mirror);
         party.move(Party.Move.FORWARD);
         for (int expected = 3; expected >= 0; expected--) {
-            assertTrue(map.tickDoors());
+            DungeonMap.DoorTick tick = map.tickDoors();
+            assertTrue(tick.moved());
             assertEquals(expected, map.doorState(1, 1));
+            assertEquals(expected != 0, tick.rattled(), "rattles on every step but the last");
         }
-        assertFalse(map.tickDoors(), "nothing left to move");
+        assertFalse(map.tickDoors().moved(), "nothing left to move");
         assertTrue(map.isPassable(1, 1));
         assertTrue(party.move(Party.Move.FORWARD), "party can walk through");
+    }
+
+    @Test
+    void closingRattlesThreeTimesToo() {
+        map.moveDoor(1, 1, true);
+        ticks(4);
+        map.moveDoor(1, 1, false);
+        int rattles = 0;
+        DungeonMap.DoorTick tick;
+        while ((tick = map.tickDoors()).moved()) {
+            rattles += tick.rattled() ? 1 : 0;
+        }
+        assertEquals(3, rattles);
+        assertEquals(DungeonMap.DOOR_CLOSED, map.doorState(1, 1));
     }
 
     @Test
