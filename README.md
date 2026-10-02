@@ -13,25 +13,33 @@ A Java remake of FTL's *Dungeon Master* (1988), built one sprint at a time.
 
 - Walls and closed doors block movement. The view gets a red border for a moment when a move is blocked.
 - Pits, stairs and teleporters are drawn but don't do anything yet.
-- The champion, spell and action areas are empty placeholders.
+
+**Sprint 2: done.** The Hall of Champions has its 24 champions:
+
+- Their portraits hang in the wall mirrors, drawn with the original artwork.
+- Face a mirror from the square in front of it and click the portrait to open the champion's character sheet. The sheet shows their equipment, health, stamina and mana, stats and skill levels. Hover over an item to see its name.
+- **Resurrect** adds the champion to your party (up to 4) and leaves the mirror empty. **Cancel** leaves them where they are.
+- Party members appear in the boxes across the top with their hands and health/stamina/mana bars. Click a box to reopen that champion's sheet.
+- Reincarnate, spells and actions come in later sprints.
 
 ## Requirements
 
 - JDK 17 or newer
 - Maven 3.9+
-- `DUNGEON.DAT` from your own copy of Dungeon Master
+- `DUNGEON.DAT` and `GRAPHICS.DAT` from your own copy of Dungeon Master
 
 ## Game data
 
-The original game data is copyrighted and is **not** included. Copy your own file to:
+The original game data is copyrighted and is **not** included. Copy your own files to:
 
 ```
 data/DUNGEON.DAT
+data/GRAPHICS.DAT
 ```
 
-- Atari ST, Amiga and PC versions should all work. The loader works out compression and byte order by itself.
-- So far only a PC (uncompressed) file has been tested.
-- The file is git-ignored.
+- For DUNGEON.DAT, the Atari ST, Amiga and PC versions should all work. The loader works out compression and byte order by itself. So far only a PC (uncompressed) file has been tested.
+- GRAPHICS.DAT must be the PC version. Without it the game still runs, using simple placeholder art.
+- Both files are git-ignored.
 
 ## Build and run
 
@@ -46,9 +54,10 @@ Options:
 |---|---|
 | `java -jar <jar> path/to/DUNGEON.DAT` | Load the data file from another location |
 | `-Ddm.dungeon=path/to/DUNGEON.DAT` | Same, set as a system property |
-| `-Ddm.debug=true` | Print Level 1 as an ASCII map, log each move, and show the party's position on screen |
+| `-Ddm.graphics=path/to/GRAPHICS.DAT` | Load the graphics from another location (default: next to DUNGEON.DAT) |
+| `-Ddm.debug=true` | Print Level 1 as an ASCII map and the list of champions, log each move, and show the party's position on screen |
 
-If the data file is missing or can't be read, an error dialog explains why.
+If DUNGEON.DAT is missing or can't be read, an error dialog explains why.
 
 ## Tests
 
@@ -56,15 +65,20 @@ If the data file is missing or can't be read, an error dialog explains why.
 mvn test
 ```
 
-The tests cover movement and collisions on small hand-made maps. They also check the data-file loader on generated test files: both byte orders, a compressed file, and broken or missing files.
+The tests cover:
+- movement and collisions on small hand-made maps;
+- the DUNGEON.DAT loader on generated test files: both byte orders, a compressed file, a champion mirror, and broken or missing files;
+- the GRAPHICS.DAT image decoder and text decoder;
+- champion parsing, skill levels and where starting items go;
+- recruiting, and the click flow of portrait → sheet → Resurrect/Cancel.
 
 ## Project layout
 
 ```
 src/main/java/dm/
-  data/   DUNGEON.DAT loader (format detection, decompression)
-  model/  map, squares, directions, party movement
-  ui/     window, 3D dungeon view, movement arrow panel
+  data/   DUNGEON.DAT and GRAPHICS.DAT loaders (format detection, decompression, objects, text)
+  model/  map, squares, party, champions, items
+  ui/     window, 3D dungeon view, character sheet, champion bars, arrow panel
 ```
 
 See [CLAUDE.md](CLAUDE.md) for architecture notes.

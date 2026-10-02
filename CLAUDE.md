@@ -4,7 +4,11 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project
 
-A Java/Swing remake of FTL's *Dungeon Master* (1988), built sprint by sprint. Sprint 1 (done) loads Level 1 from the original `DUNGEON.DAT` and lets you walk around it with DM's six-button arrow panel, which is the only input. Door, pit, stairs and teleporter behaviour, items and champions are not implemented yet.
+A Java/Swing remake of FTL's *Dungeon Master* (1988), built sprint by sprint.
+- Sprint 1: walk Level 1 with DM's six-button arrow panel, which is the only input.
+- Sprint 2: the Hall of Champions. Mirror portraits, the character sheet, Resurrect (not Reincarnate), and champion bars along the top.
+
+Door, pit, stairs and teleporter behaviour, picking items up, combat and spells are not implemented yet.
 
 ## Commands
 
@@ -22,15 +26,15 @@ The pom targets Java 17 (`maven.compiler.release`) because only JDK 17 is instal
 
 ## Game data
 
-- `data/DUNGEON.DAT` comes from the user's own copy of the game. It is copyrighted and git-ignored, so never commit it.
-- The local copy is the PC version: little-endian and uncompressed.
-- The path is resolved in this order: first CLI argument, then `-Ddm.dungeon`, then `data/DUNGEON.DAT`.
+- `data/DUNGEON.DAT` and `data/GRAPHICS.DAT` come from the user's own copy of the game. They are copyrighted and git-ignored, so never commit them.
+- The local copies are the PC version. DUNGEON.DAT is little-endian and uncompressed.
+- The DUNGEON.DAT path is resolved in this order: first CLI argument, then `-Ddm.dungeon`, then `data/DUNGEON.DAT`. GRAPHICS.DAT is read from the same folder unless `-Ddm.graphics` is set. Without it, `Art.none()` gives placeholder art and the game still runs.
 
 ## Architecture
 
 Code lives under `src/main/java/dm/`, in three layers.
 
-**`data/`: parses DUNGEON.DAT**
+**`data/`: parses DUNGEON.DAT and GRAPHICS.DAT**
 - `DungeonFile.parse` doesn't know the platform in advance. It tries every decoding (compressed variants from `Decompressor` plus the raw bytes) in both byte orders, and keeps the first one that passes its consistency checks:
   - the map count is plausible;
   - each map fits inside the raw map data;
@@ -38,25 +42,49 @@ Code lives under `src/main/java/dm/`, in three layers.
   - the party starts on a walkable square.
 - Add new format knowledge as further checks rather than special cases for one platform.
 - The javadoc on `DungeonFile` documents the file layout.
-- Squares are stored column-major (`[x][y]`), one byte each. Bits 5-7 hold the element type and bits 0-4 hold attributes.
-- Things (items, creatures, sensors), text and ornament tables are currently skipped by size only, using `THING_SIZES` and the header counts.
+- Squares are stored column-major (`[x][y]`), one byte each. Bits 5-7 hold the element type and bits 0-4 hold attributes. Bit 4 means the square has a thing list.
+- **Things** (`Thing`, `Thing.Store`):
+  - A thing id packs the cell (bits 14-15), type (10-13) and index (0-9). Each record's first word links to the next thing, and 0xFFFE ends the list.
+  - Squares with things take entries from the square-first-things table in column-major order, starting at that column's cumulative count.
+- **Text** (`TextDecoder`): 5-bit codes, 3 per word. Code 28 is a line break. Code 30 followed by another code is an escape for a common string (e.g. 30+2 = "THE ").
+- **Champions** (`ChampionFinder`):
+  - A mirror is a sensor of type 127 on a wall square. The sensor's data is the portrait number and its cell is the wall side.
+  - The starting items are the objects on that same wall side.
+  - The champion's text is on the floor square the mirror faces: `NAME\nTITLE\n\nGENDER\nvitals\nstats\nskills`, with numbers written as hex letters A-P.
+- **GRAPHICS.DAT** (`GraphicsFile`, `ImageDecoder`), as found by reverse-checking the user's PC file:
+  - The header is followed by tables of sizes and width/height, then the entries.
+  - Each image is a nibble stream: a 6-colour local palette, then single-pixel or run commands, including "copy from the row above". The javadoc on `ImageDecoder` has the details.
+  - Entries 671 and up are sounds and data, not images. Entry 694 is the object name list, indexed by icon number.
+  - The useful entry indexes are constants on `GraphicsFile` (inventory 17, portraits 26, icon sheets 42-48, mirror 346).
+- **Items** (`ItemCatalog`): maps the type numbers stored in DUNGEON.DAT to names and wear slots.
+  - This is reference data from the game itself, not from either file.
+  - Icons are found by matching names against GRAPHICS.DAT's name list. `Item.nameVariant` picks between icons that share a name (e.g. ROBE for the body vs. the legs).
 
 **`model/`: map and party, no UI**
 - `Square` keeps the raw byte and decodes attribute bits through accessors (door state, pit open, stairs up). `isPassable` holds the movement rules.
 - `DungeonMap` returns `Square.SOLID` for out-of-bounds squares. `DungeonMap.fromAscii` / `toAscii` build test maps and produce the debug dump. Its character legend is used by the tests.
 - `Direction` follows DM's encoding: 0 = north, numbered clockwise. North is -Y.
 - `Party.Move` is relative to the facing (forward, right, back, left).
+- `Party` holds up to 4 `Champion`s. `recruit(mirror)` adds the champion and marks the `ChampionMirror` as taken, so it renders empty. `facingMirror()` is the untaken mirror on the adjacent wall straight ahead.
+- `Champion.addStartingItem` chooses slots the way DM does: worn items on the body, weapons in the action hand then the quiver or ready hand, potions in the pouches, everything else in the backpack.
 
 **`ui/`: draws everything at the original 320×200 resolution**
-- `GameWindow` draws into a 320×200 `BufferedImage` and scales it to the window with nearest-neighbour filtering. Mouse clicks are mapped back to 320×200 coordinates before hit-testing.
+- `GameScreen` holds all screen state and click routing, with no Swing. `GameWindow` is a thin wrapper that scales the 320×200 buffer with nearest-neighbour filtering and maps mouse positions back. Tests and scratch renders drive `GameScreen.press`/`render` directly.
+- Click order: an open `CharacterSheet` first, then `ChampionBars`, then the portrait rectangle the renderer recorded during the last draw (`portraitHit`, only for the adjacent wall straight ahead), then the arrows. The arrows are ignored while a sheet is open.
 - Screen regions match the original layout:
-  - the dungeon view is the `DungeonViewRenderer.VIEWPORT` rectangle;
+  - the dungeon view is the `DungeonViewRenderer.VIEWPORT` rectangle (the character sheet replaces it while open);
   - the arrows are `MovementPanel.AREA`;
-  - the champion, spell and action areas are drawn as empty outlines for now.
+  - the champion boxes run across the top;
+  - the spell and action areas are drawn as empty outlines for now.
+- `CharacterSheet` slot positions come from DM's inventory background (graphic 17). Text uses `PixelFont`, a hand-made 5×5 font, because the PC GRAPHICS.DAT has no UI font image.
+- `Art` converts images using DM's 16-colour palette, where colour 10 is transparent in sprites. Every caller must handle `null` from `Art` by drawing a placeholder (`Placeholders`).
 - `DungeonViewRenderer` draws the first-person view.
   - It draws back to front: depth 3 down to 0, and the outermost squares first at each depth.
   - View space: the square at (depth d, lateral l) spans z ∈ [d-0.5, d+0.5] and x ∈ [l-0.5, l+0.5].
   - Projection divides by `z + EYE_BACK`. The eye offset gives DM's gentle shrink of about 1.6× per square, and keeps z positive, so there is no near-plane clipping. Tune `EYE_BACK` and `FOCAL_*` together.
   - Every shape goes through `sx`/`sy`, and colours go through `shade()` (darkening with distance).
 
-Tests (`src/test/java/dm/`) include a synthetic DUNGEON.DAT builder in `DungeonFileTest`, with matching code for building compressed files. Use it when extending the parser.
+Tests (`src/test/java/dm/`) include helpers to reuse when extending the loaders:
+- a synthetic DUNGEON.DAT builder in `DungeonFileTest`, including a champion mirror, with matching code for building compressed files;
+- a text encoder in `TextDecoderTest`;
+- small hand-checked images from the real GRAPHICS.DAT in `GraphicsFileTest`.

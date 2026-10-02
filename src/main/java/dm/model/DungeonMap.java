@@ -1,5 +1,7 @@
 package dm.model;
 
+import java.util.List;
+
 /** A single dungeon level. Squares are addressed as [x][y]; anything out of bounds is solid. */
 public final class DungeonMap {
 
@@ -7,12 +9,18 @@ public final class DungeonMap {
     private final Square[][] squares;
     private final int width;
     private final int height;
+    private final List<ChampionMirror> mirrors;
 
     public DungeonMap(int level, Square[][] squares) {
+        this(level, squares, List.of());
+    }
+
+    public DungeonMap(int level, Square[][] squares, List<ChampionMirror> mirrors) {
         this.level = level;
         this.squares = squares;
         this.width = squares.length;
         this.height = width == 0 ? 0 : squares[0].length;
+        this.mirrors = List.copyOf(mirrors);
     }
 
     /** Builds a map from rows of characters; see {@link #charFor(Square)} for the legend. */
@@ -50,6 +58,20 @@ public final class DungeonMap {
 
     public boolean isPassable(int x, int y) {
         return inBounds(x, y) && squares[x][y].isPassable();
+    }
+
+    public List<ChampionMirror> mirrors() {
+        return mirrors;
+    }
+
+    /** The mirror hanging on the given side of wall square (x, y), or null. */
+    public ChampionMirror mirrorAt(int x, int y, Direction side) {
+        for (ChampionMirror m : mirrors) {
+            if (m.x() == x && m.y() == y && m.side() == side) {
+                return m;
+            }
+        }
+        return null;
     }
 
     public String toAscii(Party party) {

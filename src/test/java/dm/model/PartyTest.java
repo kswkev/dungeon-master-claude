@@ -2,6 +2,9 @@ package dm.model;
 
 import org.junit.jupiter.api.Test;
 
+import java.util.ArrayList;
+import java.util.List;
+
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -72,6 +75,57 @@ class PartyTest {
         Party p = new Party(open, 0, 0, Direction.NORTH);
         assertFalse(p.move(Party.Move.FORWARD));
         assertFalse(p.move(Party.Move.LEFT));
+    }
+
+    private static DungeonMap hallWithMirrors(int count) {
+        // A corridor along y=1 with mirrors on the walls above it (y=0), facing south.
+        List<ChampionMirror> mirrors = new ArrayList<>();
+        for (int i = 0; i < count; i++) {
+            mirrors.add(new ChampionMirror(i + 1, 0, Direction.SOUTH, Champion.parse(ChampionTest.ELIJA, i)));
+        }
+        DungeonMap ascii = DungeonMap.fromAscii(0, "########", "#......#", "########");
+        Square[][] squares = new Square[ascii.width()][ascii.height()];
+        for (int x = 0; x < ascii.width(); x++) {
+            for (int y = 0; y < ascii.height(); y++) {
+                squares[x][y] = ascii.get(x, y);
+            }
+        }
+        return new DungeonMap(0, squares, mirrors);
+    }
+
+    @Test
+    void findsTheMirrorStraightAhead() {
+        DungeonMap hall = hallWithMirrors(2);
+        Party p = new Party(hall, 1, 1, Direction.NORTH);
+        assertEquals(hall.mirrors().get(0), p.facingMirror());
+        p.turnRight();
+        assertEquals(null, p.facingMirror(), "facing along the corridor");
+        Party q = new Party(hall, 1, 1, Direction.SOUTH);
+        assertEquals(null, q.facingMirror(), "mirror is behind");
+    }
+
+    @Test
+    void recruitsUpToFourAndEmptiesMirrors() {
+        DungeonMap hall = hallWithMirrors(5);
+        Party p = new Party(hall, 1, 1, Direction.NORTH);
+        for (int i = 0; i < 4; i++) {
+            assertTrue(p.recruit(hall.mirrors().get(i)));
+            assertTrue(hall.mirrors().get(i).taken());
+        }
+        assertTrue(p.isFull());
+        assertFalse(p.recruit(hall.mirrors().get(4)), "party of 4 is full");
+        assertFalse(hall.mirrors().get(4).taken());
+        assertEquals(4, p.members().size());
+        assertEquals(null, p.facingMirror(), "taken mirror shows empty");
+    }
+
+    @Test
+    void cannotRecruitTheSameChampionTwice() {
+        DungeonMap hall = hallWithMirrors(1);
+        Party p = new Party(hall, 1, 1, Direction.NORTH);
+        assertTrue(p.recruit(hall.mirrors().get(0)));
+        assertFalse(p.recruit(hall.mirrors().get(0)));
+        assertEquals(1, p.members().size());
     }
 
     @Test
