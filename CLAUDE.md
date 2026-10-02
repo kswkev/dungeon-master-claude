@@ -10,6 +10,7 @@ A Java/Swing remake of FTL's *Dungeon Master* (1988), built sprint by sprint.
 - Sprint 3: wall bumps. The original thud, 1 damage to the front-row champions with DM's damage burst on their boxes, plus the red flash.
 - Sprint 4: the original dungeon textures. Walls, floor and ceiling are pixel-exact; doors, stairs and pits are fitted. Wall/floor decorations are deferred.
 - Sprint 5: floor sensors (pressure plates) that move doors, animated doors with sound, the party formation box, and bump damage by side.
+- Sprint 6: wall, floor and door decorations (issue #4). Explicit and DM-random placement, inscriptions with text, door decorations and buttons. Visual only.
 
 Door, pit, stairs and teleporter behaviour, picking items up, combat and spells are not implemented yet.
 
@@ -62,7 +63,20 @@ Code lives under `src/main/java/dm/`, in three layers.
   - Sounds (671–693 and 701–712) are a big-endian sample count followed by unsigned 8-bit mono PCM, played at `SOUND_SAMPLE_RATE` (5500 Hz).
   - `GraphicsFile.sound()` reads them. Which index is which effect has to be checked by ear with `-Ddm.soundtest`. The user confirmed 687 as the wall bump.
   - The useful entry indexes are constants on `GraphicsFile` (inventory 17, portraits 26, icon sheets 42-48, mirror 346).
-- **Ornament lists:** each map's creature/wall/floor/door ornament lists come straight after its squares. Their counts are in map words B (wall bits 0-3, floor bits 8-11) and C (creatures bits 4-7, doors bits 0-3).
+- **Ornament lists** (`OrnamentLists`): each map's creature/wall/floor/door ornament lists come straight after its squares.
+  - Counts are in map words B (wall bits 0-3, random wall 4-7, floor 8-11, random floor 12-15) and C (creatures bits 4-7, doors bits 0-3).
+  - Things refer to decorations by a 1-based ordinal into these lists.
+- **Decorations** (`DecorationFinder` → `dm.model.Decorations`, via `DungeonMap.decorations()`). The rules are reconstructed from ReDMCSB F0169-F0172:
+  - **Random hash:** `((((v1*31417)>>1) + v2*11 + seed) >> 2) % 30` in 16-bit unsigned maths, with v1 = 2000+(x<<5)+y, v2 = 3000+(map<<6)+w+h, and seed = header word 0.
+  - **Random walls:** a wall side is allowed one if square bit (8 >> side) is set, and it hashes row (y+1)×(side+1). Corridors use bit 3 and the real (x,y).
+  - **Explicit decorations override random ones:** wall sensors' attribute bits 12-15, and visible texts (inscriptions, with their text). Champion-mirror sides are cleared, since the mirror draws itself.
+  - **Doors:** record bits 1-4 are the decoration ordinal, and bit 6 means the door has a button.
+- **Decoration art:**
+  - wall decoration k: side view 259+2k, front view 260+2k (0 inscription stone, 1-3 alcoves/altar, 43 mirror, 59 outdoor picture);
+  - floor decoration k: 385+6k;
+  - door decoration k: 441+k, where orange (colour 9) is see-through too (`Art.doorSprite`);
+  - door button: 125;
+  - inscription font: 258 (8-pixel cells, A-Z then space and '.').
 - **Floor sensors** (`FloorSensorFinder` → `dm.model.FloorSensor`): sensor things on non-wall squares.
   - Word 1: type in bits 0-6.
   - Word 2: once-only bit 0, effect bits 1-2 (set/clear/toggle/hold), revert bit 3, audible bit 4, floor-ornament ordinal bits 12-15.

@@ -99,6 +99,7 @@ public final class TexturedViewRenderer implements ViewRenderer {
                     if (sq.looksSolid()) {
                         if (WALL[d][l + 2] >= 0) {
                             drawWall(g, d, l, flipped);
+                            drawWallDecorations(g, map, d, l, mx, my, fwd);
                         }
                         if (l == 0 && d > 0) {
                             ChampionMirror mirror = map.mirrorAt(mx, my, fwd.opposite());
@@ -114,6 +115,83 @@ public final class TexturedViewRenderer implements ViewRenderer {
         } finally {
             g.dispose();
         }
+    }
+
+    // ---- wall decorations ---------------------------------------------------
+    //
+    // Decoration k has a side view (259 + 2k) and a front view (260 + 2k),
+    // both drawn for D1 and scaled down for D2/D3. DM's per-decoration
+    // coordinate tables aren't in the PC data, so positions are fitted: centred
+    // on the face slightly above its middle (like the mirrors), and full-face
+    // pictures fill the face.
+
+    static final int FIRST_WALL_ORNAMENT = 259;
+    /** Centre of each depth's visible left side face (x, y), for side decorations. */
+    private static final int[][] SIDE_FACE_CENTRE = {null, {46, 59}, {68, 52}, {82, 47}};
+    private static final double[] SIDE_SCALE = {0, 1.0, 0.66, 0.44};
+
+    private void drawWallDecorations(Graphics2D g, DungeonMap map, int d, int l, int mx, int my, Direction fwd) {
+        if (d == 0) {
+            return;
+        }
+        // Front face, for the centre and the visible slivers of the neighbouring squares.
+        if (Math.abs(l) <= 1) {
+            Direction front = fwd.opposite();
+            int ornament = map.decorations().wall(mx, my, front);
+            String text = map.decorations().inscription(mx, my, front);
+            if (text != null && d == 1 && l == 0) {
+                Inscription.draw(g, art, text, FRONT[1]);
+            } else if (ornament >= 0) {
+                Rectangle face = new Rectangle(FRONT[d]);
+                face.x += l * face.width;
+                drawFrontDecoration(g, ornament, face);
+            }
+        }
+        // Side face turned toward the middle of the view.
+        if (l != 0 && Math.abs(l) <= 1) {
+            Direction side = l < 0 ? fwd.turnRight() : fwd.turnLeft();
+            int ornament = map.decorations().wall(mx, my, side);
+            if (ornament >= 0) {
+                drawSideDecoration(g, ornament, d, l > 0);
+            }
+        }
+    }
+
+    private void drawFrontDecoration(Graphics2D g, int ornament, Rectangle face) {
+        BufferedImage img = art.sprite(FIRST_WALL_ORNAMENT + 2 * ornament + 1);
+        if (img == null) {
+            return;
+        }
+        double scale = face.width / (double) FRONT[1].width;
+        int w = (int) Math.round(img.getWidth() * scale);
+        int h = (int) Math.round(img.getHeight() * scale);
+        int x;
+        int y;
+        if (img.getWidth() >= FRONT[1].width * 0.9) {
+            x = face.x;            // full-face pictures
+            y = face.y;
+        } else {
+            x = face.x + (face.width - w) / 2;
+            y = (int) Math.round(face.y + face.height / 2.0 - h / 2.0 - 6 * scale);
+        }
+        g.drawImage(img, x, y, w, h, null);
+    }
+
+    private void drawSideDecoration(Graphics2D g, int ornament, int d, boolean rightSide) {
+        int index = FIRST_WALL_ORNAMENT + 2 * ornament;
+        BufferedImage img = rightSide ? art.spriteFlipped(index) : art.sprite(index);
+        if (img == null) {
+            return;
+        }
+        double scale = SIDE_SCALE[d];
+        int w = Math.max(1, (int) Math.round(img.getWidth() * scale));
+        int h = Math.max(1, (int) Math.round(img.getHeight() * scale));
+        int cx = SIDE_FACE_CENTRE[d][0];
+        if (rightSide) {
+            cx = VIEWPORT.width - cx;
+        }
+        int y = SIDE_FACE_CENTRE[d][1] - h / 2;
+        g.drawImage(img, cx - w / 2, y, w, h, null);
     }
 
     // ---- open squares: doors, stairs, pits, teleporters -------------------
@@ -167,7 +245,8 @@ public final class TexturedViewRenderer implements ViewRenderer {
         switch (sq.type()) {
             case DOOR -> {
                 if (sq.facesAlong(fwd)) {
-                    drawDoor(g, d, l, map.doorStyle(mx, my), map.doorState(mx, my));
+                    drawDoor(g, d, l, map.doorStyle(mx, my), map.doorState(mx, my),
+                            map.decorations().door(mx, my), map.decorations().doorButton(mx, my));
                 }
             }
             case STAIRS -> {
@@ -234,8 +313,16 @@ public final class TexturedViewRenderer implements ViewRenderer {
         paste(g, l == 0 ? base + 1 : base, x, y, l > 0);
     }
 
-    /** Door frame pillars and lintel, plus the panel unless the door is open or broken. */
-    private void drawDoor(Graphics2D g, int d, int l, int style, int state) {
+    /** Door decorations (441 + k) are drawn for the D1 panel (96 wide) and scaled down with it. */
+    static final int FIRST_DOOR_ORNAMENT = 441;
+    /** The button set into the right-hand door pillar. */
+    static final int DOOR_BUTTON = 125;
+
+    /**
+     * Door frame pillars and lintel, plus the panel unless the door is open or
+     * broken. A decoration rides on the panel; a button sits on the right pillar.
+     */
+    private void drawDoor(Graphics2D g, int d, int l, int style, int state, int ornament, boolean button) {
         if (d == 0) {
             // Standing in the doorway: only the pillars at the screen edges show.
             if (l == 0) {
@@ -257,6 +344,15 @@ public final class TexturedViewRenderer implements ViewRenderer {
                 Graphics2D clip = (Graphics2D) g.create();
                 clip.clipRect(panel.x + shift, panel.y, panel.width, panel.height);
                 clip.drawImage(img, panel.x + shift, panel.y - raised, null);
+                BufferedImage deco = ornament >= 0 ? art.doorSprite(FIRST_DOOR_ORNAMENT + ornament) : null;
+                if (deco != null) {
+                    double scale = panel.width / (double) DOOR_PANEL[1].width;
+                    int w = (int) Math.round(deco.getWidth() * scale);
+                    int h = (int) Math.round(deco.getHeight() * scale);
+                    // Full-panel designs cover the door; small ones (grilles, locks) sit in its upper part.
+                    int y = deco.getHeight() >= DOOR_PANEL[1].height * 0.7 ? panel.y : panel.y + (int) (12 * scale);
+                    clip.drawImage(deco, panel.x + shift + (panel.width - w) / 2, y - raised, w, h, null);
+                }
                 clip.dispose();
             }
         }
@@ -264,6 +360,14 @@ public final class TexturedViewRenderer implements ViewRenderer {
         if (pillar != null) {
             paste(g, DOOR_PILLAR[d], panel.x + shift - pillar.getWidth(), DOOR_PILLAR_Y[d], false);
             paste(g, DOOR_PILLAR[d], panel.x + panel.width + shift, DOOR_PILLAR_Y[d], true);
+            BufferedImage buttonImg = button ? art.sprite(DOOR_BUTTON) : null;
+            if (buttonImg != null) {
+                double scale = panel.width / (double) DOOR_PANEL[1].width;
+                int w = (int) Math.round(buttonImg.getWidth() * scale);
+                int h = (int) Math.round(buttonImg.getHeight() * scale);
+                int px = panel.x + panel.width + shift + (pillar.getWidth() - w) / 2;
+                g.drawImage(buttonImg, px, panel.y + panel.height / 2 - h / 2, w, h, null);
+            }
         }
         if (DOOR_LINTEL[d] >= 0) {
             paste(g, DOOR_LINTEL[d], DOOR_LINTEL_XY[d][0] + shift, DOOR_LINTEL_XY[d][1], false);

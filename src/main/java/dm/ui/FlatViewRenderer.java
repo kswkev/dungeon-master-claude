@@ -108,6 +108,9 @@ public final class FlatViewRenderer implements ViewRenderer {
     private void drawSquare(Graphics2D g, Square sq, int d, int l, int mx, int my) {
         if (sq.looksSolid()) {
             drawWallBlock(g, d, l);
+            if (d > 0 && l == 0) {
+                drawDecoration(g, d, mx, my);
+            }
             ChampionMirror mirror = d > 0 ? map.mirrorAt(mx, my, fwd.opposite()) : null;
             if (mirror != null) {
                 drawMirror(g, d, l, mirror);
@@ -244,6 +247,25 @@ public final class FlatViewRenderer implements ViewRenderer {
         g.setColor(shade(new Color(60, 60, 60), z, 1));
         fillFace(g, x0, x1, 0.15, 0.2, z);
         fillFace(g, x0, x1, -0.25, -0.2, z);
+    }
+
+    /** Wall decorations as a small dark plaque; inscriptions are written out on the wall straight ahead. */
+    private void drawDecoration(Graphics2D g, int d, int mx, int my) {
+        Direction front = fwd.opposite();
+        String text = map.decorations().inscription(mx, my, front);
+        double z = d - 0.5;
+        Rectangle face = new Rectangle(sx(-0.5, z), sy(0.5, z), sx(0.5, z) - sx(-0.5, z), sy(-0.5, z) - sy(0.5, z));
+        if (text != null && d == 1) {
+            Inscription.draw(g, art, text, face);
+        } else if (map.decorations().wall(mx, my, front) >= 0) {
+            Polygon plaque = new Polygon();
+            plaque.addPoint(sx(-0.15, z), sy(0.2, z));
+            plaque.addPoint(sx(0.15, z), sy(0.2, z));
+            plaque.addPoint(sx(0.15, z), sy(-0.05, z));
+            plaque.addPoint(sx(-0.15, z), sy(-0.05, z));
+            g.setColor(shade(MORTAR, z, 1));
+            g.fillPolygon(plaque);
+        }
     }
 
     /** A floor plate or other floor ornament, as a flat grey slab. */

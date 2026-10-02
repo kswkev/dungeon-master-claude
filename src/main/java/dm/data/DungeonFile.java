@@ -98,7 +98,7 @@ public final class DungeonFile {
     private static DungeonFile parse(byte[] data, boolean bigEndian, String label) throws IOException {
         ByteReader r = new ByteReader(data, bigEndian);
 
-        r.u16(); // ornament random seed
+        int ornamentSeed = r.u16();
         int rawMapBytes = r.u16();
         int mapCount = r.u8();
         r.u8();
@@ -177,9 +177,11 @@ public final class DungeonFile {
             List<List<Thing>>[] squareThings = store.listsFor(squares, columnFirstThing, columnBase);
             DungeonMap map = new DungeonMap(levels[m], squares, ChampionFinder.find(squareThings, text),
                     doorStyles(squares, squareThings, graphicsSets[m]));
-            int[] floorOrnaments = floorOrnamentList(data, base + widths[m] * heights[m],
+            OrnamentLists lists = OrnamentLists.read(data, base + widths[m] * heights[m],
                     rawStart + rawMapBytes, ornamentCounts[m], otherCounts[m]);
-            FloorSensorFinder.find(squares, squareThings, floorOrnaments).forEach(map::addSensor);
+            FloorSensorFinder.find(squares, squareThings, lists.floor()).forEach(map::addSensor);
+            map.setDecorations(new DecorationFinder(lists, ornamentSeed, m, text)
+                    .find(squares, squareThings));
             maps.add(map);
             columnBase += widths[m];
         }
@@ -212,27 +214,6 @@ public final class DungeonFile {
         return styles;
     }
 
-    /**
-     * After each map's squares come its lists of creature types, wall ornaments,
-     * floor ornaments and door ornaments (one byte each, global indexes). Their
-     * counts are in the map definition: word B bits 0-3 wall, 8-11 floor;
-     * word C bits 4-7 creatures, 0-3 doors. Returns the floor ornament list.
-     */
-    private static int[] floorOrnamentList(byte[] data, int start, int end, int ornamentCounts, int otherCounts)
-            throws IOException {
-        int creatures = (otherCounts >>> 4) & 15;
-        int walls = ornamentCounts & 15;
-        int floors = (ornamentCounts >>> 8) & 15;
-        int from = start + creatures + walls;
-        if (from + floors > end) {
-            throw new IOException("floor ornament list runs past the raw map data");
-        }
-        int[] list = new int[floors];
-        for (int i = 0; i < floors; i++) {
-            list[i] = data[from + i] & 0xFF;
-        }
-        return list;
-    }
 
     private static int[] words(ByteReader r, int count) throws IOException {
         int[] out = new int[count];

@@ -78,6 +78,31 @@ public final class Art {
         return convert(index, true);
     }
 
+    /**
+     * Door decorations are drawn on an orange (colour 9) background as well
+     * as the usual colour 10; both are see-through.
+     */
+    public BufferedImage doorSprite(int index) {
+        int key = Integer.MIN_VALUE / 2 + index;
+        if (cache.containsKey(key)) {
+            return cache.get(key);
+        }
+        BufferedImage src = sprite(index);
+        BufferedImage out = null;
+        if (src != null) {
+            out = new BufferedImage(src.getWidth(), src.getHeight(), BufferedImage.TYPE_INT_ARGB);
+            int orange = PALETTE[9].getRGB();
+            for (int y = 0; y < src.getHeight(); y++) {
+                for (int x = 0; x < src.getWidth(); x++) {
+                    int argb = src.getRGB(x, y);
+                    out.setRGB(x, y, argb == orange ? 0 : argb);
+                }
+            }
+        }
+        cache.put(key, out);
+        return out;
+    }
+
     /** Entry {@code index} as a transparent sprite, mirrored left-to-right, or null. */
     public BufferedImage spriteFlipped(int index) {
         int key = Integer.MIN_VALUE + index;
