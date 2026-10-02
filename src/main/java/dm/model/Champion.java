@@ -168,6 +168,16 @@ public final class Champion {
         return null;
     }
 
+    /**
+     * Lowers health by up to {@code amount}, never below 0, and returns the
+     * damage actually taken. Death isn't modelled yet: health just stops at 0.
+     */
+    public int takeDamage(int amount) {
+        int taken = Math.max(0, Math.min(amount, health));
+        health -= taken;
+        return taken;
+    }
+
     public String name() {
         return name;
     }

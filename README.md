@@ -22,6 +22,13 @@ A Java remake of FTL's *Dungeon Master* (1988), built one sprint at a time.
 - Party members appear in the boxes across the top with their hands and health/stamina/mana bars. Click a box to reopen that champion's sheet.
 - Reincarnate, spells and actions come in later sprints.
 
+**Sprint 3: done.** Walking into a wall or closed door now gives the original feedback:
+- the original thud sound from GRAPHICS.DAT;
+- the two front-row champions (your first two recruits) each take 1 damage, shown by the original red damage burst with the number over their status boxes;
+- the red border flash, as before.
+
+With no party yet, you only get the sound and the flash. Health can't drop below 0; champion death comes later. Sound is always on, and if no audio device is available the game simply stays silent.
+
 ## Requirements
 
 - JDK 17 or newer
@@ -56,6 +63,9 @@ Options:
 | `-Ddm.dungeon=path/to/DUNGEON.DAT` | Same, set as a system property |
 | `-Ddm.graphics=path/to/GRAPHICS.DAT` | Load the graphics from another location (default: next to DUNGEON.DAT) |
 | `-Ddm.debug=true` | Print Level 1 as an ASCII map and the list of champions, log each move, and show the party's position on screen |
+| `-Ddm.soundtest=all` | Play every sound effect from GRAPHICS.DAT with its index, then exit (or `=<index>` for one) |
+
+In PowerShell, put quotes around `-D` options, e.g. `java "-Ddm.debug=true" -jar target/dungeon-master-0.1.0-SNAPSHOT.jar`. Otherwise PowerShell splits the option at the dot and Java reports `Could not find or load main class`.
 
 If DUNGEON.DAT is missing or can't be read, an error dialog explains why.
 

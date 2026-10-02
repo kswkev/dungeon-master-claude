@@ -63,6 +63,18 @@ class ChampionTest {
     }
 
     @Test
+    void damageStopsAtZeroHealth() {
+        Champion c = Champion.parse(ELIJA, 0);
+        assertEquals(1, c.takeDamage(1));
+        assertEquals(59, c.health());
+        assertEquals(60, c.maxHealth());
+        assertEquals(59, c.takeDamage(500), "only the remaining health is lost");
+        assertEquals(0, c.health());
+        assertEquals(0, c.takeDamage(1));
+        assertEquals(0, c.takeDamage(-5), "negative damage does nothing");
+    }
+
+    @Test
     void rejectsMalformedText() {
         assertThrows(IllegalArgumentException.class, () -> Champion.parse("WELCOME BACK\nBRAVE\nADVENTURERS.", 0));
         assertThrows(IllegalArgumentException.class,

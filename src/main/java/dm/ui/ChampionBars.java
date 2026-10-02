@@ -33,10 +33,26 @@ public final class ChampionBars {
     private static final Color BOX_BG = Art.PALETTE[12];
     private static final Color BAR_BG = Art.PALETTE[0];
 
+    private static final int BURST_W = 32;
+    private static final int BURST_H = 29;
+
     private final Art art;
+    private final int[] damageShown = new int[Party.MAX_MEMBERS];
+    private final long[] damageUntil = new long[Party.MAX_MEMBERS];
 
     public ChampionBars(Art art) {
         this.art = art;
+    }
+
+    /** Shows DM's damage burst with {@code amount} over box {@code slot} until time {@code until} (ms). */
+    public void showDamage(int slot, int amount, long until) {
+        damageShown[slot] = amount;
+        damageUntil[slot] = until;
+    }
+
+    /** The damage currently shown on box {@code slot} at time {@code now}, or 0. */
+    public int damageShown(int slot, long now) {
+        return now < damageUntil[slot] ? damageShown[slot] : 0;
     }
 
     /** Index of the box at screen point (x, y), or -1. */
@@ -51,8 +67,9 @@ public final class ChampionBars {
     /**
      * @param shown     the champion whose sheet is open, or null
      * @param candidate a mirror champion being viewed (not yet recruited), or null
+     * @param now       current time in ms, for expiring damage bursts
      */
-    public void draw(Graphics2D g, List<Champion> members, Champion shown, Champion candidate) {
+    public void draw(Graphics2D g, List<Champion> members, Champion shown, Champion candidate, long now) {
         for (int i = 0; i < Party.MAX_MEMBERS; i++) {
             int x = i * PITCH;
             Champion c = i < members.size() ? members.get(i)
@@ -80,7 +97,30 @@ public final class ChampionBars {
             drawBar(g, x + BAR_X[0], c.health(), c.maxHealth(), COLORS[i]);
             drawBar(g, x + BAR_X[1], c.stamina(), c.maxStamina(), COLORS[i]);
             drawBar(g, x + BAR_X[2], c.mana(), c.maxMana(), COLORS[i]);
+            int damage = damageShown(i, now);
+            if (damage > 0) {
+                drawDamage(g, x, damage);
+            }
         }
+    }
+
+    /** The burst covers the name and hands; the number sits in its centre. */
+    private void drawDamage(Graphics2D g, int x, int damage) {
+        BufferedImage burst = art.sprite(GraphicsFile.DAMAGE_TO_CHAMPION);
+        if (burst != null) {
+            g.drawImage(burst, x, 0, null);
+        } else {
+            g.setColor(Art.PALETTE[8]);
+            g.fillRect(x + 4, 4, BURST_W - 8, BURST_H - 8);
+        }
+        String n = String.valueOf(damage);
+        int tx = x + (BURST_W - PixelFont.width(n)) / 2;
+        int ty = (BURST_H - PixelFont.HEIGHT) / 2;
+        // A dark outline keeps the number readable on the bright burst.
+        for (int[] o : new int[][] {{-1, 0}, {1, 0}, {0, -1}, {0, 1}}) {
+            PixelFont.draw(g, n, tx + o[0], ty + o[1], Art.PALETTE[0]);
+        }
+        PixelFont.draw(g, n, tx, ty, Art.PALETTE[15]);
     }
 
     private void drawHand(Graphics2D g, Item item, int x, int y) {

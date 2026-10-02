@@ -7,6 +7,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 A Java/Swing remake of FTL's *Dungeon Master* (1988), built sprint by sprint.
 - Sprint 1: walk Level 1 with DM's six-button arrow panel, which is the only input.
 - Sprint 2: the Hall of Champions. Mirror portraits, the character sheet, Resurrect (not Reincarnate), and champion bars along the top.
+- Sprint 3: wall bumps. The original thud, 1 damage to the front-row champions with DM's damage burst on their boxes, plus the red flash.
 
 Door, pit, stairs and teleporter behaviour, picking items up, combat and spells are not implemented yet.
 
@@ -18,11 +19,12 @@ mvn test                                      # all tests
 mvn test -Dtest=PartyTest                     # one test class
 mvn test -Dtest=PartyTest#wallsBlock          # one test method
 java -jar target/dungeon-master-0.1.0-SNAPSHOT.jar
-java -Ddm.debug=true -jar target/dungeon-master-0.1.0-SNAPSHOT.jar   # print Level 1 as ASCII, log each move, show coordinates on screen
+java "-Ddm.debug=true" -jar target/dungeon-master-0.1.0-SNAPSHOT.jar      # print Level 1 as ASCII, log each move, show coordinates on screen
+java "-Ddm.soundtest=all" -jar target/dungeon-master-0.1.0-SNAPSHOT.jar   # play every GRAPHICS.DAT sound with its index (or =<index>)
 mvn compile exec:java                         # run without packaging
 ```
 
-The pom targets Java 17 (`maven.compiler.release`) because only JDK 17 is installed. Java 21 was requested, so switch to 21 once it's available. No linter is configured.
+The shell is PowerShell, which splits an unquoted `-Ddm.x=y` at the dot, so always quote `-D` options. The pom targets Java 17 (`maven.compiler.release`) because only JDK 17 is installed. Java 21 was requested, so switch to 21 once it's available. No linter is configured.
 
 ## Game data
 
@@ -55,6 +57,8 @@ Code lives under `src/main/java/dm/`, in three layers.
   - The header is followed by tables of sizes and width/height, then the entries.
   - Each image is a nibble stream: a 6-colour local palette, then single-pixel or run commands, including "copy from the row above". The javadoc on `ImageDecoder` has the details.
   - Entries 671 and up are sounds and data, not images. Entry 694 is the object name list, indexed by icon number.
+  - Sounds (671–693 and 701–712) are a big-endian sample count followed by unsigned 8-bit mono PCM, played at `SOUND_SAMPLE_RATE` (5500 Hz).
+  - `GraphicsFile.sound()` reads them. Which index is which effect has to be checked by ear with `-Ddm.soundtest`. The user confirmed 687 as the wall bump.
   - The useful entry indexes are constants on `GraphicsFile` (inventory 17, portraits 26, icon sheets 42-48, mirror 346).
 - **Items** (`ItemCatalog`): maps the type numbers stored in DUNGEON.DAT to names and wear slots.
   - This is reference data from the game itself, not from either file.
@@ -77,6 +81,10 @@ Code lives under `src/main/java/dm/`, in three layers.
   - the champion boxes run across the top;
   - the spell and action areas are drawn as empty outlines for now.
 - `CharacterSheet` slot positions come from DM's inventory background (graphic 17). Text uses `PixelFont`, a hand-made 5×5 font, because the PC GRAPHICS.DAT has no UI font image.
+- Blocked moves go through `GameScreen.bump()`:
+  - it plays the thud through the injected `SoundPlayer` (`javaSound()` in the game, `silent()` or a lambda in tests);
+  - `Party.bump()` damages the `FRONT_ROW` members;
+  - `ChampionBars.showDamage` shows the burst (graphic 16) until it expires on `GameScreen`'s injectable clock.
 - `Art` converts images using DM's 16-colour palette, where colour 10 is transparent in sprites. Every caller must handle `null` from `Art` by drawing a placeholder (`Placeholders`).
 - `DungeonViewRenderer` draws the first-person view.
   - It draws back to front: depth 3 down to 0, and the outermost squares first at each depth.

@@ -4,6 +4,7 @@ import org.junit.jupiter.api.Test;
 
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
+import java.util.ArrayList;
 import java.util.List;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -64,6 +65,29 @@ class GraphicsFileTest {
     }
 
     @Test
+    void readsSoundsOnlyFromTheSoundRange() throws IOException {
+        // Sample count 3 (big-endian), 3 samples, 1 padding byte.
+        byte[] sound = bytes(0x00, 0x03, 0x80, 0xFF, 0x00, 0x7F);
+        List<byte[]> entries = new ArrayList<>();
+        int[][] dims = new int[GraphicsFile.FIRST_SOUND + 2][];
+        for (int i = 0; i < dims.length; i++) {
+            entries.add(i == GraphicsFile.FIRST_SOUND || i == 0 ? sound : new byte[0]);
+            dims[i] = new int[] {0, 0};
+        }
+        // A too-short entry: claims 9 samples but holds 2.
+        entries.set(GraphicsFile.FIRST_SOUND + 1, bytes(0x00, 0x09, 0x80, 0x80));
+        GraphicsFile g = GraphicsFile.parse(file(entries, dims));
+
+        Sound s = g.sound(GraphicsFile.FIRST_SOUND);
+        assertEquals(3, s.pcm().length);
+        assertEquals((byte) 0xFF, s.pcm()[1]);
+        assertEquals(GraphicsFile.SOUND_SAMPLE_RATE, s.sampleRate());
+        assertNull(g.sound(0), "entries before the sound range are never sounds");
+        assertNull(g.sound(GraphicsFile.FIRST_SOUND + 1), "truncated sample data");
+        assertNull(g.sound(GraphicsFile.LAST_SOUND), "beyond the end of this file");
+    }
+
+    @Test
     void rejectsWrongSignature() {
         assertThrows(IOException.class, () -> GraphicsFile.parse(bytes(0x00, 0x80, 0, 0)));
     }
@@ -75,7 +99,7 @@ class GraphicsFileTest {
         assertThrows(IOException.class, () -> GraphicsFile.parse(extra));
     }
 
-    private static byte[] file(List<byte[]> entries, int[][] dims) {
+    static byte[] file(List<byte[]> entries, int[][] dims) {
         ByteArrayOutputStream out = new ByteArrayOutputStream();
         word(out, GraphicsFile.SIGNATURE);
         word(out, entries.size());
