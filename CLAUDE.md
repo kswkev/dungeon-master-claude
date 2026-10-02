@@ -73,6 +73,7 @@ Code lives under `src/main/java/dm/`, in three layers.
   - 2500-2547: objects lying on the floor (bottom centre). 2900-2947: objects in flight (centre). The id is base + viewSquare×4 + viewCell. View squares run D3 C/L/R/far-L/far-R, D2 C/L/R, D1 C/L/R, D0. View cells run back-left, back-right, front-right, front-left. (0,0) means the cell isn't shown.
   - 2548-2554: objects in alcoves (D3 C/L/R, D2 C/L/R, D1 C). Two more such sets follow (2555, 2562), and which one DM uses when is unknown.
   - 3000-3006: front wall decoration *centres* (type 0 points), in the same order. A second set at 3007 sits a few px lower; all decorations use the first. With these, alcove objects sit on the shelf.
+  - DM's per-decoration coordinate sets aren't in the zone table, so some decorations are placed by hand. `TexturedViewRenderer.FLOOR_LEVEL_ORNAMENTS` (the drain grate, 34, as the user reported) and full-height pictures stand at the foot of the wall, on side faces too. Add more as they're spotted against the original.
   - 3200-3394 look like creature positions (5 per view square). 1500-1510 look like floor-decoration points.
   - Doors, stairs and pits are still fitted. Their ranges haven't been found.
 - **Ornament lists** (`OrnamentLists`): each map's creature/wall/floor/door ornament lists come straight after its squares.

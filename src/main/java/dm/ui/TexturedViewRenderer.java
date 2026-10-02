@@ -16,6 +16,7 @@ import java.awt.Point;
 import java.awt.Rectangle;
 import java.awt.image.BufferedImage;
 import java.util.List;
+import java.util.Set;
 
 /**
  * Draws the first-person view with the original GRAPHICS.DAT art, the way DM
@@ -243,8 +244,25 @@ public final class TexturedViewRenderer implements ViewRenderer {
             x = face.x + (face.width - w) / 2;
             y = (int) Math.round(face.y + face.height / 2.0 - h / 2.0 - 6 * scale);
         }
+        if (standsOnFloor(ornament, img)) {
+            y = face.y + face.height - h;
+        }
         g.drawImage(img, x, y, w, h, null);
         return new Rectangle(x, y, w, h);
+    }
+
+    /**
+     * Decorations that sit at the foot of the wall rather than around its
+     * middle: the drain grate (34), checked against the original, and the
+     * full-height pictures (the cracked and creature walls, 56-58), which
+     * would otherwise hang below the floor line. DM keeps a coordinate set per
+     * decoration in its program; until more are known, everything else uses
+     * the zone centres.
+     */
+    private static final Set<Integer> FLOOR_LEVEL_ORNAMENTS = Set.of(34);
+
+    private static boolean standsOnFloor(int ornament, BufferedImage img) {
+        return FLOOR_LEVEL_ORNAMENTS.contains(ornament) || img.getHeight() >= FRONT[1].height * 0.9;
     }
 
     private void drawSideDecoration(Graphics2D g, int ornament, int d, boolean rightSide) {
@@ -261,8 +279,15 @@ public final class TexturedViewRenderer implements ViewRenderer {
             cx = VIEWPORT.width - cx;
         }
         int y = SIDE_FACE_CENTRE[d][1] - h / 2;
+        BufferedImage front = art.sprite(index + 1);
+        if (front != null && standsOnFloor(ornament, front)) {
+            y = SIDE_FACE_CENTRE[d][1] + SIDE_FACE_HEIGHT[d] / 2 - h;
+        }
         g.drawImage(img, cx - w / 2, y, w, h, null);
     }
+
+    /** Height of each depth's side face at its centre: halfway between the front faces it joins. */
+    private static final int[] SIDE_FACE_HEIGHT = {0, (111 + 74) / 2, (74 + 49) / 2, (49 + 33) / 2};
 
     // ---- open squares: doors, stairs, pits, teleporters -------------------
     //
