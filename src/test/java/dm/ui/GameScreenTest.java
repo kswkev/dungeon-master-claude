@@ -24,7 +24,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 class GameScreenTest {
 
     private static final String ELIJA = "ELIJA\nLION OF YAITOPYA\n\nM\nAADMACEEAABG\nDCCKCICKCEDFCI\nBBCAAAAACBECAAAA";
-    private static final Rectangle VIEW = DungeonViewRenderer.VIEWPORT;
+    private static final Rectangle VIEW = ViewRenderer.VIEWPORT;
 
     private ChampionMirror mirror;
     private Party party;

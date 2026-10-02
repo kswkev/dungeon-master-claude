@@ -78,6 +78,26 @@ public final class Art {
         return convert(index, true);
     }
 
+    /** Entry {@code index} as a transparent sprite, mirrored left-to-right, or null. */
+    public BufferedImage spriteFlipped(int index) {
+        int key = Integer.MIN_VALUE + index;
+        if (cache.containsKey(key)) {
+            return cache.get(key);
+        }
+        BufferedImage src = sprite(index);
+        BufferedImage out = null;
+        if (src != null) {
+            out = new BufferedImage(src.getWidth(), src.getHeight(), BufferedImage.TYPE_INT_ARGB);
+            for (int y = 0; y < src.getHeight(); y++) {
+                for (int x = 0; x < src.getWidth(); x++) {
+                    out.setRGB(src.getWidth() - 1 - x, y, src.getRGB(x, y));
+                }
+            }
+        }
+        cache.put(key, out);
+        return out;
+    }
+
     public BufferedImage portrait(int n) {
         BufferedImage sheet = image(GraphicsFile.PORTRAITS);
         if (sheet == null) {

@@ -16,17 +16,15 @@ import java.awt.Shape;
 import java.awt.image.BufferedImage;
 
 /**
- * Draws DM's first-person view: a 3-squares-deep cone of the map, rendered
- * back to front with flat-shaded polygons.
+ * Fallback first-person view for when GRAPHICS.DAT is missing: a
+ * 3-squares-deep cone of the map, drawn back to front with flat-shaded
+ * polygons. {@link TexturedViewRenderer} draws the original art instead.
  *
  * View space: the party stands at the centre of square (depth 0, lateral 0),
  * looking down +z. A square at (depth d, lateral l) spans z in [d-0.5, d+0.5]
  * and x in [l-0.5, l+0.5]. Walls span y in [-0.5, 0.5] (floor to ceiling).
  */
-public final class DungeonViewRenderer {
-
-    /** Viewport position and size on the 320x200 screen, matching the original. */
-    public static final Rectangle VIEWPORT = new Rectangle(0, 33, 224, 136);
+public final class FlatViewRenderer implements ViewRenderer {
 
     private static final int MAX_DEPTH = 3;
     /** How many squares either side are visible at each depth. */
@@ -62,19 +60,16 @@ public final class DungeonViewRenderer {
     private Direction fwd;
     private Rectangle portraitHit;
 
-    public DungeonViewRenderer(Art art) {
+    public FlatViewRenderer(Art art) {
         this.art = art;
     }
 
-    /**
-     * Screen rectangle of the champion portrait on the wall straight ahead,
-     * from the last {@link #draw}, or null. DM only lets you click a portrait
-     * from the adjacent square.
-     */
+    @Override
     public Rectangle portraitHit() {
         return portraitHit;
     }
 
+    @Override
     public void draw(Graphics2D g, Party party) {
         Shape oldClip = g.getClip();
         g.clipRect(VIEWPORT.x, VIEWPORT.y, VIEWPORT.width, VIEWPORT.height);
