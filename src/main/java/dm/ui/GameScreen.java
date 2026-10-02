@@ -21,11 +21,12 @@ import java.util.function.LongSupplier;
  * The 320x200 game screen: what to draw and how clicks are routed, with no
  * Swing dependencies so it can be driven headlessly.
  *
- * Click order: an open character sheet first, then the champion bars, then
- * the formation box, then a mirror portrait in the dungeon view, then the
- * rest of the view (floor: pick up or drop; above it: throw), then the
- * movement arrows. While a sheet is open the party can't move or reach the
- * floor, as in DM.
+ * Click order: a hand in a champion's status box first, then an open
+ * character sheet, then the champion boxes, then the formation box, then in
+ * the dungeon view a mirror portrait, a door button, the wall decoration
+ * straight ahead, and the rest of the view (floor: pick up or drop; above
+ * it: throw); then the movement arrows. While a sheet is open the party
+ * can't move or reach the dungeon, as in DM.
  */
 public final class GameScreen {
 
@@ -117,9 +118,17 @@ public final class GameScreen {
         return sheet;
     }
 
+    /** The dungeon view renderer, for tests that click what it drew. */
+    ViewRenderer view() {
+        return view;
+    }
+
     /** Handles a left-button press at screen point (x, y). */
     public void press(int x, int y) {
         pointer = new Point(x, y);
+        if (clickHand(x, y)) {
+            return;
+        }
         if (sheet.isOpen()) {
             pressWithSheetOpen(x, y);
             return;
@@ -140,6 +149,16 @@ public final class GameScreen {
         ChampionMirror mirror = party.facingMirror();
         if (portrait != null && mirror != null && portrait.contains(x, y)) {
             sheet.openCandidate(mirror, party.isFull());
+            return;
+        }
+        Rectangle button = view.doorButtonHit();
+        if (button != null && button.contains(x, y)) {
+            pressDoorButton();
+            return;
+        }
+        Rectangle wall = view.wallHit();
+        if (wall != null && wall.contains(x, y)) {
+            clickWall();
             return;
         }
         if (ViewRenderer.VIEWPORT.contains(x, y)) {
@@ -178,6 +197,62 @@ public final class GameScreen {
                 sheet.openMember(party.members().get(box));
             }
         }
+    }
+
+    /**
+     * A click on a hand in a champion's status box works like that hand's
+     * cell on the sheet (issue #12). Hands aren't shown, so can't be clicked,
+     * for the champion whose sheet is open or for a mirror candidate.
+     */
+    private boolean clickHand(int x, int y) {
+        ChampionBars.Hand hand = bars.handAt(x, y);
+        if (hand == null || hand.box() >= party.members().size()) {
+            return false;
+        }
+        Champion champion = party.members().get(hand.box());
+        if (champion == sheet.champion()) {
+            return false;
+        }
+        clickSlot(champion, hand.slot());
+        return true;
+    }
+
+    /** The square straight ahead of the party. */
+    private int aheadX() {
+        return party.x() + party.facing().dx;
+    }
+
+    private int aheadY() {
+        return party.y() + party.facing().dy;
+    }
+
+    /** The button on the door straight ahead toggles it; the door sound comes from {@link #tick}. */
+    private void pressDoorButton() {
+        boolean started = party.map().pressDoorButton(aheadX(), aheadY());
+        sounds.play(clickSound);
+        if (debug) {
+            System.out.println("Door button at (" + aheadX() + "," + aheadY() + ")" + (started ? ": door moving" : ""));
+        }
+    }
+
+    /** Uses the decoration on the wall straight ahead: switches, keyholes, torch holders, alcoves. */
+    private void clickWall() {
+        Item before = party.held();
+        DungeonMap.WallClick result = party.map().clickWall(aheadX(), aheadY(), party.facing().opposite(),
+                party, art::iconIndex);
+        if (result.sound()) {
+            sounds.play(clickSound);
+        }
+        if (debug) {
+            System.out.println("Clicked wall (" + aheadX() + "," + aheadY() + ") " + party.facing().opposite()
+                    + ": " + party.map().wallSensors(aheadX(), aheadY(), party.facing().opposite())
+                    + (result.fired() ? " fired" : "") + (result.doorStarted() ? ", door moving" : "")
+                    + (result.handChanged() ? ", hand " + name(before) + " -> " + name(party.held()) : ""));
+        }
+    }
+
+    private static String name(Item item) {
+        return item == null ? "empty" : item.name();
     }
 
     /**

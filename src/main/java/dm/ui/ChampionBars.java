@@ -64,6 +64,34 @@ public final class ChampionBars {
         return i < Party.MAX_MEMBERS && x - i * PITCH < BOX_W ? i : -1;
     }
 
+    /** A hand box in a champion's status box: which box, and which hand. */
+    public record Hand(int box, Slot slot) {
+    }
+
+    private static final int HAND_SIZE = 18;
+    private static final int READY_HAND_X = 3;
+    private static final int ACTION_HAND_X = 23;
+    private static final int HAND_Y = 10;
+
+    /**
+     * The hand box at screen point (x, y), or null. Hands are only drawn,
+     * and so only clickable, while that champion's sheet isn't open.
+     */
+    public Hand handAt(int x, int y) {
+        int box = hitTest(x, y);
+        if (box < 0 || y < HAND_Y || y >= HAND_Y + HAND_SIZE) {
+            return null;
+        }
+        int bx = x - box * PITCH;
+        if (bx >= READY_HAND_X && bx < READY_HAND_X + HAND_SIZE) {
+            return new Hand(box, Slot.READY_HAND);
+        }
+        if (bx >= ACTION_HAND_X && bx < ACTION_HAND_X + HAND_SIZE) {
+            return new Hand(box, Slot.ACTION_HAND);
+        }
+        return null;
+    }
+
     /**
      * @param shown     the champion whose sheet is open, or null
      * @param candidate a mirror champion being viewed (not yet recruited), or null
@@ -91,8 +119,8 @@ public final class ChampionBars {
                 }
             } else {
                 PixelFont.draw(g, c.name(), x + 2, 2, COLORS[i]);
-                drawHand(g, c.items().get(Slot.READY_HAND), x + 3, 10);
-                drawHand(g, c.items().get(Slot.ACTION_HAND), x + 23, 10);
+                drawHand(g, c.items().get(Slot.READY_HAND), x + READY_HAND_X, HAND_Y);
+                drawHand(g, c.items().get(Slot.ACTION_HAND), x + ACTION_HAND_X, HAND_Y);
             }
             drawBar(g, x + BAR_X[0], c.health(), c.maxHealth(), COLORS[i]);
             drawBar(g, x + BAR_X[1], c.stamina(), c.maxStamina(), COLORS[i]);

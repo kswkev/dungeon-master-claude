@@ -77,10 +77,10 @@ public final class Zones {
         return null;
     }
 
-    /** A type-7 point zone, or null if {@code id} isn't one or is a hidden (0, 0) cell. */
+    /** A point zone (type 0 or 7), or null if {@code id} isn't one or is a hidden (0, 0) cell. */
     public Point point(int id) {
         int[] r = record(id);
-        if (r == null || r[0] != 7 || (r[2] == 0 && r[3] == 0)) {
+        if (r == null || (r[0] != 7 && r[0] != 0) || (r[2] == 0 && r[3] == 0)) {
             return null;
         }
         return new Point(r[2], r[3]);

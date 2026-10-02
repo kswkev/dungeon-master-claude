@@ -15,6 +15,7 @@ import java.awt.Graphics2D;
 import java.awt.Point;
 import java.awt.Rectangle;
 import java.awt.image.BufferedImage;
+import java.util.List;
 
 /**
  * Draws the first-person view with the original GRAPHICS.DAT art, the way DM
@@ -73,6 +74,8 @@ public final class TexturedViewRenderer implements ViewRenderer {
 
     private final Art art;
     private Rectangle portraitHit;
+    private Rectangle wallHit;
+    private Rectangle doorButtonHit;
 
     public TexturedViewRenderer(Art art) {
         this.art = art;
@@ -84,8 +87,20 @@ public final class TexturedViewRenderer implements ViewRenderer {
     }
 
     @Override
+    public Rectangle wallHit() {
+        return wallHit;
+    }
+
+    @Override
+    public Rectangle doorButtonHit() {
+        return doorButtonHit;
+    }
+
+    @Override
     public void draw(Graphics2D screen, Party party) {
         portraitHit = null;
+        wallHit = null;
+        doorButtonHit = null;
         Graphics2D g = (Graphics2D) screen.create(VIEWPORT.x, VIEWPORT.y, VIEWPORT.width, VIEWPORT.height);
         try {
             DungeonMap map = party.map();
@@ -128,10 +143,10 @@ public final class TexturedViewRenderer implements ViewRenderer {
     // ---- wall decorations ---------------------------------------------------
     //
     // Decoration k has a side view (259 + 2k) and a front view (260 + 2k),
-    // both drawn for D1 and scaled down for D2/D3. DM's per-decoration
-    // coordinate tables aren't in the PC data, so positions are fitted: centred
-    // on the face slightly above its middle (like the mirrors), and full-face
-    // pictures fill the face.
+    // both drawn for D1 and scaled down for D2/D3. Front views are centred on
+    // DM's own points from the zone table (FIRST_WALL_ORNAMENT_ZONE); without
+    // it, and for side views, positions are fitted: centred on the face
+    // slightly above its middle (like the mirrors). Full-face pictures fill the face.
 
     static final int FIRST_WALL_ORNAMENT = 259;
     /** Centre of each depth's visible left side face (x, y), for side decorations. */
@@ -145,7 +160,7 @@ public final class TexturedViewRenderer implements ViewRenderer {
         // Front face, for the centre and the visible slivers of the neighbouring squares.
         if (Math.abs(l) <= 1) {
             Direction front = fwd.opposite();
-            int ornament = map.decorations().wall(mx, my, front);
+            int ornament = map.wallOrnament(mx, my, front);
             String text = map.decorations().inscription(mx, my, front);
             if (text != null && d == 1 && l == 0) {
                 Inscription.draw(g, art, text, FRONT[1]);
@@ -154,37 +169,82 @@ public final class TexturedViewRenderer implements ViewRenderer {
             } else if (ornament >= 0) {
                 Rectangle face = new Rectangle(FRONT[d]);
                 face.x += l * face.width;
-                drawFrontDecoration(g, ornament, face);
+                Rectangle drawn = drawFrontDecoration(g, ornament, face, d, l);
+                if (DungeonMap.isAlcove(ornament)) {
+                    drawAlcoveItems(g, map.itemsAt(mx, my, front.ordinal()), d, l);
+                }
+                if (d == 1 && l == 0 && drawn != null) {
+                    wallHit = new Rectangle(drawn.x + VIEWPORT.x, drawn.y + VIEWPORT.y, drawn.width, drawn.height);
+                }
             }
         }
         // Side face turned toward the middle of the view.
         if (l != 0 && Math.abs(l) <= 1) {
             Direction side = l < 0 ? fwd.turnRight() : fwd.turnLeft();
-            int ornament = map.decorations().wall(mx, my, side);
+            int ornament = map.wallOrnament(mx, my, side);
             if (ornament >= 0) {
                 drawSideDecoration(g, ornament, d, l > 0);
             }
         }
     }
 
-    private void drawFrontDecoration(Graphics2D g, int ornament, Rectangle face) {
+    /**
+     * Objects in an alcove, at DM's alcove points from the zone table (2548:
+     * D3 centre, left, right, D2 centre, left, right, D1 centre), standing on
+     * the alcove's shelf. Scaled for the wall face's distance, between the
+     * object scales of the cells on either side of it.
+     */
+    private static final int FIRST_ALCOVE_ZONE = 2548;
+    private static final int[] ALCOVE_SCALE = {0, 30, 19, 13};
+
+    private void drawAlcoveItems(Graphics2D g, List<Item> items, int d, int l) {
+        if (items.isEmpty() || (d == 1 && l != 0)) {
+            return; // at D1 only the centre wall's alcove is in view
+        }
+        int index = (MAX_DEPTH - d) * 3 + (l == 0 ? 0 : l < 0 ? 1 : 2);
+        Point at = art.zone(FIRST_ALCOVE_ZONE + index);
+        if (at == null) {
+            return;
+        }
+        for (Item item : items) {
+            drawObject(g, item, at, ALCOVE_SCALE[d], true);
+        }
+    }
+
+    /**
+     * First of DM's front wall decoration centres in the zone table: D3
+     * centre, left, right, D2 centre, left, right, D1 centre. A second set
+     * follows at 3007 (a few pixels lower); which decorations use it isn't
+     * known, so all use the first. With these, objects at the alcove points
+     * (2548) sit on the alcove's shelf, which confirms the reading.
+     */
+    static final int FIRST_WALL_ORNAMENT_ZONE = 3000;
+
+    /** Draws a front-view decoration on {@code face} and returns where it went (viewport coordinates), or null. */
+    private Rectangle drawFrontDecoration(Graphics2D g, int ornament, Rectangle face, int d, int l) {
         BufferedImage img = art.sprite(FIRST_WALL_ORNAMENT + 2 * ornament + 1);
         if (img == null) {
-            return;
+            return null;
         }
         double scale = face.width / (double) FRONT[1].width;
         int w = (int) Math.round(img.getWidth() * scale);
         int h = (int) Math.round(img.getHeight() * scale);
         int x;
         int y;
+        Point centre = d == 1 && l != 0 ? null
+                : art.zone(FIRST_WALL_ORNAMENT_ZONE + (MAX_DEPTH - d) * 3 + (l == 0 ? 0 : l < 0 ? 1 : 2));
         if (img.getWidth() >= FRONT[1].width * 0.9) {
             x = face.x;            // full-face pictures
             y = face.y;
+        } else if (centre != null) {
+            x = centre.x - w / 2;
+            y = centre.y - h / 2;
         } else {
             x = face.x + (face.width - w) / 2;
             y = (int) Math.round(face.y + face.height / 2.0 - h / 2.0 - 6 * scale);
         }
         g.drawImage(img, x, y, w, h, null);
+        return new Rectangle(x, y, w, h);
     }
 
     private void drawSideDecoration(Graphics2D g, int ornament, int d, boolean rightSide) {
@@ -279,7 +339,7 @@ public final class TexturedViewRenderer implements ViewRenderer {
                 }
             }
             case PIT -> {
-                if (d > 0 && sq.pitOpen()) {
+                if (d > 0 && map.isPitOpen(mx, my)) {
                     drawLeftOrCentre(g, d, l, PIT_C, PIT_C_XY, PIT_L, PIT_L_XY);
                 }
             }
@@ -471,6 +531,9 @@ public final class TexturedViewRenderer implements ViewRenderer {
                         + (int) Math.round(DOOR_BUTTON_RIGHT * distance);
                 int py = panel.y + (int) Math.round(panel.height * DOOR_BUTTON_HEIGHT) - h / 2;
                 g.drawImage(buttonImg, px, py, w, h, null);
+                if (d == 1 && l == 0) {
+                    doorButtonHit = new Rectangle(px + VIEWPORT.x, py + VIEWPORT.y, w, h);
+                }
             }
         }
         if (DOOR_LINTEL[d] >= 0) {
