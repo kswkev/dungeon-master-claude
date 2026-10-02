@@ -361,6 +361,10 @@ public final class GameScreen {
                 if (result.click()) {
                     sounds.play(clickSound);
                 }
+                if (result.levelChanged() && debug) {
+                    System.out.printf("Took the stairs to Level %d: (%d,%d) facing %s%n",
+                            party.level() + 1, party.x(), party.y(), party.facing());
+                }
                 // The door sound comes from tick(), once per door step.
             }
         }

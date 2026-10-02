@@ -43,6 +43,10 @@ class DungeonFileTest {
 
     static final String HALK = "HALK\nTHE BARBARIAN\n\nM\nAAFKACOOAAAA\nCIDHCLBOCOCGDA\nEAEAAAAAAAAAAAAA";
 
+    /** Where map 1 sits in dungeon-wide coordinates (stairs line up through these). */
+    private static final int MAP1_OFFSET_X = 2;
+    private static final int MAP1_OFFSET_Y = 1;
+
     /** 2x2 second map, to exercise multiple map definitions. */
     private static final int[][] MAP1 = {
             {FLOOR, FLOOR},
@@ -106,6 +110,9 @@ class DungeonFileTest {
         assertEquals(1, f.startY());
         assertEquals(Direction.EAST, f.startFacing());
         assertEquals(1, f.maps().get(1).level());
+        assertEquals(0, m.offsetX());
+        assertEquals(MAP1_OFFSET_X, f.maps().get(1).offsetX());
+        assertEquals(MAP1_OFFSET_Y, f.maps().get(1).offsetY());
         assertEquals(SquareType.WALL, f.maps().get(1).get(1, 1).type());
 
         assertEquals(1, m.mirrors().size());
@@ -187,8 +194,8 @@ class DungeonFileTest {
             out.u16(c);
         }
 
-        mapDef(out, 0, 4, 3, 0, 0x0100, 0x1000);   // 1 floor ornament; door set 1 = style 1
-        mapDef(out, map0Bytes + map0Extras, 2, 2, 1, 0, 0);
+        mapDef(out, 0, 4, 3, 0, 0x0100, 0x1000, 0, 0);   // 1 floor ornament; door set 1 = style 1
+        mapDef(out, map0Bytes + map0Extras, 2, 2, 1, 0, 0, MAP1_OFFSET_X, MAP1_OFFSET_Y);
 
         // Squares with things before each column: map 0 has two in column 1, one in column 2, one in column 3.
         int[] columnCounts = {0, 0, 2, 3, 4, 4};
@@ -229,11 +236,11 @@ class DungeonFileTest {
     }
 
     private static void mapDef(Out out, int offset, int width, int height, int level, int ornamentCounts,
-                               int graphicsSets) {
+                               int graphicsSets, int offsetX, int offsetY) {
         out.u16(offset);
         out.fill(4, 0);
-        out.u8(0);
-        out.u8(0);
+        out.u8(offsetX);
+        out.u8(offsetY);
         out.u16(((height - 1) << 11) | ((width - 1) << 6) | level);
         out.u16(ornamentCounts);
         out.u16(0);

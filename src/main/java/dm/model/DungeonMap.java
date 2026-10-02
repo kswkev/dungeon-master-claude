@@ -25,8 +25,8 @@ public final class DungeonMap {
     public static final int DOOR_BROKEN = 5;
 
     /** What a party step set off: a door started moving, and/or an audible sensor clicked. */
-    public record StepResult(boolean doorStarted, boolean click) {
-        public static final StepResult NOTHING = new StepResult(false, false);
+    public record StepResult(boolean doorStarted, boolean click, boolean levelChanged) {
+        public static final StepResult NOTHING = new StepResult(false, false, false);
     }
 
     private final int level;
@@ -41,6 +41,8 @@ public final class DungeonMap {
     private final Map<Integer, List<Item>> floorItems = new HashMap<>();
     private final Map<Integer, List<WallSensor>> wallSensors = new HashMap<>();
     private final boolean[][] pitOpen;
+    private int offsetX;
+    private int offsetY;
     private final List<Projectile> projectiles = new ArrayList<>();
     private Decorations decorations;
 
@@ -244,7 +246,7 @@ public final class DungeonMap {
                 s.used();
             }
         }
-        return out.doorStarted || out.sound ? new StepResult(out.doorStarted, out.sound) : StepResult.NOTHING;
+        return out.doorStarted || out.sound ? new StepResult(out.doorStarted, out.sound, false) : StepResult.NOTHING;
     }
 
     /** The effect that undoes {@code effect}: set and clear swap, a toggle toggles back. */
@@ -323,6 +325,47 @@ public final class DungeonMap {
             applyEffect(s.targetX(), s.targetY(), s.targetCell(), effect, out, depth);
         }
         s.used();
+    }
+
+    // ---- stairs and levels -------------------------------------------------
+
+    /** Where the map sits in dungeon-wide coordinates: square (x, y) is at (x + offsetX, y + offsetY). */
+    public int offsetX() {
+        return offsetX;
+    }
+
+    public int offsetY() {
+        return offsetY;
+    }
+
+    public void setOffset(int x, int y) {
+        offsetX = x;
+        offsetY = y;
+    }
+
+    /** Where a party coming off stairs stands, and which way it faces (away from the stairs). */
+    public record StairsExit(int x, int y, Direction facing) {
+    }
+
+    /**
+     * The square beside the stairs at (x, y) that the party steps off onto:
+     * of the two neighbours along the stairs' axis ({@link Square#runsNorthSouth}),
+     * the open one. Null if (x, y) isn't stairs or both sides are blocked.
+     */
+    public StairsExit stairsExit(int x, int y) {
+        Square sq = get(x, y);
+        if (sq.type() != SquareType.STAIRS) {
+            return null;
+        }
+        Direction[] sides = sq.runsNorthSouth()
+                ? new Direction[] {Direction.NORTH, Direction.SOUTH}
+                : new Direction[] {Direction.EAST, Direction.WEST};
+        for (Direction d : sides) {
+            if (isPassable(x + d.dx, y + d.dy) && get(x + d.dx, y + d.dy).type() != SquareType.STAIRS) {
+                return new StairsExit(x + d.dx, y + d.dy, d);
+            }
+        }
+        return null;
     }
 
     // ---- pits --------------------------------------------------------------
