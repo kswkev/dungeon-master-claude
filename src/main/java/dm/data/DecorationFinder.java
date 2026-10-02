@@ -19,7 +19,8 @@ import java.util.List;
  *       the decoration list, otherwise the spot stays plain.</li>
  *   <li><b>Explicit decorations</b> override them: a wall sensor's ornament
  *       ordinal (attribute bits 12-15) on that side, and a visible text,
- *       which becomes an inscription. Champion mirrors keep their own path.</li>
+ *       which becomes an inscription. A champion mirror's side carries the
+ *       mirror frame (its sensor's ornament ordinal, else decoration 43).</li>
  *   <li><b>Doors:</b> the door record's bits 1-4 are an ordinal into the
  *       map's door decoration list; bit 6 means the door has a button.</li>
  * </ul>
@@ -28,6 +29,8 @@ final class DecorationFinder {
 
     private static final int MODULO = 30;
     private static final int SENSOR_CHAMPION_PORTRAIT = 127;
+    /** The champion mirror's global wall decoration: side view 345, front view {@link GraphicsFile#MIRROR_FRONT}. */
+    static final int MIRROR_ORNAMENT = (GraphicsFile.MIRROR_FRONT - 260) / 2;
 
     private final OrnamentLists lists;
     private final int seed;
@@ -102,8 +105,10 @@ final class DecorationFinder {
         for (Thing t : things) {
             Direction side = Direction.fromIndex(t.cell());
             if (t.type() == Thing.SENSOR && (t.words()[1] & 0x7F) == SENSOR_CHAMPION_PORTRAIT) {
-                // The mirror is this side's decoration; it's drawn with the champion's portrait elsewhere.
-                deco.setWall(x, y, side, -1, null);
+                // The mirror frame is this side's decoration, so side views show it; the front
+                // view, with the champion's portrait, is drawn by the renderer's mirror path.
+                int mirror = OrnamentLists.global(lists.wall(), t.words()[2] >>> 12);
+                deco.setWall(x, y, side, mirror >= 0 ? mirror : MIRROR_ORNAMENT, null);
             } else if (t.type() == Thing.SENSOR) {
                 int ordinal = t.words()[2] >>> 12;
                 if (ordinal > 0) {

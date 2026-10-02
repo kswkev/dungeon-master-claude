@@ -3,8 +3,10 @@ package dm.model;
 import org.junit.jupiter.api.Test;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 class ChampionTest {
 
@@ -94,6 +96,53 @@ class ChampionTest {
         assertEquals(Slot.BACKPACK_1, c.addStartingItem(ItemCatalog.item(Item.Category.JUNK, 29))); // apple
         // A second helm has nowhere to be worn, so it goes in the backpack.
         assertEquals(Slot.BACKPACK_2, c.addStartingItem(ItemCatalog.item(Item.Category.ARMOUR, 26)));
+    }
+
+    @Test
+    void takeEmptiesTheSlotAndPlaceReturnsWhatWasThere() {
+        Champion c = Champion.parse(ELIJA, 0);
+        Item sword = ItemCatalog.item(Item.Category.WEAPON, 10);
+        Item apple = ItemCatalog.item(Item.Category.JUNK, 29);
+        c.addStartingItem(sword);   // action hand
+        assertEquals(sword, c.take(Slot.ACTION_HAND));
+        assertNull(c.items().get(Slot.ACTION_HAND));
+        assertNull(c.take(Slot.ACTION_HAND), "nothing left to take");
+
+        assertNull(c.place(Slot.BACKPACK_5, sword), "empty cell");
+        assertEquals(sword, c.place(Slot.BACKPACK_5, apple), "a swap hands back the sword");
+        assertEquals(apple, c.items().get(Slot.BACKPACK_5));
+        assertThrows(IllegalArgumentException.class, () -> c.place(Slot.HEAD, sword));
+    }
+
+    @Test
+    void slotsFollowDmRules() {
+        Item sword = ItemCatalog.item(Item.Category.WEAPON, 10);
+        Item arrow = ItemCatalog.item(Item.Category.WEAPON, 27);
+        Item helm = ItemCatalog.item(Item.Category.ARMOUR, 25);
+        Item moonstone = ItemCatalog.item(Item.Category.JUNK, 39);
+        Item key = ItemCatalog.item(Item.Category.JUNK, 9);
+        Item apple = ItemCatalog.item(Item.Category.JUNK, 29);
+        Item potion = ItemCatalog.item(Item.Category.POTION, 20);
+        Item chest = ItemCatalog.item(Item.Category.CONTAINER, 0);
+
+        for (Item any : new Item[] {sword, helm, apple, chest}) {
+            assertTrue(any.fits(Slot.READY_HAND) && any.fits(Slot.ACTION_HAND) && any.fits(Slot.BACKPACK_17));
+        }
+        assertTrue(helm.fits(Slot.HEAD));
+        assertFalse(sword.fits(Slot.HEAD));
+        assertFalse(helm.fits(Slot.TORSO));
+        assertTrue(moonstone.fits(Slot.NECK));
+        assertFalse(apple.fits(Slot.NECK));
+
+        assertTrue(potion.fits(Slot.POUCH_1));
+        assertTrue(key.fits(Slot.POUCH_2));
+        assertFalse(apple.fits(Slot.POUCH_1));
+        assertFalse(sword.fits(Slot.POUCH_1));
+
+        assertTrue(sword.fits(Slot.QUIVER_1), "the first quiver cell takes any weapon");
+        assertFalse(sword.fits(Slot.QUIVER_2));
+        assertTrue(arrow.fits(Slot.QUIVER_4));
+        assertFalse(potion.fits(Slot.QUIVER_1));
     }
 
     @Test

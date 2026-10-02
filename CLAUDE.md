@@ -11,8 +11,9 @@ A Java/Swing remake of FTL's *Dungeon Master* (1988), built sprint by sprint.
 - Sprint 4: the original dungeon textures. Walls, floor and ceiling are pixel-exact; doors, stairs and pits are fitted. Wall/floor decorations are deferred.
 - Sprint 5: floor sensors (pressure plates) that move doors, animated doors with sound, the party formation box, and bump damage by side.
 - Sprint 6: wall, floor and door decorations (issue #4). Explicit and DM-random placement, inscriptions with text, door decorations and buttons. Visual only.
+- Sprint 7: up/down stair graphics fixed (#8), champion mirrors drawn on side walls (#9), and moving items between inventory cells with the item icon as the mouse pointer.
 
-Door, pit, stairs and teleporter behaviour, picking items up, combat and spells are not implemented yet.
+Door, pit, stairs and teleporter behaviour, picking items up from the floor, combat and spells are not implemented yet.
 
 ## Commands
 
@@ -69,7 +70,7 @@ Code lives under `src/main/java/dm/`, in three layers.
 - **Decorations** (`DecorationFinder` → `dm.model.Decorations`, via `DungeonMap.decorations()`). The rules are reconstructed from ReDMCSB F0169-F0172:
   - **Random hash:** `((((v1*31417)>>1) + v2*11 + seed) >> 2) % 30` in 16-bit unsigned maths, with v1 = 2000+(x<<5)+y, v2 = 3000+(map<<6)+w+h, and seed = header word 0.
   - **Random walls:** a wall side is allowed one if square bit (8 >> side) is set, and it hashes row (y+1)×(side+1). Corridors use bit 3 and the real (x,y).
-  - **Explicit decorations override random ones:** wall sensors' attribute bits 12-15, and visible texts (inscriptions, with their text). Champion-mirror sides are cleared, since the mirror draws itself.
+  - **Explicit decorations override random ones:** wall sensors' attribute bits 12-15, and visible texts (inscriptions, with their text). Champion-mirror sides carry the mirror frame (decoration 43), so side views show it. The renderer skips it on the centre front face, where `drawMirror` draws the frame, the portrait and the click target.
   - **Doors:** record bits 1-4 are the decoration ordinal, and bit 6 means the door has a button.
 - **Decoration art:**
   - wall decoration k: side view 259+2k, front view 260+2k (0 inscription stone, 1-3 alcoves/altar, 43 mirror, 59 outdoor picture);
@@ -100,6 +101,10 @@ Code lives under `src/main/java/dm/`, in three layers.
   - `Party.step(move)` moves and then runs `partyMoved`: sensors on the entered square fire; HOLD or revert sensors on the left square undo.
   - Type-3 (party) sensors need ≥1 champion. In DM an empty party is the ghost Theron.
 - `Champion.addStartingItem` chooses slots the way DM does: worn items on the body, weapons in the action hand then the quiver or ready hand, potions in the pouches, everything else in the backpack.
+- **Moving items:**
+  - `Item.fits(slot)` holds DM's slot rules: hands and backpack take anything; body slots only take what `wornOn` names; pouches take potions, scrolls and `ItemCatalog.POUCH_JUNK`; quiver 1 takes any weapon; quivers 2-4 take only missiles.
+  - `Champion.take`/`place` move items, and `place` returns the item it displaced.
+  - The item on the pointer is `Party.held()` (DM's leader hand), so it survives switching champions and closing the sheet.
 
 **`ui/`: draws everything at the original 320×200 resolution**
 - `GameScreen` holds all screen state and click routing, with no Swing. `GameWindow` is a thin wrapper that scales the 320×200 buffer with nearest-neighbour filtering and maps mouse positions back. Tests and scratch renders drive `GameScreen.press`/`render` directly.
@@ -111,7 +116,10 @@ Code lives under `src/main/java/dm/`, in three layers.
   - the arrows are `MovementPanel.AREA`;
   - the champion boxes run across the top;
   - the spell and action areas are drawn as empty outlines for now.
-- `CharacterSheet` slot positions come from DM's inventory background (graphic 17). Text uses `PixelFont`, a hand-made 5×5 font, because the PC GRAPHICS.DAT has no UI font image.
+- `CharacterSheet` slot positions come from DM's inventory background (graphic 17).
+  - On a party member's sheet, clicking a cell (`Action.SLOT`, `slotAt`) picks up, places or swaps through `GameScreen.clickSlot`. A candidate's items can't be touched.
+  - An item that doesn't fit stays in hand.
+  - While an item is held, `GameWindow` hides the OS cursor and `GameScreen` draws `Art.iconSprite` (the icon with background colour 12 transparent) centred on the pointer, on top of everything. Text uses `PixelFont`, a hand-made 5×5 font, because the PC GRAPHICS.DAT has no UI font image.
 - Blocked moves go through `GameScreen.bump()`:
   - it plays the thud through the injected `SoundPlayer` (`javaSound()` in the game, `silent()` or a lambda in tests);
   - `Party.bump()` damages the `FRONT_ROW` members;
@@ -125,6 +133,7 @@ Code lives under `src/main/java/dm/`, in three layers.
   - **Walls:** a table indexed by [depth][lateral+2] gives the graphic, x and y (D1 front 160×111 at (32,8), D2 106×74 at (59,18), D3 70×49 at (77,25)). These were measured from the art: each side piece contains its square's visible front face plus its side face, and each front face ends exactly where the next nearer centre piece begins.
   - **Flipping:** when (x + y + facing) is odd, the floor, ceiling and centre walls are mirrored, and each side uses the opposite side's piece mirrored.
   - **Doors, stairs and pits:** their positions are fitted from mid-square perspective planes, because DM's coordinate tables live in the program file, not in GRAPHICS.DAT. Treat those constants as tunable.
+  - **Stairs:** 108-113 are *up* stairs (steps climbing into darkness) and 115-120 are *down* stairs (a stairwell opening in the floor), in pairs of left then centre piece for D3, D2 and D1. The side-on pieces (114, 121, 123, 124) aren't drawn yet.
   - **Pits** are graphics 50-55. **Floor ornaments** (pressure plates etc.) are 6 pieces each from graphic 385, centred on each depth's mid-square floor line. Graphics 415-420 are the black-flame-pit *ornament*, not pits.
   - **Door design:** `DungeonMap.doorStyle` (bits 8-15 of the map's graphics-set word, chosen by bit 0 of the door thing) picks one of 4 designs (graphics 246 + style×3).
   - **Orientation:** bit 3 of a door or stairs square (`Square.runsNorthSouth`) decides whether it's seen head-on.

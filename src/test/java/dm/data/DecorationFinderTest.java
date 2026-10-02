@@ -85,11 +85,19 @@ class DecorationFinderTest {
     }
 
     @Test
-    void mirrorSidesGetNoOtherDecoration() {
-        int[] wall = {10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24};
-        Thing mirror = new Thing(Thing.SENSOR, 0, Direction.NORTH.ordinal(), new int[] {0xFFFE, 127, 0xA080, 0});
+    void mirrorSideCarriesTheMirrorDecoration() {
+        int[] wall = {10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 43, 21, 22, 23, 24};
+        Thing mirror = new Thing(Thing.SENSOR, 0, Direction.NORTH.ordinal(), new int[] {0xFFFE, 127, 0xB080, 0});
         Decorations d = decorate(0x0F, allRandom(wall), mirror);
-        assertEquals(-1, d.wall(1, 1, Direction.NORTH));
+        assertEquals(43, d.wall(1, 1, Direction.NORTH), "sensor ordinal 11 -> global 43");
+    }
+
+    @Test
+    void mirrorWithoutAnOrdinalFallsBackToTheMirrorFrame() {
+        Thing mirror = new Thing(Thing.SENSOR, 0, Direction.EAST.ordinal(), new int[] {0xFFFE, 127, 0x0080, 0});
+        Decorations d = decorate(0x00, allRandom(), mirror);
+        assertEquals(DecorationFinder.MIRROR_ORNAMENT, d.wall(1, 1, Direction.EAST));
+        assertEquals(43, DecorationFinder.MIRROR_ORNAMENT);
     }
 
     @Test

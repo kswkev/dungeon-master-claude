@@ -2,14 +2,19 @@ package dm.ui;
 
 import dm.data.GraphicsFile;
 import dm.data.Sound;
+import dm.model.Champion;
 import dm.model.ChampionMirror;
 import dm.model.DungeonMap;
+import dm.model.Item;
 import dm.model.Party;
+import dm.model.Slot;
 
 import java.awt.BasicStroke;
 import java.awt.Color;
 import java.awt.Graphics2D;
+import java.awt.Point;
 import java.awt.Rectangle;
+import java.awt.image.BufferedImage;
 import java.util.function.LongSupplier;
 
 /**
@@ -30,6 +35,7 @@ public final class GameScreen {
     public static final int TICK_MS = 170;
 
     private final Party party;
+    private final Art art;
     private final boolean debug;
     private final ViewRenderer view;
     private final MovementPanel arrows = new MovementPanel();
@@ -43,6 +49,8 @@ public final class GameScreen {
     private LongSupplier clock = System::currentTimeMillis;
     private Runnable onBump = () -> { };
     private boolean bumped;
+    /** Last mouse position in screen coordinates, or null when the mouse is outside the window. */
+    private Point pointer;
 
     public GameScreen(Party party, Art art, boolean debug) {
         this(party, art, SoundPlayer.silent(), debug);
@@ -50,6 +58,7 @@ public final class GameScreen {
 
     public GameScreen(Party party, Art art, SoundPlayer sounds, boolean debug) {
         this.party = party;
+        this.art = art;
         this.debug = debug;
         this.view = ViewRenderer.forArt(art);
         this.bars = new ChampionBars(art);
@@ -105,6 +114,7 @@ public final class GameScreen {
 
     /** Handles a left-button press at screen point (x, y). */
     public void press(int x, int y) {
+        pointer = new Point(x, y);
         if (sheet.isOpen()) {
             pressWithSheetOpen(x, y);
             return;
@@ -137,6 +147,7 @@ public final class GameScreen {
     private void pressWithSheetOpen(int x, int y) {
         if (ViewRenderer.VIEWPORT.contains(x, y)) {
             switch (sheet.click(x, y)) {
+                case SLOT -> clickSlot(sheet.champion(), sheet.slotAt(x, y));
                 case RESURRECT -> {
                     ChampionMirror mirror = sheet.candidate();
                     if (party.recruit(mirror) && debug) {
@@ -160,12 +171,46 @@ public final class GameScreen {
         }
     }
 
+    /**
+     * DM's inventory click: with an empty hand, pick up what's in the cell;
+     * holding an item, put it down there if it fits, picking up whatever was
+     * in the cell (a swap). An item that doesn't fit stays in hand.
+     */
+    private void clickSlot(Champion champion, Slot slot) {
+        Item held = party.held();
+        if (held == null) {
+            Item taken = champion.take(slot);
+            party.setHeld(taken);
+            if (taken != null && debug) {
+                System.out.println("Picked up " + taken.name() + " from " + champion.name() + "'s " + slot);
+            }
+        } else if (held.fits(slot)) {
+            party.setHeld(champion.place(slot, held));
+            if (debug) {
+                System.out.println("Placed " + held.name() + " in " + champion.name() + "'s " + slot);
+            }
+        }
+    }
+
+    /** True while an item rides on the mouse pointer, which the window then hides. */
+    public boolean holding() {
+        return party.held() != null;
+    }
+
     public void release() {
         arrows.setPressed(null);
     }
 
+    /** The mouse moved to screen point (x, y). */
     public void hover(int x, int y) {
+        pointer = new Point(x, y);
         sheet.hover(x, y);
+    }
+
+    /** The mouse left the window: nothing is drawn at the pointer. */
+    public void pointerGone() {
+        pointer = null;
+        sheet.hover(-1, -1);
     }
 
     private String name(int position) {
@@ -233,7 +278,7 @@ public final class GameScreen {
                 clock.getAsLong());
         formation.draw(g, party);
         if (sheet.isOpen()) {
-            sheet.draw(g);
+            sheet.draw(g, holding());
         } else {
             view.draw(g, party);
         }
@@ -246,6 +291,23 @@ public final class GameScreen {
         arrows.draw(g);
         if (debug) {
             PixelFont.draw(g, party.x() + "," + party.y() + " " + party.facing(), 236, 190, Color.YELLOW);
+        }
+        drawHeldItem(g);
+    }
+
+    /** The held item replaces the mouse pointer: its icon centred on the pointer, over everything else. */
+    private void drawHeldItem(Graphics2D g) {
+        Item held = party.held();
+        if (held == null || pointer == null) {
+            return;
+        }
+        int x = pointer.x - 8;
+        int y = pointer.y - 8;
+        BufferedImage icon = art.iconSprite(held);
+        if (icon != null) {
+            g.drawImage(icon, x, y, null);
+        } else {
+            Placeholders.icon(g, held, x, y);
         }
     }
 

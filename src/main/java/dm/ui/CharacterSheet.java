@@ -25,7 +25,8 @@ import java.util.Map;
  */
 public final class CharacterSheet {
 
-    public enum Action { NONE, RESURRECT, CLOSE }
+    /** What a click asks for; SLOT means an inventory cell of a party member ({@link #slotAt}). */
+    public enum Action { NONE, RESURRECT, CLOSE, SLOT }
 
     private static final Rectangle VIEW = ViewRenderer.VIEWPORT;
 
@@ -127,10 +128,34 @@ public final class CharacterSheet {
         if (candidate != null && canRecruit && RESURRECT_BUTTON.contains(vx, vy)) {
             return Action.RESURRECT;
         }
+        // A candidate's belongings can't be touched until they are resurrected.
+        if (candidate == null && slotAt(x, y) != null) {
+            return Action.SLOT;
+        }
         return Action.NONE;
     }
 
-    public void draw(Graphics2D g) {
+    /** Screen point at the centre of a slot's icon, for tests and scripted clicks. */
+    static Point slotCentre(Slot slot) {
+        Point p = SLOT_ICONS.get(slot);
+        return new Point(VIEW.x + p.x + 8, VIEW.y + p.y + 8);
+    }
+
+    /** The inventory cell under screen point (x, y), or null. */
+    public Slot slotAt(int x, int y) {
+        int vx = x - VIEW.x;
+        int vy = y - VIEW.y;
+        for (Map.Entry<Slot, Point> e : SLOT_ICONS.entrySet()) {
+            Point p = e.getValue();
+            if (vx >= p.x && vx < p.x + 16 && vy >= p.y && vy < p.y + 16) {
+                return e.getKey();
+            }
+        }
+        return null;
+    }
+
+    /** Draws the sheet; item name tooltips are left out while an item is on the pointer. */
+    public void draw(Graphics2D g, boolean holding) {
         if (champion == null) {
             return;
         }
@@ -142,7 +167,9 @@ public final class CharacterSheet {
             drawVitals(v);
             drawSkillsAndStats(v);
             drawButtons(v);
-            drawTooltip(v);
+            if (!holding) {
+                drawTooltip(v);
+            }
         } finally {
             v.dispose();
         }
@@ -229,20 +256,19 @@ public final class CharacterSheet {
         if (hover == null) {
             return;
         }
-        for (Map.Entry<Slot, Item> e : champion.items().entrySet()) {
-            Point p = SLOT_ICONS.get(e.getKey());
-            if (new Rectangle(p.x, p.y, 16, 16).contains(hover)) {
-                String name = e.getValue().name();
-                int w = PixelFont.width(name) + 4;
-                int x = Math.min(hover.x + 6, VIEW.width - w - 1);
-                int y = Math.max(hover.y - 10, 0);
-                g.setColor(Color.BLACK);
-                g.fillRect(x, y, w, 9);
-                g.setColor(Art.PALETTE[11]);
-                g.drawRect(x, y, w - 1, 8);
-                PixelFont.draw(g, name, x + 2, y + 2, Art.PALETTE[11]);
-                return;
-            }
+        Slot slot = slotAt(hover.x + VIEW.x, hover.y + VIEW.y);
+        Item item = slot == null ? null : champion.items().get(slot);
+        if (item == null) {
+            return;
         }
+        String name = item.name();
+        int w = PixelFont.width(name) + 4;
+        int x = Math.min(hover.x + 6, VIEW.width - w - 1);
+        int y = Math.max(hover.y - 10, 0);
+        g.setColor(Color.BLACK);
+        g.fillRect(x, y, w, 9);
+        g.setColor(Art.PALETTE[11]);
+        g.drawRect(x, y, w - 1, 8);
+        PixelFont.draw(g, name, x + 2, y + 2, Art.PALETTE[11]);
     }
 }

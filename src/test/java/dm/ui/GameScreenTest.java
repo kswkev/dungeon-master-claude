@@ -5,12 +5,16 @@ import dm.model.ChampionMirror;
 import dm.model.Direction;
 import dm.model.DungeonMap;
 import dm.model.FloorSensor;
+import dm.model.Item;
+import dm.model.ItemCatalog;
 import dm.model.Party;
+import dm.model.Slot;
 import dm.model.Square;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
 import java.awt.Graphics2D;
+import java.awt.Point;
 import java.awt.Rectangle;
 import java.awt.image.BufferedImage;
 import java.util.List;
@@ -18,6 +22,7 @@ import java.util.List;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertSame;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
@@ -213,6 +218,95 @@ class GameScreenTest {
         render();
         clickPortrait();
         assertFalse(screen.sheet().isOpen());
+    }
+
+    // ---- moving items on the character sheet ----
+
+    private static final Item SWORD = ItemCatalog.item(Item.Category.WEAPON, 10);
+    private static final Item HELM = ItemCatalog.item(Item.Category.ARMOUR, 25);
+
+    private void click(Slot slot) {
+        Point p = CharacterSheet.slotCentre(slot);
+        screen.press(p.x, p.y);
+        screen.release();
+    }
+
+    /** Recruits Elija with a sword in the action hand and a helm on, and opens her sheet. */
+    private Champion openElijaWithItems() {
+        mirror.champion().addStartingItem(SWORD);
+        mirror.champion().addStartingItem(HELM);
+        recruitElija();
+        screen.press(10, 10);
+        return party.members().get(0);
+    }
+
+    @Test
+    void clickingAnItemPicksItUpAndAnEmptyCellTakesIt() {
+        Champion elija = openElijaWithItems();
+        click(Slot.ACTION_HAND);
+        assertSame(SWORD, party.held());
+        assertTrue(screen.holding());
+        assertNull(elija.items().get(Slot.ACTION_HAND));
+        screen.hover(150, 100);
+        render(); // the held icon is drawn at the pointer
+
+        click(Slot.BACKPACK_3);
+        assertNull(party.held());
+        assertSame(SWORD, elija.items().get(Slot.BACKPACK_3));
+    }
+
+    @Test
+    void clickingAnEmptyCellWithNothingHeldDoesNothing() {
+        Champion elija = openElijaWithItems();
+        click(Slot.BACKPACK_1);
+        assertNull(party.held());
+        assertEquals(2, elija.items().size());
+    }
+
+    @Test
+    void anItemThatDoesNotFitStaysInHand() {
+        Champion elija = openElijaWithItems();
+        click(Slot.ACTION_HAND);
+        click(Slot.TORSO);
+        assertSame(SWORD, party.held(), "a sword can't be worn on the torso");
+        assertNull(elija.items().get(Slot.TORSO));
+    }
+
+    @Test
+    void droppingOnAnOccupiedCellSwaps() {
+        Champion elija = openElijaWithItems();
+        click(Slot.HEAD);
+        click(Slot.ACTION_HAND);
+        assertSame(HELM, elija.items().get(Slot.ACTION_HAND));
+        assertSame(SWORD, party.held());
+    }
+
+    @Test
+    void theHeldItemSurvivesSwitchingChampionsAndClosingTheSheet() {
+        openElijaWithItems();
+        ChampionMirror second = new ChampionMirror(2, 0, Direction.SOUTH, Champion.parse(ELIJA, 1));
+        party.recruit(second);
+        click(Slot.ACTION_HAND);
+        screen.press(69 + 10, 10); // second champion's box
+        assertSame(second.champion(), screen.sheet().champion());
+        assertSame(SWORD, party.held());
+        screen.press(69 + 10, 10); // close the sheet
+        assertFalse(screen.sheet().isOpen());
+        assertSame(SWORD, party.held());
+
+        screen.press(69 + 10, 10);
+        click(Slot.READY_HAND);
+        assertSame(SWORD, second.champion().items().get(Slot.READY_HAND));
+        assertNull(party.held());
+    }
+
+    @Test
+    void aCandidatesItemsCannotBeTaken() {
+        mirror.champion().addStartingItem(SWORD);
+        clickPortrait();
+        click(Slot.ACTION_HAND);
+        assertNull(party.held());
+        assertSame(SWORD, mirror.champion().items().get(Slot.ACTION_HAND));
     }
 
     @Test
