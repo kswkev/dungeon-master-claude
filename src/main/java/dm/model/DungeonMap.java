@@ -2,7 +2,9 @@ package dm.model;
 
 import java.util.ArrayList;
 import java.util.Collections;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 
 /**
  * A single dungeon level. Squares are addressed as [x][y]; anything out of bounds is solid.
@@ -10,6 +12,8 @@ import java.util.List;
  * The square bytes are fixed, but doors and floor sensors have live state:
  * a door's state (0 open .. 4 closed, 5 broken) starts from its square byte
  * and moves one step per {@link #tickDoors()} toward a target set by sensors.
+ * Items lie in piles on each square's 4 cells, and thrown items fly one
+ * square per {@link #tickProjectiles()}.
  */
 public final class DungeonMap {
 
@@ -31,6 +35,8 @@ public final class DungeonMap {
     private final int[][] doorState;
     private final int[][] doorTarget;
     private final List<FloorSensor> sensors = new ArrayList<>();
+    private final Map<Integer, List<Item>> floorItems = new HashMap<>();
+    private final List<Projectile> projectiles = new ArrayList<>();
     private Decorations decorations;
 
     public DungeonMap(int level, Square[][] squares) {
@@ -243,6 +249,85 @@ public final class DungeonMap {
             }
         }
         return doorStarted || click ? new StepResult(doorStarted, click) : StepResult.NOTHING;
+    }
+
+    // ---- items on the floor ------------------------------------------------
+    //
+    // Each square has 4 cells, numbered like DM: 0 north-west, 1 north-east,
+    // 2 south-east, 3 south-west. Each cell holds a pile, bottom first; the
+    // last item put down is on top and is the one picked up.
+
+    private List<Item> pile(int x, int y, int cell, boolean create) {
+        if (!inBounds(x, y)) {
+            return null;
+        }
+        int key = ((x * height) + y) * 4 + (cell & 3);
+        List<Item> pile = floorItems.get(key);
+        if (pile == null && create) {
+            pile = new ArrayList<>();
+            floorItems.put(key, pile);
+        }
+        return pile;
+    }
+
+    /** The pile on cell {@code cell} of (x, y), bottom first. */
+    public List<Item> itemsAt(int x, int y, int cell) {
+        List<Item> pile = pile(x, y, cell, false);
+        return pile == null ? List.of() : Collections.unmodifiableList(pile);
+    }
+
+    /** Puts {@code item} on top of the pile on cell {@code cell} of (x, y). */
+    public void addItem(int x, int y, int cell, Item item) {
+        List<Item> pile = pile(x, y, cell, true);
+        if (pile != null) {
+            pile.add(item);
+        }
+    }
+
+    /** Removes and returns the top item on cell {@code cell} of (x, y), or null. */
+    public Item takeItem(int x, int y, int cell) {
+        List<Item> pile = pile(x, y, cell, false);
+        return pile == null || pile.isEmpty() ? null : pile.remove(pile.size() - 1);
+    }
+
+    // ---- thrown items ------------------------------------------------------
+
+    /** Items in flight, oldest first. */
+    public List<Projectile> projectiles() {
+        return Collections.unmodifiableList(projectiles);
+    }
+
+    /**
+     * Throws {@code item} from (x, y) toward {@code direction}, on the left or
+     * right side. It starts in the thrower's square and lands, on the far cell
+     * of its side, in the last open square it reaches.
+     */
+    public void throwItem(Item item, int x, int y, Direction direction, boolean rightSide, int range) {
+        int cell = direction.cellOf(rightSide ? 1 : 0);
+        projectiles.add(new Projectile(item, x, y, direction, cell, range));
+    }
+
+    /**
+     * Moves every item in flight one square. One that can't go further (a
+     * wall or closed door ahead, or out of range) drops onto its square.
+     * Returns true if anything was in flight.
+     */
+    public boolean tickProjectiles() {
+        if (projectiles.isEmpty()) {
+            return false;
+        }
+        List<Projectile> flying = new ArrayList<>();
+        for (Projectile p : projectiles) {
+            Projectile next = p.advance();
+            if (p.range() > 0 && isPassable(next.x(), next.y())) {
+                flying.add(next);
+            } else {
+                addItem(p.x(), p.y(), p.cell(), p.item());
+            }
+        }
+        projectiles.clear();
+        projectiles.addAll(flying);
+        return true;
     }
 
     // ---- champions ---------------------------------------------------------

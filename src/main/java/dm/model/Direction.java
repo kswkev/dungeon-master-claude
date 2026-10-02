@@ -33,4 +33,18 @@ public enum Direction {
     public Direction opposite() {
         return values()[(ordinal() + 2) & 3];
     }
+
+    /**
+     * Square cells as seen facing this way: view cell 0 back-left, 1
+     * back-right, 2 front-right, 3 front-left ("back" = further away).
+     * Facing north they equal DM's absolute cells (0 NW, 1 NE, 2 SE, 3 SW).
+     */
+    public int cellOf(int viewCell) {
+        return (viewCell + ordinal()) & 3;
+    }
+
+    /** The inverse of {@link #cellOf}: where absolute cell {@code cell} appears in the view. */
+    public int viewCellOf(int cell) {
+        return (cell - ordinal()) & 3;
+    }
 }
