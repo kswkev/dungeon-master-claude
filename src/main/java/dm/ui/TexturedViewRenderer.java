@@ -315,10 +315,10 @@ public final class TexturedViewRenderer implements ViewRenderer {
 
     /** Door decorations (441 + k) are drawn for the D1 panel (96 wide) and scaled down with it. */
     static final int FIRST_DOOR_ORNAMENT = 441;
-    /** The button set into the right-hand door pillar. */
-    static final int DOOR_BUTTON = 125;
+    /** The button set into the right-hand door pillar (8x9, with a bevelled edge), checked against the original. */
+    static final int DOOR_BUTTON = 453;
     /** Button size at D1 relative to its graphic, and its height up the pillar (0 = top of the panel). */
-    private static final double DOOR_BUTTON_SCALE = 0.6;
+    private static final double DOOR_BUTTON_SCALE = 1.0;
     private static final double DOOR_BUTTON_HEIGHT = 0.35;
     /** How far right of the pillar's centre the button sits at D1, in pixels (scaled with distance). */
     private static final int DOOR_BUTTON_RIGHT = 4;

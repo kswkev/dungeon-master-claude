@@ -75,7 +75,7 @@ Code lives under `src/main/java/dm/`, in three layers.
   - wall decoration k: side view 259+2k, front view 260+2k (0 inscription stone, 1-3 alcoves/altar, 43 mirror, 59 outdoor picture);
   - floor decoration k: 385+6k;
   - door decoration k: 441+k, where orange (colour 9) is see-through too (`Art.doorSprite`);
-  - door button: 125;
+  - door button: 453 (8×9 with a bevelled edge, drawn at full size at D1; checked against the original);
   - inscription font: 258 (8-pixel cells, A-Z then space and '.').
 - **Floor sensors** (`FloorSensorFinder` → `dm.model.FloorSensor`): sensor things on non-wall squares.
   - Word 1: type in bits 0-6.
