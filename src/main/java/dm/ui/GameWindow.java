@@ -6,11 +6,14 @@ import javax.swing.JFrame;
 import javax.swing.JPanel;
 import javax.swing.Timer;
 import java.awt.Color;
+import java.awt.Cursor;
 import java.awt.Dimension;
 import java.awt.Graphics;
 import java.awt.Graphics2D;
+import java.awt.Point;
 import java.awt.Rectangle;
 import java.awt.RenderingHints;
+import java.awt.Toolkit;
 import java.awt.event.MouseAdapter;
 import java.awt.event.MouseEvent;
 import java.awt.image.BufferedImage;
@@ -24,6 +27,8 @@ public final class GameWindow extends JFrame {
 
     private static final int DEFAULT_SCALE = 3;
     private static final int BUMP_FLASH_MS = 150;
+    private static final Cursor BLANK_CURSOR = Toolkit.getDefaultToolkit().createCustomCursor(
+            new BufferedImage(16, 16, BufferedImage.TYPE_INT_ARGB), new Point(0, 0), "blank");
 
     public GameWindow(Party party, Art art, SoundPlayer sounds, boolean debug) {
         super("Dungeon Master - Level " + (party.map().level() + 1));
@@ -70,6 +75,7 @@ public final class GameWindow extends JFrame {
                     if (e.getButton() == MouseEvent.BUTTON1) {
                         int[] p = toScreen(e.getX(), e.getY());
                         game.press(p[0], p[1]);
+                        updateCursor();
                         repaint();
                     }
                 }
@@ -82,15 +88,32 @@ public final class GameWindow extends JFrame {
 
                 @Override
                 public void mouseMoved(MouseEvent e) {
-                    if (game.sheet().isOpen()) {
-                        int[] p = toScreen(e.getX(), e.getY());
-                        game.hover(p[0], p[1]);
+                    int[] p = toScreen(e.getX(), e.getY());
+                    game.hover(p[0], p[1]);
+                    // The tooltip and the held item follow the mouse; otherwise nothing moves.
+                    if (game.sheet().isOpen() || game.holding()) {
                         repaint();
                     }
+                }
+
+                @Override
+                public void mouseDragged(MouseEvent e) {
+                    mouseMoved(e);
+                }
+
+                @Override
+                public void mouseExited(MouseEvent e) {
+                    game.pointerGone();
+                    repaint();
                 }
             };
             addMouseListener(mouse);
             addMouseMotionListener(mouse);
+        }
+
+        /** While an item is held its icon, drawn by the game, is the pointer, so the system cursor is hidden. */
+        private void updateCursor() {
+            setCursor(game.holding() ? BLANK_CURSOR : Cursor.getDefaultCursor());
         }
 
         /** Largest rectangle with the 320x200 aspect ratio that fits the panel, centred. */

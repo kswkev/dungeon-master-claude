@@ -66,6 +66,14 @@ public final class ItemCatalog {
 
     private static final Set<Integer> NECK_JUNK = Set.of(2, 3, 37, 38, 39, 40, 41, 48);
 
+    /**
+     * Small junk that fits a pouch: compass, amulets and jewels, coins, keys,
+     * gems, magical boxes, rabbit's foot, corbamite, lock picks and magnifier.
+     */
+    private static final Set<Integer> POUCH_JUNK = Set.of(
+            0, 2, 3, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24,
+            26, 27, 28, 37, 38, 39, 40, 41, 42, 43, 46, 47, 48, 49, 50);
+
     private ItemCatalog() {
     }
 
@@ -85,6 +93,15 @@ public final class ItemCatalog {
 
     static boolean isMissileWeapon(int type) {
         return MISSILES.contains(type);
+    }
+
+    /** Potions, scrolls and the small junk in {@link #POUCH_JUNK}. */
+    static boolean fitsPouch(Item item) {
+        return switch (item.category()) {
+            case POTION, SCROLL -> true;
+            case JUNK -> POUCH_JUNK.contains(item.type());
+            default -> false;
+        };
     }
 
     static boolean isShield(int type) {

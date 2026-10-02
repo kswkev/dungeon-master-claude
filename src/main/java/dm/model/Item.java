@@ -21,4 +21,25 @@ public record Item(Category category, int type, String name, int nameVariant, Sl
     public boolean isShield() {
         return category == Category.ARMOUR && ItemCatalog.isShield(type);
     }
+
+    /**
+     * DM's slot rules: hands and backpack take anything, body slots only what
+     * is worn there, pouches small things, the first quiver slot any weapon
+     * and the other three only missiles.
+     */
+    public boolean fits(Slot slot) {
+        if (slot == Slot.READY_HAND || slot == Slot.ACTION_HAND || slot.isBackpack()) {
+            return true;
+        }
+        if (slot.isPouch()) {
+            return ItemCatalog.fitsPouch(this);
+        }
+        if (slot == Slot.QUIVER_1) {
+            return category == Category.WEAPON;
+        }
+        if (slot.isQuiver()) {
+            return isMissile();
+        }
+        return wornOn == slot;
+    }
 }

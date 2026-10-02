@@ -159,6 +159,22 @@ public final class Champion {
         return slot;
     }
 
+    /** Removes and returns the item in {@code slot}, or null if it's empty. */
+    public Item take(Slot slot) {
+        return items.remove(slot);
+    }
+
+    /**
+     * Puts {@code item} in {@code slot} and returns the item it displaced, if
+     * any. Throws if the item doesn't fit there ({@link Item#fits}).
+     */
+    public Item place(Slot slot, Item item) {
+        if (!item.fits(slot)) {
+            throw new IllegalArgumentException(item.name() + " doesn't fit " + slot);
+        }
+        return items.put(slot, item);
+    }
+
     private Slot freeOf(Slot... candidates) {
         for (Slot s : candidates) {
             if (!items.containsKey(s)) {

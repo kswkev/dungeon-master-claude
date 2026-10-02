@@ -141,6 +141,8 @@ public final class TexturedViewRenderer implements ViewRenderer {
             String text = map.decorations().inscription(mx, my, front);
             if (text != null && d == 1 && l == 0) {
                 Inscription.draw(g, art, text, FRONT[1]);
+            } else if (l == 0 && map.mirrorAt(mx, my, front) != null) {
+                // drawMirror owns the front view: frame, portrait and click target.
             } else if (ornament >= 0) {
                 Rectangle face = new Rectangle(FRONT[d]);
                 face.x += l * face.width;
@@ -228,14 +230,16 @@ public final class TexturedViewRenderer implements ViewRenderer {
     static final int FIRST_FLOOR_ORNAMENT = 385;
     private static final int[] FLOOR_CENTRE_Y = {0, 102, 80, 66};
 
-    private static final int[] STAIRS_DOWN_C = {-1, 113, 111, 109};
-    private static final int[][] STAIRS_DOWN_C_XY = {null, {32, 19}, {62, 29}, {78, 28}};
-    private static final int[] STAIRS_DOWN_L = {-1, 112, 110, 108};
-    private static final int[][] STAIRS_DOWN_L_XY = {null, {0, 19}, {-1, 30}, {14, 29}};
-    private static final int[] STAIRS_UP_C = {-1, 120, 118, 116};
-    private static final int[][] STAIRS_UP_C_XY = {null, {36, 27}, {63, 31}, {75, 25}};
-    private static final int[] STAIRS_UP_L = {-1, 119, 117, 115};
-    private static final int[][] STAIRS_UP_L_XY = {null, {0, 28}, {-2, 30}, {2, 33}};
+    /** Stairs climbing into darkness, with handrails rising away (graphics 108-113). */
+    private static final int[] STAIRS_UP_C = {-1, 113, 111, 109};
+    private static final int[][] STAIRS_UP_C_XY = {null, {32, 19}, {62, 29}, {78, 28}};
+    private static final int[] STAIRS_UP_L = {-1, 112, 110, 108};
+    private static final int[][] STAIRS_UP_L_XY = {null, {0, 19}, {-1, 30}, {14, 29}};
+    /** A stairwell opening in the floor, steps and rails dropping away (graphics 115-120). */
+    private static final int[] STAIRS_DOWN_C = {-1, 120, 118, 116};
+    private static final int[][] STAIRS_DOWN_C_XY = {null, {36, 27}, {63, 31}, {75, 25}};
+    private static final int[] STAIRS_DOWN_L = {-1, 119, 117, 115};
+    private static final int[][] STAIRS_DOWN_L_XY = {null, {0, 28}, {-2, 30}, {2, 33}};
 
     private void drawFeature(Graphics2D g, DungeonMap map, Square sq, int d, int l, Direction fwd, int mx, int my) {
         int ornament = map.floorOrnament(mx, my);

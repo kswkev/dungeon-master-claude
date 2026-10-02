@@ -41,6 +41,8 @@ public final class Party {
     private int x;
     private int y;
     private Direction facing;
+    /** The item on the mouse pointer (DM's leader hand), shared by the whole party. */
+    private Item held;
 
     public Party(DungeonMap map, int x, int y, Direction facing) {
         this.map = map;
@@ -67,6 +69,15 @@ public final class Party {
 
     public List<Champion> members() {
         return Collections.unmodifiableList(members);
+    }
+
+    /** The item being carried on the mouse pointer, or null. */
+    public Item held() {
+        return held;
+    }
+
+    public void setHeld(Item item) {
+        held = item;
     }
 
     public boolean isFull() {

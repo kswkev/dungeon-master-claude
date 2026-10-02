@@ -32,10 +32,12 @@ public final class Art {
     private static final int PORTRAITS_PER_ROW = 8;
     private static final int ICON_SIZE = 16;
     private static final int ICONS_PER_SHEET = 32;
+    private static final int ICON_BACKGROUND = 12;
 
     private final GraphicsFile gfx;
     private final Map<Integer, BufferedImage> cache = new HashMap<>();
     private final Map<String, Integer> iconIndexes = new HashMap<>();
+    private final Map<String, BufferedImage> iconSprites = new HashMap<>();
 
     private Art(GraphicsFile gfx) {
         this.gfx = gfx;
@@ -153,6 +155,28 @@ public final class Art {
         int cell = index % ICONS_PER_SHEET;
         int perRow = sheet.getWidth() / ICON_SIZE;
         return sheet.getSubimage((cell % perRow) * ICON_SIZE, (cell / perRow) * ICON_SIZE, ICON_SIZE, ICON_SIZE);
+    }
+
+    /**
+     * An item's icon for the mouse pointer: the icon sheets' background,
+     * colour 12, is see-through, as when DM draws an icon as the pointer.
+     */
+    public BufferedImage iconSprite(Item item) {
+        BufferedImage src = icon(item);
+        if (src == null) {
+            return null;
+        }
+        return iconSprites.computeIfAbsent(item.name() + "#" + item.nameVariant(), k -> {
+            BufferedImage out = new BufferedImage(src.getWidth(), src.getHeight(), BufferedImage.TYPE_INT_ARGB);
+            int background = PALETTE[ICON_BACKGROUND].getRGB();
+            for (int y = 0; y < src.getHeight(); y++) {
+                for (int x = 0; x < src.getWidth(); x++) {
+                    int argb = src.getRGB(x, y);
+                    out.setRGB(x, y, argb == background ? 0 : argb);
+                }
+            }
+            return out;
+        });
     }
 
     private static int findIcon(List<String> names, String name, int variant) {
