@@ -20,8 +20,15 @@ public final class Party {
     }
 
     public static final int MAX_MEMBERS = 4;
-    /** Champions in the front row; the first two recruits stand there, as in DM. */
-    public static final int FRONT_ROW = 2;
+    /**
+     * Formation positions, numbered like DM's cells, clockwise from the front
+     * left (relative to the way the party faces). New recruits fill them in
+     * this order.
+     */
+    public static final int FRONT_LEFT = 0;
+    public static final int FRONT_RIGHT = 1;
+    public static final int BACK_RIGHT = 2;
+    public static final int BACK_LEFT = 3;
     /**
      * Damage for walking into a wall. In DM this is 1 point reduced by torso
      * and leg armour; armour values aren't modelled yet, so it is a flat 1.
@@ -30,6 +37,7 @@ public final class Party {
 
     private final DungeonMap map;
     private final List<Champion> members = new ArrayList<>();
+    private final Champion[] positions = new Champion[MAX_MEMBERS];
     private int x;
     private int y;
     private Direction facing;
@@ -71,8 +79,36 @@ public final class Party {
             return false;
         }
         members.add(mirror.champion());
+        for (int p = 0; p < MAX_MEMBERS; p++) {
+            if (positions[p] == null) {
+                positions[p] = mirror.champion();
+                break;
+            }
+        }
         mirror.markTaken();
         return true;
+    }
+
+    /** The champion standing in formation position {@code position}, or null. */
+    public Champion at(int position) {
+        return positions[position];
+    }
+
+    /** The formation position of {@code champion}, or -1 if not in the party. */
+    public int positionOf(Champion champion) {
+        for (int p = 0; p < MAX_MEMBERS; p++) {
+            if (positions[p] == champion) {
+                return p;
+            }
+        }
+        return -1;
+    }
+
+    /** Swaps whoever stands in two formation positions; either may be empty, which moves a champion. */
+    public void swap(int a, int b) {
+        Champion tmp = positions[a];
+        positions[a] = positions[b];
+        positions[b] = tmp;
     }
 
     /** The mirror straight ahead on the adjacent wall, if there is one with a champion still in it. */
@@ -82,13 +118,23 @@ public final class Party {
     }
 
     /**
-     * Walking into a wall hurts the front row, who hit it. Returns the damage
-     * each member took, indexed like {@link #members()} (0 for the back row).
+     * Walking into a wall hurts the two champions on the side that hit it:
+     * the front row going forward, the back row going backward, and the left
+     * or right pair when sidestepping. Returns the damage each member took,
+     * indexed like {@link #members()}.
      */
-    public int[] bump() {
+    public int[] bump(Move move) {
+        int[] hit = switch (move) {
+            case FORWARD -> new int[] {FRONT_LEFT, FRONT_RIGHT};
+            case BACKWARD -> new int[] {BACK_LEFT, BACK_RIGHT};
+            case LEFT -> new int[] {FRONT_LEFT, BACK_LEFT};
+            case RIGHT -> new int[] {FRONT_RIGHT, BACK_RIGHT};
+        };
         int[] damage = new int[members.size()];
-        for (int i = 0; i < Math.min(FRONT_ROW, members.size()); i++) {
-            damage[i] = members.get(i).takeDamage(BUMP_DAMAGE);
+        for (int p : hit) {
+            if (positions[p] != null) {
+                damage[members.indexOf(positions[p])] = positions[p].takeDamage(BUMP_DAMAGE);
+            }
         }
         return damage;
     }
@@ -103,14 +149,24 @@ public final class Party {
 
     /** Attempts a step; returns false (and stays put) if the target square blocks. */
     public boolean move(Move move) {
+        return step(move) != null;
+    }
+
+    /**
+     * Attempts a step and runs the floor sensors on the squares left and
+     * entered. Returns null if the move was blocked.
+     */
+    public DungeonMap.StepResult step(Move move) {
         Direction d = Direction.fromIndex(facing.ordinal() + move.turns);
         int nx = x + d.dx;
         int ny = y + d.dy;
         if (!map.isPassable(nx, ny)) {
-            return false;
+            return null;
         }
+        int fromX = x;
+        int fromY = y;
         x = nx;
         y = ny;
-        return true;
+        return map.partyMoved(this, fromX, fromY);
     }
 }

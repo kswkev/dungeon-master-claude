@@ -3,6 +3,7 @@ package dm.ui;
 import dm.data.GraphicsFile;
 import dm.data.Sound;
 import dm.model.ChampionMirror;
+import dm.model.DungeonMap;
 import dm.model.Party;
 
 import java.awt.BasicStroke;
@@ -25,6 +26,8 @@ public final class GameScreen {
     public static final int HEIGHT = 200;
     /** How long the damage burst stays on a champion's box after a bump. */
     public static final int DAMAGE_SHOWN_MS = 900;
+    /** Length of a game tick: doors move one of their 4 steps per tick, roughly as fast as in DM. */
+    public static final int TICK_MS = 170;
 
     private final Party party;
     private final boolean debug;
@@ -32,8 +35,11 @@ public final class GameScreen {
     private final MovementPanel arrows = new MovementPanel();
     private final ChampionBars bars;
     private final CharacterSheet sheet;
+    private final FormationBox formation;
     private final SoundPlayer sounds;
     private final Sound bumpSound;
+    private final Sound doorSound;
+    private final Sound clickSound;
     private LongSupplier clock = System::currentTimeMillis;
     private Runnable onBump = () -> { };
     private boolean bumped;
@@ -48,8 +54,27 @@ public final class GameScreen {
         this.view = ViewRenderer.forArt(art);
         this.bars = new ChampionBars(art);
         this.sheet = new CharacterSheet(art);
+        this.formation = new FormationBox(art);
         this.sounds = sounds;
         this.bumpSound = art.sound(GraphicsFile.SOUND_BUMP);
+        this.doorSound = art.sound(GraphicsFile.SOUND_DOOR);
+        this.clickSound = art.sound(GraphicsFile.SOUND_CLICK);
+    }
+
+    public FormationBox formation() {
+        return formation;
+    }
+
+    /**
+     * Advances the game clock by one tick (the window calls this about every
+     * {@link #TICK_MS} ms). Returns true if anything visible changed.
+     */
+    public boolean tick() {
+        DungeonMap.DoorTick doors = party.map().tickDoors();
+        if (doors.rattled()) {
+            sounds.play(doorSound);
+        }
+        return doors.moved();
     }
 
     /**
@@ -87,6 +112,13 @@ public final class GameScreen {
         int box = bars.hitTest(x, y);
         if (box >= 0 && box < party.members().size()) {
             sheet.openMember(party.members().get(box));
+            return;
+        }
+        if (FormationBox.AREA.contains(x, y)) {
+            if (formation.click(party, x, y) && debug) {
+                System.out.println("Formation: FL " + name(Party.FRONT_LEFT) + ", FR " + name(Party.FRONT_RIGHT)
+                        + ", BL " + name(Party.BACK_LEFT) + ", BR " + name(Party.BACK_RIGHT));
+            }
             return;
         }
         Rectangle portrait = view.portraitHit();
@@ -136,23 +168,37 @@ public final class GameScreen {
         sheet.hover(x, y);
     }
 
+    private String name(int position) {
+        return party.at(position) == null ? "-" : party.at(position).name();
+    }
+
     private void move(MovementPanel.Action action) {
-        boolean moved = switch (action) {
+        Party.Move step = switch (action) {
             case TURN_LEFT -> {
                 party.turnLeft();
-                yield true;
+                yield null;
             }
             case TURN_RIGHT -> {
                 party.turnRight();
-                yield true;
+                yield null;
             }
-            case FORWARD -> party.move(Party.Move.FORWARD);
-            case BACKWARD -> party.move(Party.Move.BACKWARD);
-            case STRAFE_LEFT -> party.move(Party.Move.LEFT);
-            case STRAFE_RIGHT -> party.move(Party.Move.RIGHT);
+            case FORWARD -> Party.Move.FORWARD;
+            case BACKWARD -> Party.Move.BACKWARD;
+            case STRAFE_LEFT -> Party.Move.LEFT;
+            case STRAFE_RIGHT -> Party.Move.RIGHT;
         };
-        if (!moved) {
-            bump();
+        boolean moved = true;
+        if (step != null) {
+            DungeonMap.StepResult result = party.step(step);
+            moved = result != null;
+            if (!moved) {
+                bump(step);
+            } else {
+                if (result.click()) {
+                    sounds.play(clickSound);
+                }
+                // The door sound comes from tick(), once per door step.
+            }
         }
         if (debug) {
             System.out.printf("%s -> (%d,%d) facing %s%s%n", action, party.x(), party.y(), party.facing(),
@@ -160,10 +206,10 @@ public final class GameScreen {
         }
     }
 
-    /** DM's wall bump: the thud, damage to the front row with a burst on their boxes, plus the red flash. */
-    private void bump() {
+    /** DM's wall bump: the thud, damage to the side that hit the wall with a burst on their boxes, plus the red flash. */
+    private void bump(Party.Move step) {
         sounds.play(bumpSound);
-        int[] damage = party.bump();
+        int[] damage = party.bump(step);
         long until = clock.getAsLong() + DAMAGE_SHOWN_MS;
         for (int i = 0; i < damage.length; i++) {
             if (damage[i] > 0) {
@@ -185,6 +231,7 @@ public final class GameScreen {
         ChampionMirror viewed = sheet.candidate();
         bars.draw(g, party.members(), sheet.champion(), viewed == null ? null : viewed.champion(),
                 clock.getAsLong());
+        formation.draw(g, party);
         if (sheet.isOpen()) {
             sheet.draw(g);
         } else {

@@ -107,7 +107,7 @@ public final class TexturedViewRenderer implements ViewRenderer {
                             }
                         }
                     } else if (Math.abs(l) <= 1) {
-                        drawFeature(g, sq, d, l, map.doorStyle(mx, my), fwd, mx, my);
+                        drawFeature(g, map, sq, d, l, fwd, mx, my);
                     }
                 }
             }
@@ -135,10 +135,20 @@ public final class TexturedViewRenderer implements ViewRenderer {
     private static final int[] DOOR_LINTEL = {-1, 91, 92, -1};
     private static final int[][] DOOR_LINTEL_XY = {null, {61, 10}, {77, 17}, null};
 
-    private static final int[] PIT_C = {-1, 420, 418, 416};
-    private static final int[][] PIT_C_XY = {null, {82, 90}, {92, 75}, {99, 63}};
-    private static final int[] PIT_L = {-1, 419, 417, 415};
-    private static final int[][] PIT_L_XY = {null, {0, 92}, {4, 75}, {40, 63}};
+    /** Pit holes (graphics 50-55): the centre and left square at each depth. */
+    private static final int[] PIT_C = {-1, 55, 53, 51};
+    private static final int[][] PIT_C_XY = {null, {43, 90}, {66, 74}, {80, 62}};
+    private static final int[] PIT_L = {-1, 54, 52, 50};
+    private static final int[][] PIT_L_XY = {null, {0, 90}, {2, 74}, {10, 62}};
+
+    /**
+     * Floor ornaments (pressure plates, grates, moss...): 6 pieces each from
+     * graphic 385, ordered D3L, D3C, D2L, D2C, D1L, D1C. They are centred on
+     * the square's mid-square floor line; D1 side pieces are pre-cropped at
+     * the screen edge.
+     */
+    static final int FIRST_FLOOR_ORNAMENT = 385;
+    private static final int[] FLOOR_CENTRE_Y = {0, 102, 80, 66};
 
     private static final int[] STAIRS_DOWN_C = {-1, 113, 111, 109};
     private static final int[][] STAIRS_DOWN_C_XY = {null, {32, 19}, {62, 29}, {78, 28}};
@@ -149,11 +159,15 @@ public final class TexturedViewRenderer implements ViewRenderer {
     private static final int[] STAIRS_UP_L = {-1, 119, 117, 115};
     private static final int[][] STAIRS_UP_L_XY = {null, {0, 28}, {-2, 30}, {2, 33}};
 
-    private void drawFeature(Graphics2D g, Square sq, int d, int l, int doorStyle, Direction fwd, int mx, int my) {
+    private void drawFeature(Graphics2D g, DungeonMap map, Square sq, int d, int l, Direction fwd, int mx, int my) {
+        int ornament = map.floorOrnament(mx, my);
+        if (ornament >= 0 && d > 0) {
+            drawFloorOrnament(g, d, l, ornament);
+        }
         switch (sq.type()) {
             case DOOR -> {
                 if (sq.facesAlong(fwd)) {
-                    drawDoor(g, sq, d, l, doorStyle);
+                    drawDoor(g, d, l, map.doorStyle(mx, my), map.doorState(mx, my));
                 }
             }
             case STAIRS -> {
@@ -199,8 +213,29 @@ public final class TexturedViewRenderer implements ViewRenderer {
         paste(g, left[d], x, leftXY[d][1], l > 0);
     }
 
+    private void drawFloorOrnament(Graphics2D g, int d, int l, int ornament) {
+        int base = FIRST_FLOOR_ORNAMENT + ornament * 6 + (MAX_DEPTH - d) * 2;
+        BufferedImage img = art.sprite(l == 0 ? base + 1 : base);
+        if (img == null) {
+            return;
+        }
+        int y = FLOOR_CENTRE_Y[d] - img.getHeight() / 2;
+        int x;
+        if (l == 0) {
+            x = (VIEWPORT.width - img.getWidth()) / 2;
+        } else if (d == 1) {
+            x = 0;
+        } else {
+            x = VIEWPORT.width / 2 - MID_SPACING[d] - img.getWidth() / 2;
+        }
+        if (l > 0) {
+            x = VIEWPORT.width - x - img.getWidth();
+        }
+        paste(g, l == 0 ? base + 1 : base, x, y, l > 0);
+    }
+
     /** Door frame pillars and lintel, plus the panel unless the door is open or broken. */
-    private void drawDoor(Graphics2D g, Square sq, int d, int l, int style) {
+    private void drawDoor(Graphics2D g, int d, int l, int style, int state) {
         if (d == 0) {
             // Standing in the doorway: only the pillars at the screen edges show.
             if (l == 0) {
@@ -214,7 +249,6 @@ public final class TexturedViewRenderer implements ViewRenderer {
         }
         int shift = MID_SPACING[d] * l;
         Rectangle panel = DOOR_PANEL[d];
-        int state = sq.doorState();
         if (state >= 1 && state <= 4) {
             // DM doors slide up into the lintel; states 1-3 are part-way, 4 is shut.
             BufferedImage img = art.sprite(FIRST_DOOR + style * 3 + (MAX_DEPTH - d));

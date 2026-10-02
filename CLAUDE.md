@@ -9,6 +9,7 @@ A Java/Swing remake of FTL's *Dungeon Master* (1988), built sprint by sprint.
 - Sprint 2: the Hall of Champions. Mirror portraits, the character sheet, Resurrect (not Reincarnate), and champion bars along the top.
 - Sprint 3: wall bumps. The original thud, 1 damage to the front-row champions with DM's damage burst on their boxes, plus the red flash.
 - Sprint 4: the original dungeon textures. Walls, floor and ceiling are pixel-exact; doors, stairs and pits are fitted. Wall/floor decorations are deferred.
+- Sprint 5: floor sensors (pressure plates) that move doors, animated doors with sound, the party formation box, and bump damage by side.
 
 Door, pit, stairs and teleporter behaviour, picking items up, combat and spells are not implemented yet.
 
@@ -61,6 +62,13 @@ Code lives under `src/main/java/dm/`, in three layers.
   - Sounds (671–693 and 701–712) are a big-endian sample count followed by unsigned 8-bit mono PCM, played at `SOUND_SAMPLE_RATE` (5500 Hz).
   - `GraphicsFile.sound()` reads them. Which index is which effect has to be checked by ear with `-Ddm.soundtest`. The user confirmed 687 as the wall bump.
   - The useful entry indexes are constants on `GraphicsFile` (inventory 17, portraits 26, icon sheets 42-48, mirror 346).
+- **Ornament lists:** each map's creature/wall/floor/door ornament lists come straight after its squares. Their counts are in map words B (wall bits 0-3, floor bits 8-11) and C (creatures bits 4-7, doors bits 0-3).
+- **Floor sensors** (`FloorSensorFinder` → `dm.model.FloorSensor`): sensor things on non-wall squares.
+  - Word 1: type in bits 0-6.
+  - Word 2: once-only bit 0, effect bits 1-2 (set/clear/toggle/hold), revert bit 3, audible bit 4, floor-ornament ordinal bits 12-15.
+  - Word 3: target X in bits 6-10, Y in bits 11-15.
+  - The layout was verified on the Level 1 Hall plate (6,9) → door (5,9).
+  - Only door targets do anything yet.
 - **Items** (`ItemCatalog`): maps the type numbers stored in DUNGEON.DAT to names and wear slots.
   - This is reference data from the game itself, not from either file.
   - Icons are found by matching names against GRAPHICS.DAT's name list. `Item.nameVariant` picks between icons that share a name (e.g. ROBE for the body vs. the legs).
@@ -71,11 +79,19 @@ Code lives under `src/main/java/dm/`, in three layers.
 - `Direction` follows DM's encoding: 0 = north, numbered clockwise. North is -Y.
 - `Party.Move` is relative to the facing (forward, right, back, left).
 - `Party` holds up to 4 `Champion`s. `recruit(mirror)` adds the champion and marks the `ChampionMirror` as taken, so it renders empty. `facingMirror()` is the untaken mirror on the adjacent wall straight ahead.
+- **Formation:** `members()` is the recruit order, which is also the colour and status-box order. `at(position)` is the formation, using DM's cells: `FRONT_LEFT` 0, `FRONT_RIGHT` 1, `BACK_RIGHT` 2, `BACK_LEFT` 3. `bump(move)` damages the two positions on the side that hit the wall.
+- **Doors and sensors in `DungeonMap`:**
+  - Doors have live state (0 open … 4 closed, 5 broken), seeded from the square byte. `moveDoor`/`toggleDoor` set a target, and `tickDoors()` steps toward it once per game tick. As in DM, the door sound plays on every step except the last (`DoorTick.rattled`), so a full open or close rattles 3 times.
+  - `isPassable` uses the live state, so use it (not `Square.isPassable`) for doors.
+  - `Party.step(move)` moves and then runs `partyMoved`: sensors on the entered square fire; HOLD or revert sensors on the left square undo.
+  - Type-3 (party) sensors need ≥1 champion. In DM an empty party is the ghost Theron.
 - `Champion.addStartingItem` chooses slots the way DM does: worn items on the body, weapons in the action hand then the quiver or ready hand, potions in the pouches, everything else in the backpack.
 
 **`ui/`: draws everything at the original 320×200 resolution**
 - `GameScreen` holds all screen state and click routing, with no Swing. `GameWindow` is a thin wrapper that scales the 320×200 buffer with nearest-neighbour filtering and maps mouse positions back. Tests and scratch renders drive `GameScreen.press`/`render` directly.
-- Click order: an open `CharacterSheet` first, then `ChampionBars`, then the portrait rectangle the renderer recorded during the last draw (`portraitHit`, only for the adjacent wall straight ahead), then the arrows. The arrows are ignored while a sheet is open.
+- `GameWindow` runs a game tick every `GameScreen.TICK_MS` (170 ms) through `GameScreen.tick()`. That animates doors and repaints only on change. Tests call `tick()` directly.
+- `FormationBox` (top-right, x 276-319) draws champion colours with graphic 28's icons. Click a champion, then a cell, to swap positions.
+- Click order: an open `CharacterSheet` first, then `ChampionBars`, then `FormationBox`, then the portrait rectangle the renderer recorded during the last draw (`portraitHit`, only for the adjacent wall straight ahead), then the arrows. The arrows are ignored while a sheet is open.
 - Screen regions match the original layout:
   - the dungeon view is the `ViewRenderer.VIEWPORT` rectangle (the character sheet replaces it while open);
   - the arrows are `MovementPanel.AREA`;
@@ -95,6 +111,7 @@ Code lives under `src/main/java/dm/`, in three layers.
   - **Walls:** a table indexed by [depth][lateral+2] gives the graphic, x and y (D1 front 160×111 at (32,8), D2 106×74 at (59,18), D3 70×49 at (77,25)). These were measured from the art: each side piece contains its square's visible front face plus its side face, and each front face ends exactly where the next nearer centre piece begins.
   - **Flipping:** when (x + y + facing) is odd, the floor, ceiling and centre walls are mirrored, and each side uses the opposite side's piece mirrored.
   - **Doors, stairs and pits:** their positions are fitted from mid-square perspective planes, because DM's coordinate tables live in the program file, not in GRAPHICS.DAT. Treat those constants as tunable.
+  - **Pits** are graphics 50-55. **Floor ornaments** (pressure plates etc.) are 6 pieces each from graphic 385, centred on each depth's mid-square floor line. Graphics 415-420 are the black-flame-pit *ornament*, not pits.
   - **Door design:** `DungeonMap.doorStyle` (bits 8-15 of the map's graphics-set word, chosen by bit 0 of the door thing) picks one of 4 designs (graphics 246 + style×3).
   - **Orientation:** bit 3 of a door or stairs square (`Square.runsNorthSouth`) decides whether it's seen head-on.
 - **`FlatViewRenderer`:**

@@ -1,0 +1,116 @@
+package dm.model;
+
+/**
+ * A sensor on a floor square, such as a pressure plate, decoded from a
+ * DUNGEON.DAT sensor thing.
+ *
+ * When the party steps on the square, the sensor applies its effect to its
+ * target. When the party steps off, a HOLD sensor undoes it, and so does any
+ * sensor with the revert flag. So far only doors respond to effects.
+ */
+public final class FloorSensor {
+
+    public enum Effect { SET, CLEAR, TOGGLE, HOLD }
+
+    /** DM floor sensor types that this game handles. */
+    public static final int TYPE_ANY = 1;
+    public static final int TYPE_PARTY_OR_CREATURE = 2;
+    public static final int TYPE_PARTY = 3;
+
+    private final int x;
+    private final int y;
+    private final int type;
+    private final Effect effect;
+    private final boolean onceOnly;
+    private final boolean revert;
+    private final boolean audible;
+    private final int targetX;
+    private final int targetY;
+    private final int ornament;
+    private boolean enabled = true;
+
+    /**
+     * @param ornament global floor ornament index drawn on the square (e.g. 1 = square pressure plate), or -1
+     */
+    public FloorSensor(int x, int y, int type, Effect effect, boolean onceOnly, boolean revert, boolean audible,
+                       int targetX, int targetY, int ornament) {
+        this.x = x;
+        this.y = y;
+        this.type = type;
+        this.effect = effect;
+        this.onceOnly = onceOnly;
+        this.revert = revert;
+        this.audible = audible;
+        this.targetX = targetX;
+        this.targetY = targetY;
+        this.ornament = ornament;
+    }
+
+    /**
+     * Whether the party standing here sets the sensor off. Type 1/2 sensors react
+     * to any party. Party sensors (type 3) need at least one champion: in DM an
+     * empty party is just the ghost Theron, who can't press them. Other types
+     * (objects, creatures, items carried) aren't modelled yet.
+     */
+    public boolean triggeredBy(Party party) {
+        if (!enabled) {
+            return false;
+        }
+        return switch (type) {
+            case TYPE_ANY, TYPE_PARTY_OR_CREATURE -> true;
+            case TYPE_PARTY -> !party.members().isEmpty();
+            default -> false;
+        };
+    }
+
+    /** Once-only sensors switch off after their first use. */
+    void used() {
+        if (onceOnly) {
+            enabled = false;
+        }
+    }
+
+    public int x() {
+        return x;
+    }
+
+    public int y() {
+        return y;
+    }
+
+    public int type() {
+        return type;
+    }
+
+    public Effect effect() {
+        return effect;
+    }
+
+    public boolean onceOnly() {
+        return onceOnly;
+    }
+
+    public boolean revert() {
+        return revert;
+    }
+
+    public boolean audible() {
+        return audible;
+    }
+
+    public int targetX() {
+        return targetX;
+    }
+
+    public int targetY() {
+        return targetY;
+    }
+
+    public int ornament() {
+        return ornament;
+    }
+
+    public boolean enabled() {
+        return enabled;
+    }
+}

@@ -4,6 +4,7 @@ import dm.model.Champion;
 import dm.model.ChampionMirror;
 import dm.model.Direction;
 import dm.model.DungeonMap;
+import dm.model.FloorSensor;
 import dm.model.Party;
 import dm.model.Square;
 import org.junit.jupiter.api.BeforeEach;
@@ -79,6 +80,70 @@ class GameScreenTest {
         assertEquals(1, screen.bars().damageShown(0, now));
         now += GameScreen.DAMAGE_SHOWN_MS;
         assertEquals(0, screen.bars().damageShown(0, now), "burst expires");
+    }
+
+    @Test
+    void formationBoxPicksAndPlacesAChampion() {
+        recruitElija();
+        Champion elija = party.members().get(0);
+        Rectangle box = FormationBox.AREA;
+        screen.press(box.x + 5, box.y + 5);          // front-left: Elija
+        assertEquals(Party.FRONT_LEFT, screen.formation().picked());
+        screen.press(box.x + box.width - 5, box.y + box.height - 5); // back-right, empty
+        assertEquals(-1, screen.formation().picked());
+        assertSame(elija, party.at(Party.BACK_RIGHT));
+        assertEquals(null, party.at(Party.FRONT_LEFT));
+        render();
+    }
+
+    @Test
+    void clickingAnEmptyFormationCellPicksNothing() {
+        screen.press(FormationBox.AREA.x + 5, FormationBox.AREA.y + 5);
+        assertEquals(-1, screen.formation().picked());
+    }
+
+    @Test
+    void backingIntoAWallHurtsTheBackRow() {
+        recruitElija();
+        Champion elija = party.members().get(0);
+        party.swap(Party.FRONT_LEFT, Party.BACK_LEFT);
+        party.turnRight();
+        party.turnRight(); // face south: the mirror wall is now behind
+        screen.press(MovementPanel.AREA.x + 40, MovementPanel.AREA.y + 32); // backward arrow
+        assertEquals(elija.maxHealth() - 1, elija.health());
+        assertEquals(1, screen.bars().damageShown(0, now));
+    }
+
+    @Test
+    void plateOpensTheDoorOverGameTicks() {
+        // Corridor running west: door (1,1), plate (2,1), party starts at (3,1).
+        DungeonMap ascii = DungeonMap.fromAscii(0, "#####", "#D..#", "#####");
+        Square[][] squares = new Square[5][3];
+        for (int x = 0; x < 5; x++) {
+            for (int y = 0; y < 3; y++) {
+                squares[x][y] = ascii.get(x, y);
+            }
+        }
+        ChampionMirror hallMirror = new ChampionMirror(3, 0, Direction.SOUTH, Champion.parse(ELIJA, 0));
+        DungeonMap map = new DungeonMap(0, squares, List.of(hallMirror));
+        map.addSensor(new FloorSensor(2, 1, FloorSensor.TYPE_PARTY, FloorSensor.Effect.SET,
+                false, false, false, 1, 1, 1));
+        Party p = new Party(map, 3, 1, Direction.WEST);
+        p.recruit(hallMirror);
+        GameScreen s = new GameScreen(p, Art.none(), sound -> soundsPlayed++, false);
+
+        s.press(MovementPanel.AREA.x + 40, MovementPanel.AREA.y + 10); // forward onto the plate
+        assertEquals(0, soundsPlayed, "the door hasn't moved yet");
+        assertFalse(map.isPassable(1, 1));
+        int ticks = 0;
+        while (s.tick()) {
+            ticks++;
+        }
+        assertEquals(4, ticks);
+        assertEquals(3, soundsPlayed, "the door rattles 3 times while opening, as in DM");
+        assertTrue(map.isPassable(1, 1));
+        s.press(MovementPanel.AREA.x + 40, MovementPanel.AREA.y + 10);
+        assertEquals(1, p.x(), "walked into the open doorway");
     }
 
     @Test

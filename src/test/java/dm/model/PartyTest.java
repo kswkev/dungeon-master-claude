@@ -8,6 +8,8 @@ import java.util.List;
 import static org.junit.jupiter.api.Assertions.assertArrayEquals;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertNull;
+import static org.junit.jupiter.api.Assertions.assertSame;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 class PartyTest {
@@ -129,24 +131,65 @@ class PartyTest {
         assertEquals(1, p.members().size());
     }
 
-    @Test
-    void bumpHurtsOnlyTheFrontRow() {
-        DungeonMap hall = hallWithMirrors(3);
+    private static Party fullParty() {
+        DungeonMap hall = hallWithMirrors(4);
         Party p = new Party(hall, 1, 1, Direction.NORTH);
         for (ChampionMirror m : hall.mirrors()) {
             p.recruit(m);
         }
-        int[] damage = p.bump();
-        assertArrayEquals(new int[] {1, 1, 0}, damage);
+        return p;
+    }
+
+    @Test
+    void recruitsFillTheFormationClockwiseFromFrontLeft() {
+        Party p = fullParty();
+        assertSame(p.members().get(0), p.at(Party.FRONT_LEFT));
+        assertSame(p.members().get(1), p.at(Party.FRONT_RIGHT));
+        assertSame(p.members().get(2), p.at(Party.BACK_RIGHT));
+        assertSame(p.members().get(3), p.at(Party.BACK_LEFT));
+        assertEquals(Party.BACK_LEFT, p.positionOf(p.members().get(3)));
+    }
+
+    @Test
+    void swappingAndMovingInTheFormation() {
+        DungeonMap hall = hallWithMirrors(2);
+        Party p = new Party(hall, 1, 1, Direction.NORTH);
+        p.recruit(hall.mirrors().get(0));
+        p.recruit(hall.mirrors().get(1));
+        Champion first = p.members().get(0);
+        Champion second = p.members().get(1);
+        p.swap(Party.FRONT_LEFT, Party.FRONT_RIGHT);
+        assertSame(second, p.at(Party.FRONT_LEFT));
+        assertSame(first, p.at(Party.FRONT_RIGHT));
+        p.swap(Party.FRONT_RIGHT, Party.BACK_LEFT); // into an empty position
+        assertSame(first, p.at(Party.BACK_LEFT));
+        assertNull(p.at(Party.FRONT_RIGHT));
+        assertSame(first, p.members().get(0), "status boxes keep recruit order");
+    }
+
+    @Test
+    void bumpHurtsTheSideThatHitsTheWall() {
+        // members: 0 front-left, 1 front-right, 2 back-right, 3 back-left
+        assertArrayEquals(new int[] {1, 1, 0, 0}, fullParty().bump(Party.Move.FORWARD));
+        assertArrayEquals(new int[] {0, 0, 1, 1}, fullParty().bump(Party.Move.BACKWARD));
+        assertArrayEquals(new int[] {1, 0, 0, 1}, fullParty().bump(Party.Move.LEFT));
+        assertArrayEquals(new int[] {0, 1, 1, 0}, fullParty().bump(Party.Move.RIGHT));
+    }
+
+    @Test
+    void bumpFollowsTheFormation() {
+        Party p = fullParty();
+        p.swap(Party.FRONT_LEFT, Party.BACK_LEFT); // member 0 moves to the back
+        int[] damage = p.bump(Party.Move.BACKWARD);
+        assertEquals(1, damage[0]);
         assertEquals(59, p.members().get(0).health());
-        assertEquals(59, p.members().get(1).health());
-        assertEquals(60, p.members().get(2).health(), "back row is untouched");
+        assertEquals(60, p.members().get(3).health(), "member 3 is now in front");
     }
 
     @Test
     void bumpWithNoPartyDoesNothing() {
         Party p = new Party(MAP, 1, 1, Direction.NORTH);
-        assertEquals(0, p.bump().length);
+        assertEquals(0, p.bump(Party.Move.FORWARD).length);
     }
 
     @Test

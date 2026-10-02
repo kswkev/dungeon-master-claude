@@ -4,6 +4,7 @@ import dm.model.Champion;
 import dm.model.ChampionMirror;
 import dm.model.Direction;
 import dm.model.DungeonMap;
+import dm.model.FloorSensor;
 import dm.model.Item;
 import dm.model.Slot;
 import dm.model.SquareType;
@@ -28,14 +29,17 @@ class DungeonFileTest {
     /**
      * 4 wide, 3 high: a corridor along y=1 with a closed door at x=2. Wall
      * (1,0) has a champion mirror on its south side; the champion's text is
-     * on the floor square (1,1) below it.
+     * on the floor square (1,1) below it. Floor (3,1) has a pressure plate
+     * that opens the door.
      */
     private static final int[][] MAP0 = {
             {WALL, WALL, WALL},
             {WALL | HAS_THINGS, FLOOR | HAS_THINGS, WALL},
             {WALL, CLOSED_DOOR | HAS_THINGS, WALL},
-            {WALL, FLOOR, WALL},
+            {WALL, FLOOR | HAS_THINGS, WALL},
     };
+    /** Map 0's floor ornament list: ordinal 1 is global ornament 1 (square pressure plate). */
+    private static final int MAP0_FLOOR_ORNAMENT = 1;
 
     static final String HALK = "HALK\nTHE BARBARIAN\n\nM\nAAFKACOOAAAA\nCIDHCLBOCOCGDA\nEAEAAAAAAAAAAAAA";
 
@@ -119,6 +123,30 @@ class DungeonFileTest {
         // The door's thing selects door set 1, which map 0 sets to style 1 (wood).
         assertEquals(1, m.doorStyle(2, 1));
         assertEquals(0, m.doorStyle(1, 1), "not a door");
+
+        // The plate on (3,1), encoded like the original Hall plate.
+        assertEquals(1, m.sensors().size());
+        FloorSensor plate = m.sensors().get(0);
+        assertEquals(3, plate.x());
+        assertEquals(1, plate.y());
+        assertEquals(FloorSensor.TYPE_PARTY, plate.type());
+        assertEquals(FloorSensor.Effect.SET, plate.effect());
+        assertEquals(2, plate.targetX());
+        assertEquals(1, plate.targetY());
+        assertEquals(MAP0_FLOOR_ORNAMENT, m.floorOrnament(3, 1));
+        assertTrue(f.maps().get(1).sensors().isEmpty());
+    }
+
+    @Test
+    void decodesTheOriginalHallPlateRecord() {
+        // Raw words of the Level 1 sensor at (6,9): party plate, set, square plate, door (5,9).
+        FloorSensor s = FloorSensorFinder.decode(6, 9, new int[] {0xFFFE, 0x0003, 0x40C0, 0x4940}, new int[] {2, 8, 6, 1});
+        assertEquals(FloorSensor.TYPE_PARTY, s.type());
+        assertEquals(FloorSensor.Effect.SET, s.effect());
+        assertEquals(5, s.targetX());
+        assertEquals(9, s.targetY());
+        assertEquals(1, s.ornament(), "ordinal 4 -> Level 1 list [2, 8, 6, 1] -> square pressure plate");
+        assertTrue(!s.onceOnly() && !s.revert() && !s.audible());
     }
 
     /** Thing ids: bits 14-15 cell, 10-13 type, 0-9 index. */
@@ -131,13 +159,14 @@ class DungeonFileTest {
         Out out = new Out(bigEndian);
         int map0Bytes = 4 * 3;
         int map1Bytes = 2 * 2;
-        int rawBytes = map0Bytes + map1Bytes + 3; // trailing per-map tables
+        int map0Extras = 1;                       // map 0's floor ornament list
+        int rawBytes = map0Bytes + map0Extras + map1Bytes + 3; // + trailing padding
         int[] text = TextDecoderTest.encode(HALK);
-        int squareFirstThings = 3;
+        int squareFirstThings = 4;
         int[] thingCounts = new int[16];
         thingCounts[0] = 1;  // one door (4 bytes)
         thingCounts[2] = 1;  // the champion's text (4 bytes)
-        thingCounts[3] = 1;  // the portrait sensor (8 bytes)
+        thingCounts[3] = 2;  // the portrait sensor and the pressure plate (8 bytes each)
         thingCounts[4] = 2;  // two creature groups (16 bytes each)
         thingCounts[5] = 1;  // the champion's club (4 bytes)
 
@@ -152,17 +181,18 @@ class DungeonFileTest {
             out.u16(c);
         }
 
-        mapDef(out, 0, 4, 3, 0, 0x1000);   // door set 1 = style 1
-        mapDef(out, map0Bytes, 2, 2, 1, 0);
+        mapDef(out, 0, 4, 3, 0, 0x0100, 0x1000);   // 1 floor ornament; door set 1 = style 1
+        mapDef(out, map0Bytes + map0Extras, 2, 2, 1, 0, 0);
 
-        // Squares with things before each column: map 0 has two in column 1 and one in column 2.
-        int[] columnCounts = {0, 0, 2, 3, 3, 3};
+        // Squares with things before each column: map 0 has two in column 1, one in column 2, one in column 3.
+        int[] columnCounts = {0, 0, 2, 3, 4, 4};
         for (int c : columnCounts) {
             out.u16(c);
         }
         out.u16(thingId(2, 3, 0));  // wall (1,0): sensor on its south side
         out.u16(thingId(0, 2, 0));  // floor (1,1): the text
         out.u16(thingId(0, 0, 0));  // door (2,1): its door record
+        out.u16(thingId(0, 3, 1));  // floor (3,1): the pressure plate
         for (int w : text) {
             out.u16(w);
         }
@@ -174,24 +204,31 @@ class DungeonFileTest {
         out.u16((5 << 7) | 127);
         out.u16(0);
         out.u16(0);
+        out.u16(0xFFFE);            // plate: party sensor, set, floor ornament ordinal 1, target (2,1)
+        out.u16(3);
+        out.u16(0x10C0);
+        out.u16((1 << 11) | (2 << 6));
         out.fill(2 * 16, 0xAA);     // creature groups
         out.u16(0xFFFE);            // club: end of list, weapon type 23
         out.u16(23);
 
         writeSquares(out, MAP0);
+        out.u8(MAP0_FLOOR_ORNAMENT); // map 0's ornament lists (just one floor ornament)
         writeSquares(out, MAP1);
         out.fill(3, 0);             // extra per-map tables
         out.u16(0);                 // checksum
         return out.bytes();
     }
 
-    private static void mapDef(Out out, int offset, int width, int height, int level, int graphicsSets) {
+    private static void mapDef(Out out, int offset, int width, int height, int level, int ornamentCounts,
+                               int graphicsSets) {
         out.u16(offset);
         out.fill(4, 0);
         out.u8(0);
         out.u8(0);
         out.u16(((height - 1) << 11) | ((width - 1) << 6) | level);
-        out.fill(4, 0);
+        out.u16(ornamentCounts);
+        out.u16(0);
         out.u16(graphicsSets);
     }
 
