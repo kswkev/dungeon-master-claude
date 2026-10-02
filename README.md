@@ -29,6 +29,13 @@ A Java remake of FTL's *Dungeon Master* (1988), built one sprint at a time.
 
 With no party yet, you only get the sound and the flash. Health can't drop below 0; champion death comes later. Sound is always on, and if no audio device is available the game simply stays silent.
 
+**Sprint 4: done.** The dungeon view uses the original artwork from GRAPHICS.DAT:
+- **Walls, floor and ceiling:** placed pixel-exact, as in the original. As in DM, the art is mirrored on alternate squares so walking looks like movement.
+- **Doors, stairs and pits:** the original graphics, including the right door design for each door (grate, wood, ...). DM's exact coordinates for these aren't in the data files, so their positions are fitted to the wall geometry and may be a pixel or two off the original.
+- **Not yet:** wall and floor decorations (torch holders, switches, moss...).
+
+Without GRAPHICS.DAT the game still uses the flat-shaded view.
+
 ## Requirements
 
 - JDK 17 or newer

@@ -27,7 +27,8 @@ import java.util.List;
  *   map definitions (16 bytes each)
  *     word  raw map data offset, 4 unused bytes, byte X offset, byte Y offset
  *     word  bits 11-15 height-1, bits 6-10 width-1, bits 0-5 level
- *     3 words of ornament / creature / graphics-set counts
+ *     2 words of ornament / creature counts
+ *     word  graphics sets: bits 12-15 door set 1, 8-11 door set 0
  *   column cumulative square-thing counts (word per map column, all maps)
  *   square first things (words), text data (words), thing data per type
  *   raw map data: one byte per square, column-major, then per-map extra tables
@@ -117,6 +118,7 @@ public final class DungeonFile {
         int[] widths = new int[mapCount];
         int[] heights = new int[mapCount];
         int[] levels = new int[mapCount];
+        int[] graphicsSets = new int[mapCount];
         int columnCount = 0;
         for (int m = 0; m < mapCount; m++) {
             offsets[m] = r.u16();
@@ -124,7 +126,8 @@ public final class DungeonFile {
             r.u8(); // X offset within the level
             r.u8(); // Y offset within the level
             int dims = r.u16();
-            r.skip(6);
+            r.skip(4); // ornament and creature counts
+            graphicsSets[m] = r.u16();
             widths[m] = ((dims >>> 6) & 0x1F) + 1;
             heights[m] = (dims >>> 11) + 1;
             levels[m] = dims & 0x3F;
@@ -167,7 +170,8 @@ public final class DungeonFile {
                 }
             }
             List<List<Thing>>[] squareThings = store.listsFor(squares, columnFirstThing, columnBase);
-            maps.add(new DungeonMap(levels[m], squares, ChampionFinder.find(squareThings, text)));
+            maps.add(new DungeonMap(levels[m], squares, ChampionFinder.find(squareThings, text),
+                    doorStyles(squares, squareThings, graphicsSets[m])));
             columnBase += widths[m];
         }
 
@@ -175,6 +179,28 @@ public final class DungeonFile {
             throw new IOException("party start (" + startX + "," + startY + ") is not walkable");
         }
         return new DungeonFile(List.copyOf(maps), startX, startY, facing, label);
+    }
+
+    /**
+     * Each map offers two door designs: set 0 in bits 8-11 of its graphics-set
+     * word, set 1 in bits 12-15. Bit 0 of a door square's door thing picks
+     * which set that door uses.
+     */
+    private static int[][] doorStyles(Square[][] squares, List<List<Thing>>[] squareThings, int graphicsSets) {
+        int[][] styles = new int[squares.length][];
+        for (int x = 0; x < squares.length; x++) {
+            styles[x] = new int[squares[x].length];
+            for (int y = 0; y < squares[x].length; y++) {
+                for (Thing t : squareThings[x].get(y)) {
+                    if (t.type() == Thing.DOOR) {
+                        boolean secondSet = (t.words()[1] & 1) != 0;
+                        styles[x][y] = (graphicsSets >>> (secondSet ? 12 : 8)) & 3;
+                        break;
+                    }
+                }
+            }
+        }
+        return styles;
     }
 
     private static int[] words(ByteReader r, int count) throws IOException {

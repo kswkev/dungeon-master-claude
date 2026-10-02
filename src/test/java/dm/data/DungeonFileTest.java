@@ -33,7 +33,7 @@ class DungeonFileTest {
     private static final int[][] MAP0 = {
             {WALL, WALL, WALL},
             {WALL | HAS_THINGS, FLOOR | HAS_THINGS, WALL},
-            {WALL, CLOSED_DOOR, WALL},
+            {WALL, CLOSED_DOOR | HAS_THINGS, WALL},
             {WALL, FLOOR, WALL},
     };
 
@@ -115,6 +115,10 @@ class DungeonFileTest {
         assertEquals(Item.Category.WEAPON, halk.items().get(Slot.ACTION_HAND).category());
         assertEquals("CLUB", halk.items().get(Slot.ACTION_HAND).name());
         assertTrue(f.maps().get(1).mirrors().isEmpty());
+
+        // The door's thing selects door set 1, which map 0 sets to style 1 (wood).
+        assertEquals(1, m.doorStyle(2, 1));
+        assertEquals(0, m.doorStyle(1, 1), "not a door");
     }
 
     /** Thing ids: bits 14-15 cell, 10-13 type, 0-9 index. */
@@ -129,7 +133,7 @@ class DungeonFileTest {
         int map1Bytes = 2 * 2;
         int rawBytes = map0Bytes + map1Bytes + 3; // trailing per-map tables
         int[] text = TextDecoderTest.encode(HALK);
-        int squareFirstThings = 2;
+        int squareFirstThings = 3;
         int[] thingCounts = new int[16];
         thingCounts[0] = 1;  // one door (4 bytes)
         thingCounts[2] = 1;  // the champion's text (4 bytes)
@@ -148,20 +152,22 @@ class DungeonFileTest {
             out.u16(c);
         }
 
-        mapDef(out, 0, 4, 3, 0);
-        mapDef(out, map0Bytes, 2, 2, 1);
+        mapDef(out, 0, 4, 3, 0, 0x1000);   // door set 1 = style 1
+        mapDef(out, map0Bytes, 2, 2, 1, 0);
 
-        // Squares with things before each column: map 0 has two, both in column 1.
-        int[] columnCounts = {0, 0, 2, 2, 2, 2};
+        // Squares with things before each column: map 0 has two in column 1 and one in column 2.
+        int[] columnCounts = {0, 0, 2, 3, 3, 3};
         for (int c : columnCounts) {
             out.u16(c);
         }
         out.u16(thingId(2, 3, 0));  // wall (1,0): sensor on its south side
         out.u16(thingId(0, 2, 0));  // floor (1,1): the text
+        out.u16(thingId(0, 0, 0));  // door (2,1): its door record
         for (int w : text) {
             out.u16(w);
         }
-        out.fill(4, 0xAA);          // door
+        out.u16(0xFFFE);            // door: end of list, uses door set 1
+        out.u16(1);
         out.u16(0xFFFE);            // text: end of list, offset 0 << 3, visible
         out.u16(1);
         out.u16(thingId(2, 5, 0));  // sensor -> club; type 127, portrait 5
@@ -179,13 +185,14 @@ class DungeonFileTest {
         return out.bytes();
     }
 
-    private static void mapDef(Out out, int offset, int width, int height, int level) {
+    private static void mapDef(Out out, int offset, int width, int height, int level, int graphicsSets) {
         out.u16(offset);
         out.fill(4, 0);
         out.u8(0);
         out.u8(0);
         out.u16(((height - 1) << 11) | ((width - 1) << 6) | level);
-        out.fill(6, 0);
+        out.fill(4, 0);
+        out.u16(graphicsSets);
     }
 
     private static void writeSquares(Out out, int[][] columns) {

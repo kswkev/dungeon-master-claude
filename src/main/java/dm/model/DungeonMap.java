@@ -10,17 +10,31 @@ public final class DungeonMap {
     private final int width;
     private final int height;
     private final List<ChampionMirror> mirrors;
+    private final int[][] doorStyles;
 
     public DungeonMap(int level, Square[][] squares) {
         this(level, squares, List.of());
     }
 
     public DungeonMap(int level, Square[][] squares, List<ChampionMirror> mirrors) {
+        this(level, squares, mirrors, null);
+    }
+
+    /**
+     * @param doorStyles door graphic style (0-3) per square [x][y], or null for all style 0
+     */
+    public DungeonMap(int level, Square[][] squares, List<ChampionMirror> mirrors, int[][] doorStyles) {
         this.level = level;
         this.squares = squares;
         this.width = squares.length;
         this.height = width == 0 ? 0 : squares[0].length;
         this.mirrors = List.copyOf(mirrors);
+        this.doorStyles = doorStyles;
+    }
+
+    /** Which of DM's 4 door designs the door at (x, y) uses: 0 grate, 1 wood, 2 iron, 3 ra. */
+    public int doorStyle(int x, int y) {
+        return doorStyles != null && inBounds(x, y) ? doorStyles[x][y] : 0;
     }
 
     /** Builds a map from rows of characters; see {@link #charFor(Square)} for the legend. */

@@ -22,6 +22,19 @@ public record Square(int raw) {
         return raw & 0x07;
     }
 
+    /**
+     * Doors and stairs: bit 3 set means the passage runs north-south, so a
+     * door's panel (or the stairs' front) is seen when facing north or south.
+     */
+    public boolean runsNorthSouth() {
+        return (raw & 0x08) != 0;
+    }
+
+    /** True if a party facing {@code facing} sees this door or staircase head-on. */
+    public boolean facesAlong(Direction facing) {
+        return runsNorthSouth() == (facing == Direction.NORTH || facing == Direction.SOUTH);
+    }
+
     public boolean isDoorOpen() {
         int state = doorState();
         return state == 0 || state == 5;

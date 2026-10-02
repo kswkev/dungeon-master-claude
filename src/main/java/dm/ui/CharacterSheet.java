@@ -27,7 +27,7 @@ public final class CharacterSheet {
 
     public enum Action { NONE, RESURRECT, CLOSE }
 
-    private static final Rectangle VIEW = DungeonViewRenderer.VIEWPORT;
+    private static final Rectangle VIEW = ViewRenderer.VIEWPORT;
 
     /** Top-left of each slot's 16x16 icon; the outline box is 1 pixel further out. */
     private static final Map<Slot, Point> SLOT_ICONS = new EnumMap<>(Slot.class);

@@ -28,7 +28,7 @@ public final class GameScreen {
 
     private final Party party;
     private final boolean debug;
-    private final DungeonViewRenderer view;
+    private final ViewRenderer view;
     private final MovementPanel arrows = new MovementPanel();
     private final ChampionBars bars;
     private final CharacterSheet sheet;
@@ -45,7 +45,7 @@ public final class GameScreen {
     public GameScreen(Party party, Art art, SoundPlayer sounds, boolean debug) {
         this.party = party;
         this.debug = debug;
-        this.view = new DungeonViewRenderer(art);
+        this.view = ViewRenderer.forArt(art);
         this.bars = new ChampionBars(art);
         this.sheet = new CharacterSheet(art);
         this.sounds = sounds;
@@ -103,7 +103,7 @@ public final class GameScreen {
     }
 
     private void pressWithSheetOpen(int x, int y) {
-        if (DungeonViewRenderer.VIEWPORT.contains(x, y)) {
+        if (ViewRenderer.VIEWPORT.contains(x, y)) {
             switch (sheet.click(x, y)) {
                 case RESURRECT -> {
                     ChampionMirror mirror = sheet.candidate();
@@ -193,7 +193,7 @@ public final class GameScreen {
         if (bumped) {
             g.setColor(new Color(200, 0, 0));
             g.setStroke(new BasicStroke(2));
-            Rectangle v = DungeonViewRenderer.VIEWPORT;
+            Rectangle v = ViewRenderer.VIEWPORT;
             g.drawRect(v.x + 1, v.y + 1, v.width - 2, v.height - 2);
         }
         arrows.draw(g);

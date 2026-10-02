@@ -8,6 +8,7 @@ A Java/Swing remake of FTL's *Dungeon Master* (1988), built sprint by sprint.
 - Sprint 1: walk Level 1 with DM's six-button arrow panel, which is the only input.
 - Sprint 2: the Hall of Champions. Mirror portraits, the character sheet, Resurrect (not Reincarnate), and champion bars along the top.
 - Sprint 3: wall bumps. The original thud, 1 damage to the front-row champions with DM's damage burst on their boxes, plus the red flash.
+- Sprint 4: the original dungeon textures. Walls, floor and ceiling are pixel-exact; doors, stairs and pits are fitted. Wall/floor decorations are deferred.
 
 Door, pit, stairs and teleporter behaviour, picking items up, combat and spells are not implemented yet.
 
@@ -76,7 +77,7 @@ Code lives under `src/main/java/dm/`, in three layers.
 - `GameScreen` holds all screen state and click routing, with no Swing. `GameWindow` is a thin wrapper that scales the 320×200 buffer with nearest-neighbour filtering and maps mouse positions back. Tests and scratch renders drive `GameScreen.press`/`render` directly.
 - Click order: an open `CharacterSheet` first, then `ChampionBars`, then the portrait rectangle the renderer recorded during the last draw (`portraitHit`, only for the adjacent wall straight ahead), then the arrows. The arrows are ignored while a sheet is open.
 - Screen regions match the original layout:
-  - the dungeon view is the `DungeonViewRenderer.VIEWPORT` rectangle (the character sheet replaces it while open);
+  - the dungeon view is the `ViewRenderer.VIEWPORT` rectangle (the character sheet replaces it while open);
   - the arrows are `MovementPanel.AREA`;
   - the champion boxes run across the top;
   - the spell and action areas are drawn as empty outlines for now.
@@ -86,8 +87,17 @@ Code lives under `src/main/java/dm/`, in three layers.
   - `Party.bump()` damages the `FRONT_ROW` members;
   - `ChampionBars.showDamage` shows the burst (graphic 16) until it expires on `GameScreen`'s injectable clock.
 - `Art` converts images using DM's 16-colour palette, where colour 10 is transparent in sprites. Every caller must handle `null` from `Art` by drawing a placeholder (`Placeholders`).
-- `DungeonViewRenderer` draws the first-person view.
-  - It draws back to front: depth 3 down to 0, and the outermost squares first at each depth.
+- **Two `ViewRenderer`s**, chosen by `ViewRenderer.forArt`:
+  - `TexturedViewRenderer` when GRAPHICS.DAT is loaded;
+  - `FlatViewRenderer` (the original Sprint 1 renderer) as the fallback.
+  Both draw back to front, outermost squares first, and record `portraitHit`.
+- **`TexturedViewRenderer`** works like DM: no 3D maths, just pre-drawn pieces pasted at fixed viewport positions.
+  - **Walls:** a table indexed by [depth][lateral+2] gives the graphic, x and y (D1 front 160×111 at (32,8), D2 106×74 at (59,18), D3 70×49 at (77,25)). These were measured from the art: each side piece contains its square's visible front face plus its side face, and each front face ends exactly where the next nearer centre piece begins.
+  - **Flipping:** when (x + y + facing) is odd, the floor, ceiling and centre walls are mirrored, and each side uses the opposite side's piece mirrored.
+  - **Doors, stairs and pits:** their positions are fitted from mid-square perspective planes, because DM's coordinate tables live in the program file, not in GRAPHICS.DAT. Treat those constants as tunable.
+  - **Door design:** `DungeonMap.doorStyle` (bits 8-15 of the map's graphics-set word, chosen by bit 0 of the door thing) picks one of 4 designs (graphics 246 + style×3).
+  - **Orientation:** bit 3 of a door or stairs square (`Square.runsNorthSouth`) decides whether it's seen head-on.
+- **`FlatViewRenderer`:**
   - View space: the square at (depth d, lateral l) spans z ∈ [d-0.5, d+0.5] and x ∈ [l-0.5, l+0.5].
   - Projection divides by `z + EYE_BACK`. The eye offset gives DM's gentle shrink of about 1.6× per square, and keeps z positive, so there is no near-plane clipping. Tune `EYE_BACK` and `FOCAL_*` together.
   - Every shape goes through `sx`/`sy`, and colours go through `shade()` (darkening with distance).
