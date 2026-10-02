@@ -1,0 +1,277 @@
+package dm.ui;
+
+import dm.model.Direction;
+import dm.model.DungeonMap;
+import dm.model.Party;
+import dm.model.Square;
+
+import java.awt.Color;
+import java.awt.GradientPaint;
+import java.awt.Graphics2D;
+import java.awt.Polygon;
+import java.awt.Rectangle;
+import java.awt.Shape;
+
+/**
+ * Draws DM's first-person view: a 3-squares-deep cone of the map, rendered
+ * back to front with flat-shaded polygons.
+ *
+ * View space: the party stands at the centre of square (depth 0, lateral 0),
+ * looking down +z. A square at (depth d, lateral l) spans z in [d-0.5, d+0.5]
+ * and x in [l-0.5, l+0.5]. Walls span y in [-0.5, 0.5] (floor to ceiling).
+ */
+public final class DungeonViewRenderer {
+
+    /** Viewport position and size on the 320x200 screen, matching the original. */
+    public static final Rectangle VIEWPORT = new Rectangle(0, 33, 224, 136);
+
+    private static final int MAX_DEPTH = 3;
+    /** How many squares either side are visible at each depth. */
+    private static final int[] LATERAL_REACH = {1, 1, 2, 3};
+    /**
+     * The eye sits this far behind the centre of its square. That gives DM's
+     * gentle ~1.6x shrink per square instead of a steep pinhole falloff, and
+     * keeps every visible z in front of the eye.
+     */
+    private static final double EYE_BACK = 1.17;
+    private static final double FOCAL_X = 250;
+    private static final double FOCAL_Y = 167;
+
+    private static final Color WALL = new Color(132, 128, 118);
+    private static final Color MORTAR = new Color(70, 66, 60);
+    private static final Color DOOR_WOOD = new Color(120, 78, 40);
+    private static final Color DOOR_FRAME = new Color(96, 96, 104);
+    private static final Color TELEPORTER = new Color(80, 140, 255, 90);
+
+    private final double cx = VIEWPORT.x + VIEWPORT.width / 2.0;
+    private final double cy = VIEWPORT.y + VIEWPORT.height / 2.0;
+
+    public void draw(Graphics2D g, Party party) {
+        Shape oldClip = g.getClip();
+        g.clipRect(VIEWPORT.x, VIEWPORT.y, VIEWPORT.width, VIEWPORT.height);
+
+        drawFloorAndCeiling(g);
+
+        DungeonMap map = party.map();
+        Direction fwd = party.facing();
+        Direction right = fwd.turnRight();
+        for (int d = MAX_DEPTH; d >= 0; d--) {
+            int reach = LATERAL_REACH[d];
+            // Outermost squares first so nearer-the-centre faces overdraw them.
+            for (int a = reach; a >= 0; a--) {
+                for (int l : a == 0 ? new int[] {0} : new int[] {-a, a}) {
+                    int mx = party.x() + fwd.dx * d + right.dx * l;
+                    int my = party.y() + fwd.dy * d + right.dy * l;
+                    drawSquare(g, map.get(mx, my), d, l, mx, my);
+                }
+            }
+        }
+
+        g.setClip(oldClip);
+    }
+
+    private void drawFloorAndCeiling(Graphics2D g) {
+        int top = VIEWPORT.y;
+        int mid = (int) cy;
+        int bottom = VIEWPORT.y + VIEWPORT.height;
+        g.setPaint(new GradientPaint(0, top, new Color(58, 56, 54), 0, mid, Color.BLACK));
+        g.fillRect(VIEWPORT.x, top, VIEWPORT.width, mid - top);
+        g.setPaint(new GradientPaint(0, mid, Color.BLACK, 0, bottom, new Color(84, 72, 58)));
+        g.fillRect(VIEWPORT.x, mid, VIEWPORT.width, bottom - mid);
+    }
+
+    private void drawSquare(Graphics2D g, Square sq, int d, int l, int mx, int my) {
+        if (sq.looksSolid()) {
+            drawWallBlock(g, d, l);
+            return;
+        }
+        if (d == 0 && l == 0) {
+            return; // the square the party stands in
+        }
+        switch (sq.type()) {
+            case PIT -> {
+                if (sq.pitOpen()) {
+                    drawPit(g, d, l);
+                }
+            }
+            case STAIRS -> drawStairs(g, d, l, sq.stairsUp());
+            case DOOR -> drawDoor(g, d, l, sq.isDoorOpen());
+            case TELEPORTER -> drawTeleporter(g, d, l, mx, my);
+            default -> { }
+        }
+    }
+
+    // ---- walls ----------------------------------------------------------
+
+    private void drawWallBlock(Graphics2D g, int d, int l) {
+        double zNear = d - 0.5;
+        double zFar = d + 0.5;
+        // Side face that looks toward the centre line, visible for off-centre squares.
+        if (l != 0) {
+            double x = l < 0 ? l + 0.5 : l - 0.5;
+            Polygon side = quad(x, zNear, x, zFar);
+            g.setColor(shade(WALL, (zNear + zFar) / 2, 0.78));
+            g.fillPolygon(side);
+            g.setColor(shade(MORTAR, (zNear + zFar) / 2, 1));
+            g.drawPolygon(side);
+        }
+        if (d > 0) {
+            drawFrontWall(g, l - 0.5, l + 0.5, zNear);
+        }
+    }
+
+    private void drawFrontWall(Graphics2D g, double x0, double x1, double z) {
+        int left = sx(x0, z);
+        int right = sx(x1, z);
+        int top = sy(0.5, z);
+        int bottom = sy(-0.5, z);
+        g.setColor(shade(WALL, z, 1));
+        g.fillRect(left, top, right - left, bottom - top);
+
+        // Brick courses: 4 rows, joints offset on alternate rows.
+        g.setColor(shade(MORTAR, z, 1));
+        int rows = 4;
+        for (int row = 0; row < rows; row++) {
+            double yTop = 0.5 - row / (double) rows;
+            double yBottom = 0.5 - (row + 1) / (double) rows;
+            int ry = sy(yBottom, z);
+            g.drawLine(left, ry, right, ry);
+            double offset = (row % 2 == 0) ? 0.25 : 0.5;
+            for (double bx = x0 + offset; bx < x1 - 0.01; bx += 0.5) {
+                int px = sx(bx, z);
+                g.drawLine(px, sy(yTop, z), px, ry);
+            }
+        }
+        g.drawRect(left, top, right - left - 1, bottom - top - 1);
+    }
+
+    // ---- doors, pits, stairs, teleporters --------------------------------
+
+    private void drawDoor(Graphics2D g, int d, int l, boolean open) {
+        double z = d;
+        double inset = 0.1;
+        // Posts and lintel.
+        g.setColor(shade(DOOR_FRAME, z, 1));
+        fillFace(g, l - 0.5, l - 0.5 + inset, -0.5, 0.5, z);
+        fillFace(g, l + 0.5 - inset, l + 0.5, -0.5, 0.5, z);
+        fillFace(g, l - 0.5, l + 0.5, 0.5 - inset, 0.5, z);
+        if (open) {
+            return;
+        }
+        double x0 = l - 0.5 + inset;
+        double x1 = l + 0.5 - inset;
+        g.setColor(shade(DOOR_WOOD, z, 1));
+        fillFace(g, x0, x1, -0.5, 0.5 - inset, z);
+        g.setColor(shade(DOOR_WOOD.darker(), z, 1));
+        int planks = 5;
+        for (int i = 1; i < planks; i++) {
+            int px = sx(x0 + (x1 - x0) * i / planks, z);
+            g.drawLine(px, sy(0.5 - inset, z), px, sy(-0.5, z));
+        }
+        g.setColor(shade(new Color(60, 60, 60), z, 1));
+        fillFace(g, x0, x1, 0.15, 0.2, z);
+        fillFace(g, x0, x1, -0.25, -0.2, z);
+    }
+
+    private void drawPit(Graphics2D g, int d, int l) {
+        double zNear = d - 0.4;
+        double zFar = d + 0.4;
+        Polygon hole = floorQuad(l - 0.4, l + 0.4, zNear, zFar, -0.5);
+        g.setColor(Color.BLACK);
+        g.fillPolygon(hole);
+        g.setColor(shade(MORTAR, d, 1));
+        g.drawPolygon(hole);
+    }
+
+    private void drawStairs(Graphics2D g, int d, int l, boolean up) {
+        int steps = 4;
+        if (up) {
+            // Rising steps, drawn far to near so nearer treads overlap.
+            for (int i = steps - 1; i >= 0; i--) {
+                double z = d - 0.5 + (i + 0.5) / steps;
+                double yTop = -0.5 + (i + 1) / (double) (steps + 1);
+                g.setColor(shade(WALL, z, 0.9 - 0.08 * i));
+                fillFace(g, l - 0.45, l + 0.45, -0.5, yTop, z);
+                g.setColor(shade(MORTAR, z, 1));
+                g.drawLine(sx(l - 0.45, z), sy(yTop, z), sx(l + 0.45, z), sy(yTop, z));
+            }
+        } else {
+            double zNear = d - 0.45;
+            double zFar = d + 0.45;
+            g.setColor(new Color(20, 18, 16));
+            g.fillPolygon(floorQuad(l - 0.45, l + 0.45, zNear, zFar, -0.5));
+            g.setColor(shade(WALL, d, 0.7));
+            for (int i = 1; i < steps; i++) {
+                double z = zNear + (zFar - zNear) * i / steps;
+                g.drawLine(sx(l - 0.45, z), sy(-0.5, z), sx(l + 0.45, z), sy(-0.5, z));
+            }
+        }
+    }
+
+    private void drawTeleporter(Graphics2D g, int d, int l, int mx, int my) {
+        double z = d;
+        g.setColor(TELEPORTER);
+        fillFace(g, l - 0.5, l + 0.5, -0.5, 0.5, z);
+        // Fixed sparkle pattern per square, so it doesn't flicker between repaints.
+        long seed = mx * 31L + my * 17L;
+        g.setColor(new Color(200, 230, 255, 160));
+        for (int i = 0; i < 24; i++) {
+            seed = seed * 6364136223846793005L + 1442695040888963407L;
+            double px = l - 0.45 + ((seed >>> 33) & 0xFF) / 255.0 * 0.9;
+            double py = -0.45 + ((seed >>> 45) & 0xFF) / 255.0 * 0.9;
+            g.fillRect(sx(px, z), sy(py, z), 1, 1);
+        }
+    }
+
+    // ---- projection helpers ----------------------------------------------
+
+    private int sx(double x, double z) {
+        return (int) Math.round(cx + x * FOCAL_X / (z + EYE_BACK));
+    }
+
+    private int sy(double y, double z) {
+        return (int) Math.round(cy - y * FOCAL_Y / (z + EYE_BACK));
+    }
+
+    /** Vertical wall quad running from (x0, z0) to (x1, z1), floor to ceiling. */
+    private Polygon quad(double x0, double z0, double x1, double z1) {
+        Polygon p = new Polygon();
+        p.addPoint(sx(x0, z0), sy(0.5, z0));
+        p.addPoint(sx(x1, z1), sy(0.5, z1));
+        p.addPoint(sx(x1, z1), sy(-0.5, z1));
+        p.addPoint(sx(x0, z0), sy(-0.5, z0));
+        return p;
+    }
+
+    private Polygon floorQuad(double x0, double x1, double zNear, double zFar, double y) {
+        Polygon p = new Polygon();
+        p.addPoint(sx(x0, zNear), sy(y, zNear));
+        p.addPoint(sx(x1, zNear), sy(y, zNear));
+        p.addPoint(sx(x1, zFar), sy(y, zFar));
+        p.addPoint(sx(x0, zFar), sy(y, zFar));
+        return p;
+    }
+
+    /** Axis-aligned rectangle facing the viewer at depth z. */
+    private void fillFace(Graphics2D g, double x0, double x1, double y0, double y1, double z) {
+        int left = sx(x0, z);
+        int right = sx(x1, z);
+        int top = sy(y1, z);
+        int bottom = sy(y0, z);
+        g.fillRect(left, top, Math.max(1, right - left), Math.max(1, bottom - top));
+    }
+
+    /** Darkens with distance, like DM's per-depth palettes. */
+    private static Color shade(Color c, double z, double factor) {
+        double f = factor / (1 + 0.45 * Math.max(0, z - 0.5));
+        return new Color(
+                clamp((int) (c.getRed() * f)),
+                clamp((int) (c.getGreen() * f)),
+                clamp((int) (c.getBlue() * f)),
+                c.getAlpha());
+    }
+
+    private static int clamp(int v) {
+        return Math.max(0, Math.min(255, v));
+    }
+}

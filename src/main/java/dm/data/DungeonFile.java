@@ -1,0 +1,194 @@
+package dm.data;
+
+import dm.model.Direction;
+import dm.model.DungeonMap;
+import dm.model.Square;
+
+import java.io.IOException;
+import java.nio.file.Files;
+import java.nio.file.NoSuchFileException;
+import java.nio.file.Path;
+import java.util.ArrayList;
+import java.util.List;
+
+/**
+ * Loader for the original Dungeon Master DUNGEON.DAT.
+ *
+ * File layout (all words 16-bit, byte order depends on the platform):
+ * <pre>
+ *   header (44 bytes)
+ *     word  ornament random seed
+ *     word  raw map data byte count
+ *     byte  map count, byte padding
+ *     word  text data word count
+ *     word  party start: bits 0-4 X, 5-9 Y, 10-11 facing
+ *     word  square-first-thing count
+ *     word  thing count x16 (one per thing type)
+ *   map definitions (16 bytes each)
+ *     word  raw map data offset, 4 unused bytes, byte X offset, byte Y offset
+ *     word  bits 11-15 height-1, bits 6-10 width-1, bits 0-5 level
+ *     3 words of ornament / creature / graphics-set counts
+ *   column cumulative square-thing counts (word per map column, all maps)
+ *   square first things (words), text data (words), thing data per type
+ *   raw map data: one byte per square, column-major, then per-map extra tables
+ * </pre>
+ * Only the square grid is kept for now. Things, text and ornaments are skipped.
+ */
+public final class DungeonFile {
+
+    /** Byte size of one thing record per thing type, as stored in the file. */
+    private static final int[] THING_SIZES = {4, 6, 4, 8, 16, 4, 4, 4, 4, 8, 4, 0, 0, 0, 8, 4};
+    private static final int MAX_MAPS = 64;
+
+    private final List<DungeonMap> maps;
+    private final int startX;
+    private final int startY;
+    private final Direction startFacing;
+    private final String format;
+
+    private DungeonFile(List<DungeonMap> maps, int startX, int startY, Direction startFacing, String format) {
+        this.maps = maps;
+        this.startX = startX;
+        this.startY = startY;
+        this.startFacing = startFacing;
+        this.format = format;
+    }
+
+    public static DungeonFile load(Path path) throws IOException {
+        byte[] data;
+        try {
+            data = Files.readAllBytes(path);
+        } catch (NoSuchFileException e) {
+            throw new IOException("DUNGEON.DAT not found at " + path.toAbsolutePath());
+        }
+        return parse(data);
+    }
+
+    /** Tries every supported encoding (raw/compressed, big/little endian) and returns the first that is consistent. */
+    public static DungeonFile parse(byte[] data) throws IOException {
+        List<byte[]> bodies = new ArrayList<>();
+        List<String> labels = new ArrayList<>();
+        if (Decompressor.isCompressed(data)) {
+            for (byte[] unpacked : Decompressor.candidates(data)) {
+                bodies.add(unpacked);
+                labels.add("compressed");
+            }
+        }
+        bodies.add(data);
+        labels.add("uncompressed");
+
+        StringBuilder errors = new StringBuilder();
+        for (int i = 0; i < bodies.size(); i++) {
+            for (boolean bigEndian : new boolean[] {true, false}) {
+                String label = labels.get(i) + ", " + (bigEndian ? "big-endian (Atari ST/Amiga)" : "little-endian (PC)");
+                try {
+                    return parse(bodies.get(i), bigEndian, label);
+                } catch (IOException e) {
+                    errors.append("\n  ").append(label).append(": ").append(e.getMessage());
+                }
+            }
+        }
+        throw new IOException("Not a recognised DUNGEON.DAT:" + errors);
+    }
+
+    private static DungeonFile parse(byte[] data, boolean bigEndian, String label) throws IOException {
+        ByteReader r = new ByteReader(data, bigEndian);
+
+        r.u16(); // ornament random seed
+        int rawMapBytes = r.u16();
+        int mapCount = r.u8();
+        r.u8();
+        int textWords = r.u16();
+        int start = r.u16();
+        int squareFirstThings = r.u16();
+        long thingBytes = 0;
+        for (int size : THING_SIZES) {
+            thingBytes += (long) r.u16() * size;
+        }
+
+        if (mapCount < 1 || mapCount > MAX_MAPS) {
+            throw new IOException("implausible map count " + mapCount);
+        }
+
+        int[] offsets = new int[mapCount];
+        int[] widths = new int[mapCount];
+        int[] heights = new int[mapCount];
+        int[] levels = new int[mapCount];
+        int columnCount = 0;
+        for (int m = 0; m < mapCount; m++) {
+            offsets[m] = r.u16();
+            r.skip(4);
+            r.u8(); // X offset within the level
+            r.u8(); // Y offset within the level
+            int dims = r.u16();
+            r.skip(6);
+            widths[m] = ((dims >>> 6) & 0x1F) + 1;
+            heights[m] = (dims >>> 11) + 1;
+            levels[m] = dims & 0x3F;
+            if (offsets[m] + widths[m] * heights[m] > rawMapBytes) {
+                throw new IOException("map " + m + " (" + widths[m] + "x" + heights[m] + " at " + offsets[m]
+                        + ") overflows raw map data of " + rawMapBytes + " bytes");
+            }
+            columnCount += widths[m];
+        }
+
+        int startX = start & 0x1F;
+        int startY = (start >>> 5) & 0x1F;
+        Direction facing = Direction.fromIndex(start >>> 10);
+        if (startX >= widths[0] || startY >= heights[0]) {
+            throw new IOException("party start (" + startX + "," + startY + ") outside first map");
+        }
+
+        r.skip(columnCount * 2L);
+        r.skip(squareFirstThings * 2L);
+        r.skip(textWords * 2L);
+        r.skip(thingBytes);
+        int rawStart = r.position();
+        if (rawStart + rawMapBytes > data.length) {
+            throw new IOException("raw map data (" + rawMapBytes + " bytes at " + rawStart + ") runs past end of file");
+        }
+
+        List<DungeonMap> maps = new ArrayList<>(mapCount);
+        for (int m = 0; m < mapCount; m++) {
+            Square[][] squares = new Square[widths[m]][heights[m]];
+            int base = rawStart + offsets[m];
+            for (int x = 0; x < widths[m]; x++) {
+                for (int y = 0; y < heights[m]; y++) {
+                    squares[x][y] = new Square(data[base + x * heights[m] + y] & 0xFF);
+                }
+            }
+            maps.add(new DungeonMap(levels[m], squares));
+        }
+
+        if (!maps.get(0).isPassable(startX, startY)) {
+            throw new IOException("party start (" + startX + "," + startY + ") is not walkable");
+        }
+        return new DungeonFile(List.copyOf(maps), startX, startY, facing, label);
+    }
+
+    public List<DungeonMap> maps() {
+        return maps;
+    }
+
+    /** The first level of the game (map 0, the Hall of Champions level). */
+    public DungeonMap firstLevel() {
+        return maps.get(0);
+    }
+
+    public int startX() {
+        return startX;
+    }
+
+    public int startY() {
+        return startY;
+    }
+
+    public Direction startFacing() {
+        return startFacing;
+    }
+
+    /** Human-readable description of the detected encoding. */
+    public String format() {
+        return format;
+    }
+}

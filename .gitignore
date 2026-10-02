@@ -1,0 +1,11 @@
+target/
+.idea/
+*.iml
+.vscode/
+.classpath
+.project
+.settings/
+
+# Original game data is copyrighted - never commit it
+data/*.DAT
+data/*.dat
