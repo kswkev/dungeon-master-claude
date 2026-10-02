@@ -144,13 +144,22 @@ public final class Art {
         return sheet.getSubimage(x, y, PORTRAIT_W, PORTRAIT_H);
     }
 
+    /**
+     * An item's inventory icon number (its index in GRAPHICS.DAT's object name
+     * list), or -1. Wall sensors name the item they want by this number,
+     * e.g. 184 for a gold key.
+     */
+    public int iconIndex(Item item) {
+        if (gfx == null) {
+            return -1;
+        }
+        return iconIndexes.computeIfAbsent(item.name() + "#" + item.nameVariant(),
+                k -> findIcon(gfx.objectNames(), item.name(), item.nameVariant()));
+    }
+
     /** The 16x16 inventory icon for an item, found by its name in GRAPHICS.DAT's object name list. */
     public BufferedImage icon(Item item) {
-        if (gfx == null) {
-            return null;
-        }
-        int index = iconIndexes.computeIfAbsent(item.name() + "#" + item.nameVariant(),
-                k -> findIcon(gfx.objectNames(), item.name(), item.nameVariant()));
+        int index = iconIndex(item);
         if (index < 0) {
             return null;
         }

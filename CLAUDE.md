@@ -13,8 +13,9 @@ A Java/Swing remake of FTL's *Dungeon Master* (1988), built sprint by sprint.
 - Sprint 6: wall, floor and door decorations (issue #4). Explicit and DM-random placement, inscriptions with text, door decorations and buttons. Visual only.
 - Sprint 7: up/down stair graphics fixed (#8), champion mirrors drawn on side walls (#9), and moving items between inventory cells with the item icon as the mouse pointer.
 - Sprint 8: items on the floor. They are drawn at DM's own positions (decoded from GRAPHICS.DAT's zone table), can be picked up from and dropped on the party's square, and can be thrown.
+- Sprint 9: wall interaction (switches, buttons, keyholes, coin slots, torch holders, alcoves, door buttons, AND/OR gates, pits as targets), front wall decorations at DM's positions, and hand clicks in the status boxes (#12).
 
-Door, pit, stairs and teleporter behaviour, wall interaction (switches, alcoves), combat and spells are not implemented yet.
+Stairs, pit and teleporter behaviour, combat and spells are not implemented yet.
 
 ## Commands
 
@@ -70,7 +71,11 @@ Code lives under `src/main/java/dm/`, in three layers.
   - Layout: magic 0xFC0D, a range count, (first, last) id pairs, then a 4-word record (type, parent, a, b) per id.
   - Type 9 is a size, types 1-4 anchor a rectangle by a corner, and type 7 is a point relative to its parent (viewport coordinates for the ids used here). Zone 7 places the 224×136 viewport at (0,33).
   - 2500-2547: objects lying on the floor (bottom centre). 2900-2947: objects in flight (centre). The id is base + viewSquare×4 + viewCell. View squares run D3 C/L/R/far-L/far-R, D2 C/L/R, D1 C/L/R, D0. View cells run back-left, back-right, front-right, front-left. (0,0) means the cell isn't shown.
-  - 2548-2568 look like objects in wall alcoves; they aren't used yet. Other ranges (creatures? doors?) haven't been identified, and may replace the fitted door/stairs/pit positions later.
+  - 2548-2554: objects in alcoves (D3 C/L/R, D2 C/L/R, D1 C). Two more such sets follow (2555, 2562), and which one DM uses when is unknown.
+  - 3000-3006: front wall decoration *centres* (type 0 points), in the same order. A second set at 3007 sits a few px lower; all decorations use the first. With these, alcove objects sit on the shelf.
+  - DM's per-decoration coordinate sets aren't in the zone table, so some decorations are placed by hand. `TexturedViewRenderer.FLOOR_LEVEL_ORNAMENTS` (the moss tuft 33 and the drain grate 34, as the user reported) and full-height pictures stand at the foot of the wall, on side faces too. Add more as they're spotted against the original.
+  - 3200-3394 look like creature positions (5 per view square). 1500-1510 look like floor-decoration points.
+  - Doors, stairs and pits are still fitted. Their ranges haven't been found.
 - **Ornament lists** (`OrnamentLists`): each map's creature/wall/floor/door ornament lists come straight after its squares.
   - Counts are in map words B (wall bits 0-3, random wall 4-7, floor 8-11, random floor 12-15) and C (creatures bits 4-7, doors bits 0-3).
   - Things refer to decorations by a 1-based ordinal into these lists.
@@ -85,7 +90,12 @@ Code lives under `src/main/java/dm/`, in three layers.
   - door decoration k: 441+k, where orange (colour 9) is see-through too (`Art.doorSprite`);
   - door button: 453 (8×9 with a bevelled edge, drawn at full size at D1; checked against the original);
   - inscription font: 258 (8-pixel cells, A-Z then space and '.').
-- **Floor sensors** (`FloorSensorFinder` → `dm.model.FloorSensor`): sensor things on non-wall squares.
+- **Wall sensors** (`WallSensorFinder` → `dm.model.WallSensor`): the sensor things on wall squares, except type-127 mirrors. Their order on each side is kept.
+  - Word 1: type in bits 0-6, data in bits 7-15. For item sensors the data is the required item's **inventory icon number** (184 gold key, 176 iron key, 125 copper coin, 4 torch). For gates it's the start value (bits 0-3) and the target value (bits 4-7).
+  - Word 2: as for floor sensors, plus bit 11 = local.
+  - Word 3: remote targets keep X in bits 6-10, Y in bits 11-15 and cell in bits 4-5. Local sensors keep an action in bits 4-15 (10 = add experience, anything else = rotate this side).
+  - Handled types: 0 disabled, 1 click, 2 any item, 3 specific item (kept), 4 specific item (used up: keyholes, coin slots), 5 AND/OR gate, 13 single-object storage (torch holders). Others are ignored.
+- **Wall-side objects:** things on a wall square whose cell is the side, such as alcove and torch-holder contents. `FloorItemFinder` loads them into the same piles, except on champion-mirror sides.
   - Word 1: type in bits 0-6.
   - Word 2: once-only bit 0, effect bits 1-2 (set/clear/toggle/hold), revert bit 3, audible bit 4, floor-ornament ordinal bits 12-15.
   - Word 3: target X in bits 6-10, Y in bits 11-15.
@@ -110,6 +120,17 @@ Code lives under `src/main/java/dm/`, in three layers.
 - **Floor items:** `FloorItemFinder` puts every object thing on a non-wall square into `DungeonMap`'s piles (`itemsAt`/`addItem`/`takeItem`), one pile per cell (0 NW, 1 NE, 2 SE, 3 SW), with the top item last.
   - `Direction.cellOf(viewCell)` / `viewCellOf(cell)` convert between absolute cells and view cells (0 back-left, 1 back-right, 2 front-right, 3 front-left).
   - `ItemCatalog.floorGraphic` maps each item to its floor picture. This is hand-built reference data, matched by eye against the icons.
+- **Wall interaction** (`DungeonMap.clickWall(x, y, side, party, iconOf)`): walks the side's sensors in order.
+  - A fired local sensor rotates the side: once per firing, after the walk, the first sensor moves to the end. A remote one sends its effect through `applyEffect`.
+  - The decoration shown is the *last* sensor's decoration that has one (`wallOrnament`), so rotation flips pictures: a switch's lever, or a torch holder going empty.
+  - After the sensors, an alcove (global decoration 1-3) swaps items with the hand.
+  - `iconOf` comes from the UI (`Art.iconIndex`), because icon numbers live in GRAPHICS.DAT.
+- **`applyEffect`:**
+  - doors: set = open, clear = close, toggle;
+  - pits: live `isPitOpen` state, visual only;
+  - wall squares: each AND/OR gate there gets the effect as input bit = cell. When the value hits the target it fires; with revert it fires the opposite when it leaves the target.
+  - Floor plates use it too. HOLD counts as SET.
+- `pressDoorButton` toggles a door.
 - **Throwing:** `DungeonMap.throwItem` adds a `Projectile`, and `tickProjectiles()` (run from `GameScreen.tick()`) moves it one square per tick.
   - It stops before a wall or closed door, or after `Party.THROW_RANGE` squares, and lands on the far cell of its side.
   - There's no damage or strength-based range yet.
@@ -123,7 +144,15 @@ Code lives under `src/main/java/dm/`, in three layers.
 - `GameScreen` holds all screen state and click routing, with no Swing. `GameWindow` is a thin wrapper that scales the 320×200 buffer with nearest-neighbour filtering and maps mouse positions back. Tests and scratch renders drive `GameScreen.press`/`render` directly.
 - `GameWindow` runs a game tick every `GameScreen.TICK_MS` (170 ms) through `GameScreen.tick()`. That animates doors and repaints only on change. Tests call `tick()` directly.
 - `FormationBox` (top-right, x 276-319) draws champion colours with graphic 28's icons. Click a champion, then a cell, to swap positions.
-- Click order: an open `CharacterSheet` first, then `ChampionBars`, then `FormationBox`, then the portrait rectangle the renderer recorded during the last draw (`portraitHit`, only for the adjacent wall straight ahead), then the arrows. The arrows are ignored while a sheet is open.
+- Click order:
+  1. a hand box in `ChampionBars` (`handAt`), except on the box of the champion whose sheet is open;
+  2. an open `CharacterSheet`;
+  3. the `ChampionBars` boxes;
+  4. `FormationBox`;
+  5. in the view, the rectangles the renderer recorded during the last draw, all only for the square straight ahead: `portraitHit`, `doorButtonHit`, `wallHit`;
+  6. the rest of the view (floor or throw);
+  7. the arrows.
+  The arrows and the dungeon are ignored while a sheet is open.
 - Screen regions match the original layout:
   - the dungeon view is the `ViewRenderer.VIEWPORT` rectangle (the character sheet replaces it while open);
   - the arrows are `MovementPanel.AREA`;

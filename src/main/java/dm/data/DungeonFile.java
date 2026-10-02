@@ -36,8 +36,9 @@ import java.util.List;
  * </pre>
  * Squares with bit 4 set own a thing list; see {@link Thing}. From the things
  * we build the Hall of Champions mirrors ({@link ChampionFinder}), floor
- * sensors such as pressure plates ({@link FloorSensorFinder}), the objects
- * lying on the floor ({@link FloorItemFinder}) and door styles.
+ * sensors such as pressure plates ({@link FloorSensorFinder}), wall sensors
+ * such as switches and keyholes ({@link WallSensorFinder}), the loose objects
+ * on floors and in alcoves ({@link FloorItemFinder}) and door styles.
  */
 public final class DungeonFile {
 
@@ -182,6 +183,7 @@ public final class DungeonFile {
                     rawStart + rawMapBytes, ornamentCounts[m], otherCounts[m]);
             FloorSensorFinder.find(squares, squareThings, lists.floor()).forEach(map::addSensor);
             FloorItemFinder.place(map, squares, squareThings);
+            WallSensorFinder.find(squares, squareThings, lists.wall()).forEach(map::addWallSensor);
             map.setDecorations(new DecorationFinder(lists, ornamentSeed, m, text)
                     .find(squares, squareThings));
             maps.add(map);

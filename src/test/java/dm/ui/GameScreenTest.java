@@ -2,6 +2,7 @@ package dm.ui;
 
 import dm.model.Champion;
 import dm.model.ChampionMirror;
+import dm.model.Decorations;
 import dm.model.Direction;
 import dm.model.DungeonMap;
 import dm.model.FloorSensor;
@@ -10,6 +11,7 @@ import dm.model.ItemCatalog;
 import dm.model.Party;
 import dm.model.Slot;
 import dm.model.Square;
+import dm.model.WallSensor;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
@@ -31,6 +33,9 @@ class GameScreenTest {
 
     private static final String ELIJA = "ELIJA\nLION OF YAITOPYA\n\nM\nAADMACEEAABG\nDCCKCICKCEDFCI\nBBCAAAAACBECAAAA";
     private static final Rectangle VIEW = ViewRenderer.VIEWPORT;
+    /** A point on the first champion's name in their status box (the hands are below it). */
+    private static final int NAME_X = 10;
+    private static final int NAME_Y = 4;
 
     private ChampionMirror mirror;
     private Party party;
@@ -203,11 +208,11 @@ class GameScreenTest {
         clickPortrait();
         screen.press(VIEW.x + 120, VIEW.y + 128);
         render();
-        screen.press(10, 10); // first champion box
+        screen.press(NAME_X, NAME_Y); // first champion box
         assertTrue(screen.sheet().isOpen());
         assertNotNull(screen.sheet().champion());
         assertEquals(null, screen.sheet().candidate());
-        screen.press(10, 10); // clicking the same box again closes it
+        screen.press(NAME_X, NAME_Y); // clicking the same box again closes it
         assertFalse(screen.sheet().isOpen());
     }
 
@@ -236,7 +241,7 @@ class GameScreenTest {
         mirror.champion().addStartingItem(SWORD);
         mirror.champion().addStartingItem(HELM);
         recruitElija();
-        screen.press(10, 10);
+        screen.press(NAME_X, NAME_Y);
         return party.members().get(0);
     }
 
@@ -287,14 +292,14 @@ class GameScreenTest {
         ChampionMirror second = new ChampionMirror(2, 0, Direction.SOUTH, Champion.parse(ELIJA, 1));
         party.recruit(second);
         click(Slot.ACTION_HAND);
-        screen.press(69 + 10, 10); // second champion's box
+        screen.press(69 + NAME_X, NAME_Y); // second champion's box
         assertSame(second.champion(), screen.sheet().champion());
         assertSame(SWORD, party.held());
-        screen.press(69 + 10, 10); // close the sheet
+        screen.press(69 + NAME_X, NAME_Y); // close the sheet
         assertFalse(screen.sheet().isOpen());
         assertSame(SWORD, party.held());
 
-        screen.press(69 + 10, 10);
+        screen.press(69 + NAME_X, NAME_Y);
         click(Slot.READY_HAND);
         assertSame(SWORD, second.champion().items().get(Slot.READY_HAND));
         assertNull(party.held());
@@ -381,10 +386,103 @@ class GameScreenTest {
     void theFloorCannotBeReachedWhileASheetIsOpen() {
         recruitElija();
         party.map().addItem(1, 1, 0, APPLE);
-        screen.press(10, 10); // open Elija's sheet over the view
+        screen.press(NAME_X, NAME_Y); // open Elija's sheet over the view
         screen.press(VIEW.x + 110, VIEW.y + 104);
         assertNull(party.held());
         assertEquals(List.of(APPLE), party.map().itemsAt(1, 1, 0));
+    }
+
+    // ---- hands in the status boxes (issue #12) ----
+
+    /** Centre of a hand box in status box {@code box}: ready hand at x + 3, action hand at x + 23, 18x18 from y = 10. */
+    private void clickHand(int box, Slot slot) {
+        screen.press(69 * box + (slot == Slot.READY_HAND ? 3 : 23) + 9, 19);
+        screen.release();
+    }
+
+    @Test
+    void clickingAHandPicksUpPlacesAndSwapsWithoutOpeningTheSheet() {
+        Champion elija = openElijaWithItems();          // sword in the action hand
+        screen.press(NAME_X, NAME_Y);                    // close the sheet again
+        assertFalse(screen.sheet().isOpen());
+
+        clickHand(0, Slot.ACTION_HAND);
+        assertSame(SWORD, party.held());
+        assertNull(elija.items().get(Slot.ACTION_HAND));
+        assertFalse(screen.sheet().isOpen(), "a hand click doesn't open the sheet");
+
+        clickHand(0, Slot.READY_HAND);
+        assertNull(party.held());
+        assertSame(SWORD, elija.items().get(Slot.READY_HAND));
+
+        party.setHeld(APPLE);
+        clickHand(0, Slot.READY_HAND);
+        assertSame(SWORD, party.held(), "swapped");
+        assertSame(APPLE, elija.items().get(Slot.READY_HAND));
+    }
+
+    @Test
+    void anotherChampionsHandsWorkWhileASheetIsOpen() {
+        openElijaWithItems();
+        ChampionMirror second = new ChampionMirror(2, 0, Direction.SOUTH, Champion.parse(ELIJA, 1));
+        party.recruit(second);
+        render();
+        assertTrue(screen.sheet().isOpen());
+        party.setHeld(APPLE);
+        clickHand(1, Slot.ACTION_HAND);
+        assertSame(APPLE, second.champion().items().get(Slot.ACTION_HAND));
+        assertSame(party.members().get(0), screen.sheet().champion(), "the open sheet stays");
+
+        // The open champion's own box shows their portrait, not hands: a click there toggles the sheet.
+        clickHand(0, Slot.READY_HAND);
+        assertFalse(screen.sheet().isOpen());
+    }
+
+    // ---- walls ----
+
+    /** A party at (1,1) facing north at wall (1,0), with a closed door at (1,2) behind it. */
+    private GameScreen wallScreen(Party p) {
+        GameScreen s = new GameScreen(p, Art.none(), sound -> soundsPlayed++, false);
+        s.setClock(() -> now);
+        BufferedImage img = new BufferedImage(GameScreen.WIDTH, GameScreen.HEIGHT, BufferedImage.TYPE_INT_RGB);
+        Graphics2D g = img.createGraphics();
+        s.render(g);
+        g.dispose();
+        return s;
+    }
+
+    @Test
+    void clickingTheWallDecorationAheadRunsItsSensors() {
+        DungeonMap map = DungeonMap.fromAscii(0, "###", "#.#", "#D#", "###");
+        map.addWallSensor(new WallSensor(1, 0, Direction.SOUTH, WallSensor.TYPE_CLICK, 0, FloorSensor.Effect.TOGGLE,
+                false, false, true, false, 0, 1, 2, 0, 10));
+        Party p = new Party(map, 1, 1, Direction.NORTH);
+        GameScreen s = wallScreen(p);
+        Rectangle wall = s.view().wallHit();
+        assertNotNull(wall, "the decoration ahead is clickable");
+        s.press(wall.x + wall.width / 2, wall.y + wall.height / 2);
+        assertEquals(1, soundsPlayed, "the switch clicks");
+        while (s.tick()) {
+            // door opening
+        }
+        assertTrue(map.isPassable(1, 2));
+    }
+
+    @Test
+    void clickingADoorButtonTogglesTheDoor() {
+        DungeonMap map = DungeonMap.fromAscii(0, "###", "#D#", "#.#", "###");
+        Decorations deco = new Decorations(3, 4);
+        deco.setDoor(1, 1, -1, true);
+        map.setDecorations(deco);
+        Party p = new Party(map, 1, 2, Direction.NORTH);
+        GameScreen s = wallScreen(p);
+        Rectangle button = s.view().doorButtonHit();
+        assertNotNull(button);
+        s.press(button.x + button.width / 2, button.y + button.height / 2);
+        while (s.tick()) {
+            // door opening
+        }
+        assertTrue(map.isPassable(1, 1));
     }
 
     @Test

@@ -60,6 +60,8 @@ public final class FlatViewRenderer implements ViewRenderer {
     private DungeonMap map;
     private Direction fwd;
     private Rectangle portraitHit;
+    private Rectangle wallHit;
+    private Rectangle doorButtonHit;
 
     public FlatViewRenderer(Art art) {
         this.art = art;
@@ -68,6 +70,16 @@ public final class FlatViewRenderer implements ViewRenderer {
     @Override
     public Rectangle portraitHit() {
         return portraitHit;
+    }
+
+    @Override
+    public Rectangle wallHit() {
+        return wallHit;
+    }
+
+    @Override
+    public Rectangle doorButtonHit() {
+        return doorButtonHit;
     }
 
     @Override
@@ -80,6 +92,8 @@ public final class FlatViewRenderer implements ViewRenderer {
         map = party.map();
         fwd = party.facing();
         portraitHit = null;
+        wallHit = null;
+        doorButtonHit = null;
         Direction right = fwd.turnRight();
         for (int d = MAX_DEPTH; d >= 0; d--) {
             int reach = LATERAL_REACH[d];
@@ -127,12 +141,12 @@ public final class FlatViewRenderer implements ViewRenderer {
         }
         switch (sq.type()) {
             case PIT -> {
-                if (sq.pitOpen()) {
+                if (map.isPitOpen(mx, my)) {
                     drawPit(g, d, l);
                 }
             }
             case STAIRS -> drawStairs(g, d, l, sq.stairsUp());
-            case DOOR -> drawDoor(g, d, l, map.isPassable(mx, my));
+            case DOOR -> drawDoor(g, d, l, map.isPassable(mx, my), map.decorations().doorButton(mx, my));
             case TELEPORTER -> drawTeleporter(g, d, l, mx, my);
             default -> { }
         }
@@ -252,7 +266,7 @@ public final class FlatViewRenderer implements ViewRenderer {
 
     // ---- doors, pits, stairs, teleporters --------------------------------
 
-    private void drawDoor(Graphics2D g, int d, int l, boolean open) {
+    private void drawDoor(Graphics2D g, int d, int l, boolean open, boolean button) {
         double z = d;
         double inset = 0.1;
         // Posts and lintel.
@@ -260,6 +274,17 @@ public final class FlatViewRenderer implements ViewRenderer {
         fillFace(g, l - 0.5, l - 0.5 + inset, -0.5, 0.5, z);
         fillFace(g, l + 0.5 - inset, l + 0.5, -0.5, 0.5, z);
         fillFace(g, l - 0.5, l + 0.5, 0.5 - inset, 0.5, z);
+        if (button) {
+            // A small square on the right post.
+            Rectangle b = new Rectangle(sx(l + 0.5 - inset * 0.8, z), sy(0.15, z),
+                    Math.max(2, sx(l + 0.5 - inset * 0.2, z) - sx(l + 0.5 - inset * 0.8, z)),
+                    Math.max(2, sy(0.05, z) - sy(0.15, z)));
+            g.setColor(shade(new Color(170, 150, 60), z, 1));
+            g.fillRect(b.x, b.y, b.width, b.height);
+            if (d == 1 && l == 0) {
+                doorButtonHit = b;
+            }
+        }
         if (open) {
             return;
         }
@@ -286,7 +311,7 @@ public final class FlatViewRenderer implements ViewRenderer {
         Rectangle face = new Rectangle(sx(-0.5, z), sy(0.5, z), sx(0.5, z) - sx(-0.5, z), sy(-0.5, z) - sy(0.5, z));
         if (text != null && d == 1) {
             Inscription.draw(g, art, text, face);
-        } else if (map.decorations().wall(mx, my, front) >= 0) {
+        } else if (map.wallOrnament(mx, my, front) >= 0 && map.mirrorAt(mx, my, front) == null) {
             Polygon plaque = new Polygon();
             plaque.addPoint(sx(-0.15, z), sy(0.2, z));
             plaque.addPoint(sx(0.15, z), sy(0.2, z));
@@ -294,6 +319,9 @@ public final class FlatViewRenderer implements ViewRenderer {
             plaque.addPoint(sx(-0.15, z), sy(-0.05, z));
             g.setColor(shade(MORTAR, z, 1));
             g.fillPolygon(plaque);
+            if (d == 1) {
+                wallHit = plaque.getBounds();
+            }
         }
     }
 
