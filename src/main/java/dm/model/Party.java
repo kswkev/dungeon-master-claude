@@ -386,13 +386,84 @@ public final class Party {
         }
     }
 
-    /** A champion's load, counting the item on the pointer for the leader (the first member) as DM does. */
+    /** A champion's load, counting the item on the pointer for the leader as DM does. */
     public int load(Champion c) {
         int load = c.load();
-        if (held != null && !members.isEmpty() && members.get(0) == c) {
+        if (held != null && leader() == c) {
             load += held.weight();
         }
         return load;
+    }
+
+    /** DM's leader, whose hand is the pointer: the first living member, or null. */
+    public Champion leader() {
+        for (Champion c : members) {
+            if (c.health() > 0) {
+                return c;
+            }
+        }
+        return null;
+    }
+
+    // ---- death --------------------------------------------------------------
+
+    /** Champions already laid to rest; their bones lie where they fell. */
+    private final List<Champion> buried = new ArrayList<>();
+
+    /** Junk type of the bones a dead champion leaves (DM's C05_JUNK_BONES). */
+    static final int BONES = 5;
+
+    /**
+     * DM's F318: the order a dead champion's things fall in, so that the hands
+     * end up on top of the pile. (DM's quiver and backpack rows mapped to ours.)
+     */
+    private static final Slot[] DROP_ORDER = {
+            Slot.FEET, Slot.LEGS, Slot.QUIVER_4, Slot.QUIVER_2, Slot.QUIVER_3, Slot.QUIVER_1,
+            Slot.POUCH_2, Slot.POUCH_1, Slot.TORSO,
+            Slot.BACKPACK_1, Slot.BACKPACK_10, Slot.BACKPACK_11, Slot.BACKPACK_12, Slot.BACKPACK_13,
+            Slot.BACKPACK_14, Slot.BACKPACK_15, Slot.BACKPACK_16, Slot.BACKPACK_17,
+            Slot.BACKPACK_2, Slot.BACKPACK_3, Slot.BACKPACK_4, Slot.BACKPACK_5, Slot.BACKPACK_6,
+            Slot.BACKPACK_7, Slot.BACKPACK_8, Slot.BACKPACK_9,
+            Slot.NECK, Slot.HEAD, Slot.READY_HAND, Slot.ACTION_HAND};
+
+    public boolean isDead(Champion c) {
+        return c.health() == 0;
+    }
+
+    /**
+     * DM's F319 for every member whose health has run out since the last
+     * call: everything they carried falls onto their cell of the party's
+     * square, their bones on top (the bones remember which member they were,
+     * as DM's do, for a resurrection at an altar later), and they leave the
+     * formation. Returns the newly dead.
+     */
+    public List<Champion> bury() {
+        List<Champion> dead = new ArrayList<>();
+        for (Champion c : members) {
+            if (c.health() > 0 || buried.contains(c)) {
+                continue;
+            }
+            buried.add(c);
+            dead.add(c);
+            int position = positionOf(c);
+            int cell = Direction.fromIndex(Math.max(position, 0) + facing.ordinal()).ordinal();
+            for (Slot slot : DROP_ORDER) {
+                Item item = c.take(slot);
+                if (item != null) {
+                    map.dropItem(x, y, cell, item);
+                }
+            }
+            map.dropItem(x, y, cell, ItemCatalog.item(Item.Category.JUNK, BONES, members.indexOf(c)));
+            if (position >= 0) {
+                positions[position] = null;
+            }
+        }
+        return dead;
+    }
+
+    /** True once every member of a party that had any is dead: the game is over. */
+    public boolean allDead() {
+        return !members.isEmpty() && leader() == null;
     }
 
     /**
@@ -434,7 +505,9 @@ public final class Party {
         int[] damage = new int[members.size()];
         int half = FALL_ATTACK / 2;
         for (int i = 0; i < damage.length; i++) {
-            damage[i] = members.get(i).takeDamage(half + random.nextInt(half));
+            if (members.get(i).health() > 0) {
+                damage[i] = members.get(i).takeDamage(half + random.nextInt(half));
+            }
         }
         return damage;
     }

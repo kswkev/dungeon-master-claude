@@ -108,6 +108,10 @@ public final class ChampionBars {
                 g.drawRect(x, 0, BOX_W - 1, BOX_H - 1);
                 continue;
             }
+            if (c.health() == 0 && c != candidate) {
+                drawDead(g, c, x);
+                continue;
+            }
             g.setColor(BOX_BG);
             g.fillRect(x, 0, BOX_W, BOX_H);
             if (c == shown) {
@@ -132,6 +136,20 @@ public final class ChampionBars {
             }
         }
     }
+
+    /** DM's dead-champion status box (graphic 8, F292): the skull and bones with the name, and no bars or hands. */
+    private void drawDead(Graphics2D g, Champion c, int x) {
+        BufferedImage box = art.image(DEAD_BOX);
+        if (box != null) {
+            g.drawImage(box, x, 0, null);
+        } else {
+            g.setColor(Art.PALETTE[1]);
+            g.fillRect(x, 0, BOX_W, BOX_H);
+        }
+        PixelFont.draw(g, c.name(), x + 2, 2, Art.PALETTE[13]);
+    }
+
+    private static final int DEAD_BOX = 8;
 
     /** The burst covers the name and hands; the number sits in its centre. */
     private void drawDamage(Graphics2D g, int x, int damage) {

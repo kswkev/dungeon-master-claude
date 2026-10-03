@@ -186,7 +186,8 @@ public final class Champion {
 
     /**
      * Lowers health by up to {@code amount}, never below 0, and returns the
-     * damage actually taken. Death isn't modelled yet: health just stops at 0.
+     * damage actually taken. At 0 the champion is dead; {@link Party#bury}
+     * then drops their things.
      */
     public int takeDamage(int amount) {
         int taken = Math.max(0, Math.min(amount, health));

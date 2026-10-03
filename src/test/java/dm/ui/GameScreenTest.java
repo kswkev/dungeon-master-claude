@@ -95,6 +95,42 @@ class GameScreenTest {
     }
 
     @Test
+    void aFatalBumpKillsAndEndsTheGame() {
+        recruitElija();
+        Champion elija = party.members().get(0);
+        elija.takeDamage(elija.health() - 1);
+        pressForward();
+        assertEquals(0, elija.health());
+        assertEquals(2, soundsPlayed, "the thud, then the scream");
+        assertEquals(0, screen.bars().damageShown(0, now), "no burst for a killing blow");
+        assertTrue(screen.gameOver());
+        assertEquals("BONES", last(party.map().itemsAt(1, 1, 0)).name(), "front left facing north: the NW cell");
+        render(); // THE END
+        int y = party.y();
+        pressForward();
+        assertEquals(y, party.y());
+        assertEquals(2, soundsPlayed, "input is ignored after the end");
+    }
+
+    private static Item last(List<Item> pile) {
+        return pile.get(pile.size() - 1);
+    }
+
+    @Test
+    void aDeadChampionsBoxDoesNotOpenTheirSheet() {
+        recruitElija();
+        ChampionMirror second = new ChampionMirror(2, 0, Direction.SOUTH, Champion.parse(ELIJA, 1));
+        party.recruit(second);
+        Champion first = party.members().get(0);
+        first.takeDamage(first.health());
+        party.bury();
+        screen.press(NAME_X, NAME_Y);
+        assertFalse(screen.sheet().isOpen());
+        assertFalse(screen.gameOver());
+        render(); // the dead box
+    }
+
+    @Test
     void formationBoxPicksAndPlacesAChampion() {
         recruitElija();
         Champion elija = party.members().get(0);

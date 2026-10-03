@@ -15,6 +15,7 @@ import java.awt.Graphics2D;
 import java.awt.Point;
 import java.awt.Rectangle;
 import java.awt.image.BufferedImage;
+import java.util.List;
 import java.util.function.LongSupplier;
 
 /**
@@ -172,6 +173,9 @@ public final class GameScreen {
     /** Handles a left-button press at screen point (x, y). */
     public void press(int x, int y) {
         pointer = new Point(x, y);
+        if (gameOver) {
+            return;
+        }
         if (clickHand(x, y)) {
             return;
         }
@@ -181,7 +185,9 @@ public final class GameScreen {
         }
         int box = bars.hitTest(x, y);
         if (box >= 0 && box < party.members().size()) {
-            sheet.openMember(party.members().get(box));
+            if (party.members().get(box).health() > 0) { // a dead champion's box does nothing
+                sheet.openMember(party.members().get(box));
+            }
             return;
         }
         if (FormationBox.AREA.contains(x, y)) {
@@ -238,7 +244,8 @@ public final class GameScreen {
         }
         // Clicking party boxes switches between members (DM toggles off the one shown).
         int box = bars.hitTest(x, y);
-        if (sheet.candidate() == null && box >= 0 && box < party.members().size()) {
+        if (sheet.candidate() == null && box >= 0 && box < party.members().size()
+                && party.members().get(box).health() > 0) {
             if (party.members().get(box) == sheet.champion()) {
                 sheet.close();
             } else {
@@ -258,7 +265,7 @@ public final class GameScreen {
             return false;
         }
         Champion champion = party.members().get(hand.box());
-        if (champion == sheet.champion()) {
+        if (champion == sheet.champion() || champion.health() == 0) {
             return false;
         }
         clickSlot(champion, hand.slot());
@@ -448,12 +455,17 @@ public final class GameScreen {
         onBump.run();
     }
 
-    /** DM's damage burst on each hurt champion's box; the caller's onDamage repaints once it has expired. */
+    /**
+     * DM's damage burst on each hurt champion's box; the caller's onDamage
+     * repaints once it has expired. A killing blow shows no burst, as in DM:
+     * the champion's things fall, the scream plays, and if nobody is left
+     * the game is over.
+     */
     private void showDamage(int[] damage) {
         onDamage.run();
         long until = clock.getAsLong() + DAMAGE_SHOWN_MS;
         for (int i = 0; i < damage.length; i++) {
-            if (damage[i] > 0) {
+            if (damage[i] > 0 && party.members().get(i).health() > 0) {
                 bars.showDamage(i, damage[i], until);
                 if (debug) {
                     System.out.printf("%s takes %d damage (health %d)%n",
@@ -461,9 +473,71 @@ public final class GameScreen {
                 }
             }
         }
+        buryTheDead();
     }
 
+    private boolean gameOver;
+
+    /** True once the whole party has died: the screen shows THE END and ignores input. */
+    public boolean gameOver() {
+        return gameOver;
+    }
+
+    /** DM's F319 for whoever just died: their things fall, the scream, their sheet closes; all dead ends the game. */
+    private void buryTheDead() {
+        List<Champion> dead = party.bury();
+        if (dead.isEmpty()) {
+            return;
+        }
+        sounds.play(screamSound);
+        if (dead.contains(sheet.champion())) {
+            sheet.close();
+        }
+        if (debug) {
+            dead.forEach(c -> System.out.println(c.name() + " has died"));
+        }
+        if (party.allDead()) {
+            gameOver = true;
+            sheet.close();
+            party.setHeld(null);
+            if (debug) {
+                System.out.println("The party is dead: THE END");
+            }
+        }
+    }
+
+    /**
+     * DM's endgame (F444): THE END on a cleared screen, shown through a
+     * palette that is dark blue everywhere but white (colour 15), so the
+     * whole screen is dark blue with white lettering.
+     */
+    private void drawTheEnd(Graphics2D g) {
+        g.setColor(new Color(END_BLUE));
+        g.fillRect(0, 0, WIDTH, HEIGHT);
+        BufferedImage end = art.image(THE_END);
+        if (end == null) {
+            PixelFont.draw(g, "THE END", 142, 98, Color.WHITE);
+            return;
+        }
+        int white = Art.PALETTE[15].getRGB();
+        BufferedImage tinted = new BufferedImage(end.getWidth(), end.getHeight(), BufferedImage.TYPE_INT_RGB);
+        for (int y = 0; y < end.getHeight(); y++) {
+            for (int x = 0; x < end.getWidth(); x++) {
+                tinted.setRGB(x, y, end.getRGB(x, y) == white ? white : END_BLUE);
+            }
+        }
+        g.drawImage(tinted, 120, 95, null);
+    }
+
+    private static final int THE_END = 6;
+    /** DM fades every colour but white to dark blue for the ending (ST 0x002). */
+    private static final int END_BLUE = 0x000044;
+
     public void render(Graphics2D g) {
+        if (gameOver) {
+            drawTheEnd(g);
+            return;
+        }
         g.setColor(Color.BLACK);
         g.fillRect(0, 0, WIDTH, HEIGHT);
         drawPlaceholders(g);

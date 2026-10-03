@@ -16,7 +16,7 @@ A Java/Swing remake of FTL's *Dungeon Master* (1988), built sprint by sprint.
 - Sprint 9: wall interaction (switches, buttons, keyholes, coin slots, torch holders, alcoves, door buttons, AND/OR gates, pits as targets), front wall decorations at DM's positions, and hand clicks in the status boxes (#12).
 - Sprint 10: stairs between levels.
 - Sprint 11: bugs #14-#17 (alcove clicks, eye-level keyholes and levers, levers that toggle, plates pressed by items), pits that drop the party and items a level, and teleporters.
-- Sprint 12 (in progress): sensor bits and teleporter scopes fixed (#20), champion upkeep (food, water, stamina, mana, health over time; eating and drinking), fountains, torches and darkness. Still to come: death, keyboard movement.
+- Sprint 12 (in progress): sensor bits and teleporter scopes fixed (#20), champion upkeep (food, water, stamina, mana, health over time; eating and drinking), fountains, torches and darkness, death. Still to come: keyboard movement.
 
 Creatures, combat and spells are not implemented yet.
 
@@ -177,6 +177,10 @@ Code lives under `src/main/java/dm/`, in three layers.
   - Food and water start at 1500 + random(256), cap at 2048 and bottom out at -1024.
   - `Party.feed` / `Upkeep.consume` (F349): food is eaten, a waterskin gives 800 water per draught, a water flask 1600, other potions their DM effect (YA and antivenin do nothing yet), leaving an empty flask. Each plays the swallow (`SOUND_SWALLOW` 678, confirmed by ear), as does drinking at a fountain.
   - Sleeping, wounds and poison aren't modelled.
+- **Death** (ReDMCSB F318/F319/F444):
+  - Health 0 is dead. `GameScreen.showDamage` (the one funnel for bumps, falls and starvation) calls `Party.bury()`. Everything the champion carried falls onto their cell of the party's square in DM's drop order, hands last. Their BONES go on top, with charges = member index, for a later altar resurrection. They leave the formation, and the scream plays.
+  - A killing blow shows no damage burst. The dead box is graphic 8 with the name. A dead champion's box opens no sheet, and their hands can't be clicked. Upkeep, step costs, falls, bumps and feeding skip the dead. `Party.leader()` is the first living member.
+  - When everyone is dead (`Party.allDead`, never for an empty party) the game is over. The screen is dark blue with graphic 6 (THE END) at (120,95) in white, as DM's palette does, and input is ignored. DM's RESTART option isn't offered.
 - **Light** (`Light`, ReDMCSB F337/F338/F301; tables from ScummVM):
   - A map of difficulty 0 (bits 12-15 of the map definition's third word; only Level 1) is always fully lit.
   - Elsewhere the light is the torches in the champions' hands (each worth its charges through DM's power-to-light table, the four brightest first, each half the one before, plus one more) and 12 for each Illumulet worn on a neck. It picks one of DM's six dungeon palettes (thresholds 99/75/50/25/1).
