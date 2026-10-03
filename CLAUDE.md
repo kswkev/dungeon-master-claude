@@ -84,7 +84,7 @@ Code lives under `src/main/java/dm/`, in three layers.
   - 2548-2554: objects in alcoves (D3 C/L/R, D2 C/L/R, D1 C). Two more such sets follow (2555, 2562), and which one DM uses when is unknown.
   - 3000-3006: front wall decoration *centres* (type 0 points), in the same order. A second set at 3007 sits a few px lower; all decorations use the first. With these, alcove objects sit on the shelf.
   - DM's per-decoration coordinate sets aren't in the zone table, so some decorations are placed by hand. `TexturedViewRenderer.FLOOR_LEVEL_ORNAMENTS` (the moss tuft 33 and the drain grate 34, as the user reported) and full-height pictures stand at the foot of the wall, on side faces too. Add more as they're spotted against the original.
-  - `EYE_LEVEL_ORNAMENTS` (the gold keyhole 5 and the lever positions 44/45, #15) are centred higher: row 48 of the viewport at D1 (40 of the face's 111 rows), and the same fraction of every other front or side face. Other keyholes, gems and switches are probably eye level too, but add them only once confirmed against the original.
+  - `EYE_LEVEL_ORNAMENTS` (#15) are centred higher: row 48 of the viewport at D1 (40 of the face's 111 rows), and the same fraction of every other front or side face. They are 4-6, 15-32, 44-45 and 51-53 (keyholes, locks, slots, gems, the skull, the hook and ring, and the lever positions), all confirmed by the user against the original.
   - 3200-3394 look like creature positions (5 per view square). 1500-1510 look like floor-decoration points.
   - Doors, stairs and pits are still fitted. Their ranges haven't been found.
 - **Ornament lists** (`OrnamentLists`): each map's creature/wall/floor/door ornament lists come straight after its squares.

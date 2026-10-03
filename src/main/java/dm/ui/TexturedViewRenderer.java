@@ -254,12 +254,15 @@ public final class TexturedViewRenderer implements ViewRenderer {
     }
 
     /**
-     * Decorations DM hangs higher than the zone centres, at eye level (#15):
-     * the gold keyhole (5) and both positions of the lever (44, 45), checked
-     * against the original. Their centre is at row 48 of the D1 front face
-     * (40 of its 111 rows down), and at the same fraction of every other face.
+     * Decorations DM hangs higher than the zone centres, at eye level (#15),
+     * all confirmed by the user against the original: the hook and ring (4, 6),
+     * the keyholes, locks and slots (5, 17-24, 26-32), the gems (15, 16,
+     * 51-53), the skull (25) and both positions of the lever (44, 45). Their
+     * centre is at row 48 of the D1 front face (40 of its 111 rows down), and
+     * at the same fraction of every other face.
      */
-    static final Set<Integer> EYE_LEVEL_ORNAMENTS = Set.of(5, 44, 45);
+    static final Set<Integer> EYE_LEVEL_ORNAMENTS = Set.of(
+            4, 5, 6, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30, 31, 32, 44, 45, 51, 52, 53);
     static final double EYE_LEVEL = 40 / 111.0;
 
     /**
