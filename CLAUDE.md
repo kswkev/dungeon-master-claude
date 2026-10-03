@@ -15,8 +15,9 @@ A Java/Swing remake of FTL's *Dungeon Master* (1988), built sprint by sprint.
 - Sprint 8: items on the floor. They are drawn at DM's own positions (decoded from GRAPHICS.DAT's zone table), can be picked up from and dropped on the party's square, and can be thrown.
 - Sprint 9: wall interaction (switches, buttons, keyholes, coin slots, torch holders, alcoves, door buttons, AND/OR gates, pits as targets), front wall decorations at DM's positions, and hand clicks in the status boxes (#12).
 - Sprint 10: stairs between levels.
+- Sprint 11: bugs #14-#17 (alcove clicks, eye-level keyholes and levers, levers that toggle, plates pressed by items), pits that drop the party and items a level, and teleporters.
 
-Pit and teleporter behaviour, combat and spells are not implemented yet.
+Creatures, combat and spells are not implemented yet.
 
 ## Commands
 
@@ -53,6 +54,13 @@ Code lives under `src/main/java/dm/`, in three layers.
 - The javadoc on `DungeonFile` documents the file layout.
 - Each map definition carries the map's X/Y offset (two bytes after the first 4 skipped bytes), its position in dungeon-wide coordinates (`DungeonMap.offsetX/offsetY`). Every staircase's partner is at the same dungeon-wide position one level up or down.
 - Squares are stored column-major (`[x][y]`), one byte each. Bits 5-7 hold the element type and bits 0-4 hold attributes. Bit 4 means the square has a thing list.
+  - Pits: bit 3 open, bit 2 imaginary (drawn, nothing falls), bit 0 invisible (not drawn, things still fall).
+  - Teleporters: bit 3 open (active), bit 2 visible.
+- **Teleporters** (`TeleporterFinder` → `dm.model.Teleporter`): thing type 1 on a teleporter square, layout from ReDMCSB.
+  - Word 1: target X bits 0-4, Y bits 5-9, rotation bits 10-11, absolute rotation bit 12, scope bits 13-14 (1 objects, 2 creatures and the party), audible bit 15.
+  - Word 2: target **map index** (not level) in bits 8-15.
+  - Verified on the PC file: all 175 teleporters lead to an open square on an existing map.
+  - A teleporter that targets its own square is a "spinner": it only turns the party.
 - **Things** (`Thing`, `Thing.Store`):
   - A thing id packs the cell (bits 14-15), type (10-13) and index (0-9). Each record's first word links to the next thing, and 0xFFFE ends the list.
   - Squares with things take entries from the square-first-things table in column-major order, starting at that column's cumulative count.
@@ -76,6 +84,7 @@ Code lives under `src/main/java/dm/`, in three layers.
   - 2548-2554: objects in alcoves (D3 C/L/R, D2 C/L/R, D1 C). Two more such sets follow (2555, 2562), and which one DM uses when is unknown.
   - 3000-3006: front wall decoration *centres* (type 0 points), in the same order. A second set at 3007 sits a few px lower; all decorations use the first. With these, alcove objects sit on the shelf.
   - DM's per-decoration coordinate sets aren't in the zone table, so some decorations are placed by hand. `TexturedViewRenderer.FLOOR_LEVEL_ORNAMENTS` (the moss tuft 33 and the drain grate 34, as the user reported) and full-height pictures stand at the foot of the wall, on side faces too. Add more as they're spotted against the original.
+  - `EYE_LEVEL_ORNAMENTS` (the gold keyhole 5 and the lever positions 44/45, #15) are centred higher: row 48 of the viewport at D1 (40 of the face's 111 rows), and the same fraction of every other front or side face. Other keyholes, gems and switches are probably eye level too, but add them only once confirmed against the original.
   - 3200-3394 look like creature positions (5 per view square). 1500-1510 look like floor-decoration points.
   - Doors, stairs and pits are still fitted. Their ranges haven't been found.
 - **Ornament lists** (`OrnamentLists`): each map's creature/wall/floor/door ornament lists come straight after its squares.
@@ -112,26 +121,36 @@ Code lives under `src/main/java/dm/`, in three layers.
 - `DungeonMap` returns `Square.SOLID` for out-of-bounds squares. `DungeonMap.fromAscii` / `toAscii` build test maps and produce the debug dump. Its character legend is used by the tests.
 - `Direction` follows DM's encoding: 0 = north, numbered clockwise. North is -Y.
 - `Party.Move` is relative to the facing (forward, right, back, left).
-- **Stairs:** `Party` holds every map (`Party(maps, index, …)`; the single-map constructor is for tests).
-  - Stepping onto stairs finds the partner stairs one level up or down at the same dungeon-wide position.
+- **`Dungeon`:** every map plus the ways between them. `Party(maps, index, …)` wraps the maps in one (the single-map constructor is for tests), and each map gets a back reference (`setDungeon`), so items can fall or teleport to other maps. A map on its own (no `Dungeon`) has no level below and no teleporter targets.
+- **Stairs:**
+  - Stepping onto stairs finds the partner stairs one level up or down at the same dungeon-wide position (`Dungeon.stairsPartner`).
   - The party lands on that staircase's `stairsExit`: the open neighbour along its axis (`Square.runsNorthSouth`), facing away from the stairs.
   - Floor sensors run on the square left and on the square arrived at. `StepResult.levelChanged` is set.
   - Stairs without a partner block like a wall.
   - Only the current map ticks.
+- **Pits and teleporters** (`Party.settle`, run after every step, after wall clicks, and on every tick):
+  - An open, non-imaginary pit (`dropsThrough`) drops the party to the same dungeon-wide square one level down (`Dungeon.below`), keeping its facing. Each champion takes DM's fall damage (attack 20: 10 + random(10), no armour yet; `Party.setRandom` for tests). It keeps falling through further pits.
+  - An open teleporter whose scope includes creatures moves the party to its target and turns it (relative, or absolute with `Teleporter.turn`). Teleporters chain, up to 8 hops; a spinner only turns.
+  - `StepResult` carries `fell`, `teleported` and per-member `damage`; `and()` merges results.
+  - `applyEffect` opens, closes and toggles pits and teleporters (live `pitOpen`/`teleporterOpen`).
 - `Party` holds up to 4 `Champion`s. `recruit(mirror)` adds the champion and marks the `ChampionMirror` as taken, so it renders empty. `facingMirror()` is the untaken mirror on the adjacent wall straight ahead.
 - **Formation:** `members()` is the recruit order, which is also the colour and status-box order. `at(position)` is the formation, using DM's cells: `FRONT_LEFT` 0, `FRONT_RIGHT` 1, `BACK_RIGHT` 2, `BACK_LEFT` 3. `bump(move)` damages the two positions on the side that hit the wall.
 - **Doors and sensors in `DungeonMap`:**
   - Doors have live state (0 open … 4 closed, 5 broken), seeded from the square byte. `moveDoor`/`toggleDoor` set a target, and `tickDoors()` steps toward it once per game tick. As in DM, the door sound plays on every step except the last (`DoorTick.rattled`), so a full open or close rattles 3 times.
   - `isPassable` uses the live state, so use it (not `Square.isPassable`) for doors.
-  - `Party.step(move)` moves and then runs `partyMoved`: sensors on the entered square fire; HOLD or revert sensors on the left square undo.
+  - Floor sensors have a live `pressed` state: pressed while the party (if `triggeredBy` it) or, for type 1 only (`acceptsItems`), any item is on the square. Becoming pressed fires the effect; being released undoes it if HOLD or revert (#17). DM's type 2 is party/creature and type 3 party only, so neither counts items.
+  - The map tracks the party while it's on it (`partyMoved`, `partyLeft`, `placeParty`). `updateSensors(x, y)` re-checks a square after the party moves, or after `dropItem`/`pickUpItem`. `initSensors` sets the starting state silently after loading.
   - Type-3 (party) sensors need ≥1 champion. In DM an empty party is the ghost Theron.
 - **Floor items:** `FloorItemFinder` puts every object thing on a non-wall square into `DungeonMap`'s piles (`itemsAt`/`addItem`/`takeItem`), one pile per cell (0 NW, 1 NE, 2 SE, 3 SW), with the top item last.
+  - `addItem`/`takeItem` are raw (loading, alcoves, wall sides). In play, use `dropItem` (falls through open pits, moves through object teleporters, presses plates) and `pickUpItem` (releases plates).
   - `Direction.cellOf(viewCell)` / `viewCellOf(cell)` convert between absolute cells and view cells (0 back-left, 1 back-right, 2 front-right, 3 front-left).
   - `ItemCatalog.floorGraphic` maps each item to its floor picture. This is hand-built reference data, matched by eye against the icons.
 - **Wall interaction** (`DungeonMap.clickWall(x, y, side, party, iconOf)`): walks the side's sensors in order.
   - A fired local sensor rotates the side: once per firing, after the walk, the first sensor moves to the end. A remote one sends its effect through `applyEffect`.
   - The decoration shown is the *last* sensor's decoration that has one (`wallOrnament`), so rotation flips pictures: a switch's lever, or a torch holder going empty.
   - After the sensors, an alcove (global decoration 1-3) swaps items with the hand.
+  - **Alcove clicks (#14):** if the side shows an alcove *before* the click, only item sensors (types 2-4) run; plain click and storage sensors don't, so a button that revealed an alcove doesn't hide it again.
+  - **Levers (#16):** a lever is a local rotating click sensor plus a remote click sensor whose data always says SET. On a side with a local rotating sensor, the remote one's pull sends TOGGLE, so every pull reverses its door, pit or gate input. Checked on Level 2: (6,8) → pit (7,8), (4,10) → door (5,9).
   - `iconOf` comes from the UI (`Art.iconIndex`), because icon numbers live in GRAPHICS.DAT.
 - **`applyEffect`:**
   - doors: set = open, clear = close, toggle;
@@ -140,7 +159,9 @@ Code lives under `src/main/java/dm/`, in three layers.
   - Floor plates use it too. HOLD counts as SET.
 - `pressDoorButton` toggles a door.
 - **Throwing:** `DungeonMap.throwItem` adds a `Projectile`, and `tickProjectiles()` (run from `GameScreen.tick()`) moves it one square per tick.
-  - It stops before a wall or closed door, or after `Party.THROW_RANGE` squares, and lands on the far cell of its side.
+  - It stops before a wall or closed door, or after `Party.THROW_RANGE` squares, and lands on the far cell of its side, through `dropItem`.
+  - It flies over open pits. An object teleporter moves it to the target, turned, and it flies on from there (on that map's list, which only ticks while the party is on that map).
+  - `tickProjectiles` returns a `ProjectileTick` (moved, click).
   - There's no damage or strength-based range yet.
 - `Champion.addStartingItem` chooses slots the way DM does: worn items on the body, weapons in the action hand then the quiver or ready hand, potions in the pouches, everything else in the backpack.
 - **Moving items:**
@@ -185,7 +206,8 @@ Code lives under `src/main/java/dm/`, in three layers.
   - **Flipping:** when (x + y + facing) is odd, the floor, ceiling and centre walls are mirrored, and each side uses the opposite side's piece mirrored.
   - **Doors, stairs and pits:** their positions are fitted from mid-square perspective planes. Treat those constants as tunable. Sprint 8 found that GRAPHICS.DAT's zone table (entry 696) holds some of DM's coordinates; the ranges for these haven't been identified yet, so check there before fitting anything new.
   - **Stairs:** 108-113 are *up* stairs (steps climbing into darkness) and 115-120 are *down* stairs (a stairwell opening in the floor), in pairs of left then centre piece for D3, D2 and D1. The side-on pieces (114, 121, 123, 124) aren't drawn yet.
-  - **Pits** are graphics 50-55.
+  - **Pits** are graphics 50-55; invisible pits aren't drawn.
+  - **Teleporters** are drawn (as a translucent overlay) only when visible and open. Graphics 70-75 look like DM's field masks and 76/77 like 32×32 field patterns; using them is still to do.
   - **Objects** use the zone points, scaled by DM's object scales: 32/32 at D0, then 27/21 (D1 near/far), 18/14 (D2), 12 (D3). Far cells are drawn before a door and near cells after it; items in flight come last. **Floor ornaments** (pressure plates etc.) are 6 pieces each from graphic 385, centred on each depth's mid-square floor line. Graphics 415-420 are the black-flame-pit *ornament*, not pits.
   - **Door design:** `DungeonMap.doorStyle` (bits 8-15 of the map's graphics-set word, chosen by bit 0 of the door thing) picks one of 4 designs (graphics 246 + style×3).
   - **Orientation:** bit 3 of a door or stairs square (`Square.runsNorthSouth`) decides whether it's seen head-on.
@@ -197,4 +219,5 @@ Code lives under `src/main/java/dm/`, in three layers.
 Tests (`src/test/java/dm/`) include helpers to reuse when extending the loaders:
 - a synthetic DUNGEON.DAT builder in `DungeonFileTest`, including a champion mirror, with matching code for building compressed files;
 - a text encoder in `TextDecoderTest`;
-- small hand-checked images from the real GRAPHICS.DAT in `GraphicsFileTest`.
+- small hand-checked images from the real GRAPHICS.DAT in `GraphicsFileTest`;
+- `RealDungeonTest`, which replays reported bugs on the user's own `data/` files and is skipped when they're missing (as on CI).

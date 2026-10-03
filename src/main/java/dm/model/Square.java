@@ -50,6 +50,26 @@ public record Square(int raw) {
         return (raw & 0x08) != 0;
     }
 
+    /** Pit squares: bit 2 set means the pit is imaginary: drawn, but nothing falls through it. */
+    public boolean pitImaginary() {
+        return (raw & 0x04) != 0;
+    }
+
+    /** Pit squares: bit 0 set means the pit is invisible: not drawn, but things still fall through it. */
+    public boolean pitInvisible() {
+        return (raw & 0x01) != 0;
+    }
+
+    /** Teleporter squares: bit 3 set means the teleporter is active. */
+    public boolean teleporterOpen() {
+        return (raw & 0x08) != 0;
+    }
+
+    /** Teleporter squares: bit 2 set means the teleporter's shimmering field is drawn. */
+    public boolean teleporterVisible() {
+        return (raw & 0x04) != 0;
+    }
+
     public boolean isPassable() {
         return switch (type()) {
             case WALL -> false;

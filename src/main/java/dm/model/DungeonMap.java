@@ -24,9 +24,33 @@ public final class DungeonMap {
     public static final int DOOR_CLOSED = 4;
     public static final int DOOR_BROKEN = 5;
 
-    /** What a party step set off: a door started moving, and/or an audible sensor clicked. */
-    public record StepResult(boolean doorStarted, boolean click, boolean levelChanged) {
+    /**
+     * What a party step (or an item put down or picked up) set off: a door
+     * started moving, an audible sensor clicked, the party changed level,
+     * fell through a pit or was teleported.
+     *
+     * @param damage fall damage per champion, indexed like {@link Party#members()}, or null
+     */
+    public record StepResult(boolean doorStarted, boolean click, boolean levelChanged, boolean fell,
+                             boolean teleported, int[] damage) {
         public static final StepResult NOTHING = new StepResult(false, false, false);
+
+        public StepResult(boolean doorStarted, boolean click, boolean levelChanged) {
+            this(doorStarted, click, levelChanged, false, false, null);
+        }
+
+        /** Both results together; damage adds up. */
+        public StepResult and(StepResult o) {
+            int[] sum = damage;
+            if (o.damage != null) {
+                sum = damage == null ? o.damage.clone() : damage.clone();
+                for (int i = 0; damage != null && i < o.damage.length; i++) {
+                    sum[i] += o.damage[i];
+                }
+            }
+            return new StepResult(doorStarted || o.doorStarted, click || o.click, levelChanged || o.levelChanged,
+                    fell || o.fell, teleported || o.teleported, sum);
+        }
     }
 
     private final int level;
@@ -41,6 +65,12 @@ public final class DungeonMap {
     private final Map<Integer, List<Item>> floorItems = new HashMap<>();
     private final Map<Integer, List<WallSensor>> wallSensors = new HashMap<>();
     private final boolean[][] pitOpen;
+    private final boolean[][] teleporterOpen;
+    private final Map<Integer, Teleporter> teleporters = new HashMap<>();
+    /** The dungeon this map belongs to, for things falling or teleporting to other maps; null on its own. */
+    private Dungeon dungeon;
+    /** The party, while it is on this map (floor sensors need to know where it stands). */
+    private Party party;
     private int offsetX;
     private int offsetY;
     private final List<Projectile> projectiles = new ArrayList<>();
@@ -68,14 +98,21 @@ public final class DungeonMap {
         this.doorState = new int[width][height];
         this.doorTarget = new int[width][height];
         this.pitOpen = new boolean[width][height];
+        this.teleporterOpen = new boolean[width][height];
         for (int x = 0; x < width; x++) {
             for (int y = 0; y < height; y++) {
                 if (squares[x][y].type() == SquareType.DOOR) {
                     doorState[x][y] = doorTarget[x][y] = squares[x][y].doorState();
                 }
                 pitOpen[x][y] = squares[x][y].type() == SquareType.PIT && squares[x][y].pitOpen();
+                teleporterOpen[x][y] = squares[x][y].type() == SquareType.TELEPORTER
+                        && squares[x][y].teleporterOpen();
             }
         }
+    }
+
+    void setDungeon(Dungeon dungeon) {
+        this.dungeon = dungeon;
     }
 
     /** Builds a map from rows of characters; see {@link #charFor} for the legend. */
@@ -220,20 +257,65 @@ public final class DungeonMap {
     }
 
     /**
-     * Runs the floor sensors for a party that has just moved from (fromX, fromY)
-     * to its current square. Sensors on the new square fire their effect;
-     * sensors on the old square undo theirs if they are HOLD or revert sensors.
+     * Runs the floor sensors for a party that has just moved on this map from
+     * (fromX, fromY) to its current square (from out of bounds when it has
+     * just arrived from another map). See {@link #updateSensors}.
      */
     public StepResult partyMoved(Party party, int fromX, int fromY) {
+        this.party = party;
         Outcome out = new Outcome();
+        updateSensors(fromX, fromY, out);
+        updateSensors(party.x(), party.y(), out);
+        return out.result();
+    }
+
+    /** The party has left this map from (x, y): sensors there are released. */
+    public StepResult partyLeft(int x, int y) {
+        party = null;
+        Outcome out = new Outcome();
+        updateSensors(x, y, out);
+        return out.result();
+    }
+
+    /**
+     * Puts the party on this map without setting anything off, as at the
+     * start of the game: sensors under it (and under items) start pressed.
+     */
+    public void placeParty(Party party) {
+        this.party = party;
+        initSensors();
+    }
+
+    /** Marks every sensor pressed or not from what lies on it now, without firing. */
+    public void initSensors() {
         for (FloorSensor s : sensors) {
-            boolean left = s.x() == fromX && s.y() == fromY;
-            boolean entered = s.x() == party.x() && s.y() == party.y();
-            if (left == entered || !s.triggeredBy(party)) {
+            s.setPressed(pressedNow(s));
+        }
+    }
+
+    private boolean pressedNow(FloorSensor s) {
+        boolean partyOn = party != null && party.map() == this && party.x() == s.x() && party.y() == s.y()
+                && s.triggeredBy(party);
+        return partyOn || s.acceptsItems() && hasItems(s.x(), s.y());
+    }
+
+    /**
+     * Re-checks the floor sensors on (x, y) after the party or an item came
+     * or went (#17). A sensor that becomes pressed applies its effect; one
+     * that is released undoes it if it is a HOLD or revert sensor.
+     */
+    private void updateSensors(int x, int y, Outcome out) {
+        for (FloorSensor s : sensors) {
+            if (s.x() != x || s.y() != y || !s.enabled()) {
                 continue;
             }
+            boolean now = pressedNow(s);
+            if (now == s.pressed()) {
+                continue;
+            }
+            s.setPressed(now);
             FloorSensor.Effect effect;
-            if (entered) {
+            if (now) {
                 effect = s.effect();
             } else if (s.effect() == FloorSensor.Effect.HOLD || s.revert()) {
                 effect = opposite(s.effect());
@@ -242,11 +324,10 @@ public final class DungeonMap {
             }
             applyEffect(s.targetX(), s.targetY(), 0, effect, out, 0);
             out.sound |= s.audible();
-            if (entered) {
+            if (now) {
                 s.used();
             }
         }
-        return out.doorStarted || out.sound ? new StepResult(out.doorStarted, out.sound, false) : StepResult.NOTHING;
     }
 
     /** The effect that undoes {@code effect}: set and clear swap, a toggle toggles back. */
@@ -264,6 +345,10 @@ public final class DungeonMap {
         boolean sound;
         boolean fired;
         boolean handChanged;
+
+        StepResult result() {
+            return doorStarted || sound ? new StepResult(doorStarted, sound, false) : StepResult.NOTHING;
+        }
     }
 
     /** Gates can feed gates; deeper chains than this are taken to be loops. */
@@ -271,9 +356,10 @@ public final class DungeonMap {
 
     /**
      * Sends a sensor effect to square (x, y): a door opens (SET), closes
-     * (CLEAR) or toggles; a pit opens, closes or toggles; on a wall square
-     * every AND/OR gate gets the effect as input {@code cell}. Other targets
-     * (teleporters, creatures...) don't respond yet.
+     * (CLEAR) or toggles; a pit or teleporter opens, closes or toggles; on a
+     * wall square every AND/OR gate gets the effect as input {@code cell}.
+     * Other targets (creatures...) don't respond yet. A pit opening under
+     * the party drops it on its next {@link Party#settle()}.
      */
     private void applyEffect(int x, int y, int cell, FloorSensor.Effect effect, Outcome out, int depth) {
         if (!inBounds(x, y) || depth > MAX_CHAIN) {
@@ -289,6 +375,11 @@ public final class DungeonMap {
                 case SET, HOLD -> true;
                 case CLEAR -> false;
                 case TOGGLE -> !pitOpen[x][y];
+            };
+            case TELEPORTER -> teleporterOpen[x][y] = switch (effect) {
+                case SET, HOLD -> true;
+                case CLEAR -> false;
+                case TOGGLE -> !teleporterOpen[x][y];
             };
             case WALL -> {
                 for (Direction side : Direction.values()) {
@@ -375,6 +466,48 @@ public final class DungeonMap {
         return inBounds(x, y) && squares[x][y].type() == SquareType.PIT && pitOpen[x][y];
     }
 
+    /** Whether the party and items fall through (x, y): an open pit that isn't imaginary. */
+    public boolean dropsThrough(int x, int y) {
+        return isPitOpen(x, y) && !squares[x][y].pitImaginary();
+    }
+
+    /** Where something falling through (x, y) lands, or null (no level below, or no dungeon). */
+    public Dungeon.Location below(int x, int y) {
+        return dungeon == null ? null : dungeon.below(this, x, y);
+    }
+
+    // ---- teleporters -------------------------------------------------------
+
+    public void addTeleporter(Teleporter t) {
+        if (inBounds(t.x(), t.y())) {
+            teleporters.put(t.x() * height + t.y(), t);
+        }
+    }
+
+    /** The teleporter on (x, y), open or not, or null. */
+    public Teleporter teleporterAt(int x, int y) {
+        return inBounds(x, y) && squares[x][y].type() == SquareType.TELEPORTER
+                ? teleporters.get(x * height + y) : null;
+    }
+
+    /** Live teleporter state: sensors can switch teleporters on and off. */
+    public boolean isTeleporterOpen(int x, int y) {
+        return inBounds(x, y) && squares[x][y].type() == SquareType.TELEPORTER && teleporterOpen[x][y];
+    }
+
+    /** The open teleporter on (x, y) that moves {@code what} (a {@link Teleporter} scope bit), or null. */
+    public Teleporter activeTeleporter(int x, int y, int what) {
+        Teleporter t = teleporterAt(x, y);
+        return t != null && isTeleporterOpen(x, y) && t.moves(what) ? t : null;
+    }
+
+    /** Where the teleporter {@code t} on this map sends things, or null if its target doesn't exist. */
+    public Dungeon.Location destination(Teleporter t) {
+        DungeonMap m = dungeon == null ? null : dungeon.map(t.targetMap());
+        return m == null || !m.inBounds(t.targetX(), t.targetY()) ? null
+                : new Dungeon.Location(m, t.targetX(), t.targetY());
+    }
+
     // ---- wall sensors ------------------------------------------------------
 
     private List<WallSensor> sideSensors(int x, int y, Direction side, boolean create) {
@@ -441,8 +574,20 @@ public final class DungeonMap {
      *   <li>storage (torch holders): an empty hand takes the stored item, a
      *       hand with the right item puts it back; either way it fires.</li>
      * </ul>
-     * Sensors that fired locally then rotate their side once each. Finally,
-     * an alcove takes the held item or hands over its top one.
+     * Sensors that fired locally then rotate their side once each.
+     *
+     * <p>Levers toggle (#16). DM's levers are a pair of click sensors: a
+     * local one that rotates the side (flipping the picture) and a remote one
+     * that, in the data, always says SET, yet in the game each pull reverses
+     * its target. So on a side with a local rotating sensor, a remote click
+     * sensor's pull toggles its target: a door or pit, or a gate input,
+     * which then goes on and off with the lever.
+     *
+     * <p>As in DM, clicking a side that shows an alcove is an alcove click
+     * (#14): the alcove takes the held item or hands over its top one, and
+     * only sensors that react to items are checked; plain click and storage
+     * sensors don't fire, so a button that revealed the alcove doesn't hide
+     * it again.
      *
      * @param iconOf an item's inventory icon number, which item sensors compare with their data
      */
@@ -450,13 +595,15 @@ public final class DungeonMap {
         Outcome out = new Outcome();
         List<WallSensor> rotate = new ArrayList<>();
         int cell = side.ordinal();
+        boolean alcove = isAlcove(wallOrnament(x, y, side));
+        boolean lever = hasLocalRotation(x, y, side);
         for (WallSensor s : new ArrayList<>(wallSensors(x, y, side))) {
             if (!s.enabled()) {
                 continue;
             }
             Item held = party.held();
             boolean fires = switch (s.type()) {
-                case WallSensor.TYPE_CLICK -> true;
+                case WallSensor.TYPE_CLICK -> !alcove;
                 case WallSensor.TYPE_CLICK_WITH_ANY_ITEM -> held != null;
                 case WallSensor.TYPE_CLICK_WITH_ITEM -> held != null && iconOf.applyAsInt(held) == s.data();
                 case WallSensor.TYPE_CLICK_WITH_ITEM_USED_UP -> {
@@ -467,11 +614,12 @@ public final class DungeonMap {
                     }
                     yield false;
                 }
-                case WallSensor.TYPE_STORAGE_ROTATE -> storage(x, y, cell, s.data(), party, iconOf, out);
+                case WallSensor.TYPE_STORAGE_ROTATE -> !alcove && storage(x, y, cell, s.data(), party, iconOf, out);
                 default -> false; // disabled sensors, gates (fed by events) and types not handled yet
             };
             if (fires) {
-                fire(s, s.effect(), out, 0, rotate);
+                boolean pulled = lever && s.type() == WallSensor.TYPE_CLICK && !s.local() && !s.revert();
+                fire(s, pulled ? FloorSensor.Effect.TOGGLE : s.effect(), out, 0, rotate);
             }
         }
         // Each local firing rotates the side once: the first sensor moves to the end.
@@ -479,7 +627,7 @@ public final class DungeonMap {
         for (int i = 0; i < rotate.size() && list != null && !list.isEmpty(); i++) {
             list.add(list.remove(0));
         }
-        if (isAlcove(wallOrnament(x, y, side))) {
+        if (alcove) {
             Item held = party.held();
             if (held != null) {
                 addItem(x, y, cell, held);
@@ -497,6 +645,16 @@ public final class DungeonMap {
             return WallClick.NOTHING;
         }
         return new WallClick(out.fired, out.sound, out.doorStarted, out.handChanged);
+    }
+
+    /** Whether a side has a sensor that rotates it when clicked: the moving half of a lever. */
+    private boolean hasLocalRotation(int x, int y, Direction side) {
+        for (WallSensor s : wallSensors(x, y, side)) {
+            if (s.local() && s.type() == WallSensor.TYPE_CLICK && s.localAction() != WallSensor.ACTION_ADD_EXPERIENCE) {
+                return true;
+            }
+        }
+        return false;
     }
 
     /** A storage sensor: swap the stored item (icon {@code icon}) with an empty hand, or take it back. */
@@ -570,6 +728,67 @@ public final class DungeonMap {
         return pile == null || pile.isEmpty() ? null : pile.remove(pile.size() - 1);
     }
 
+    /** Whether any cell of (x, y) holds an item. */
+    public boolean hasItems(int x, int y) {
+        for (int cell = 0; cell < 4; cell++) {
+            List<Item> pile = pile(x, y, cell, false);
+            if (pile != null && !pile.isEmpty()) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    /**
+     * Puts {@code item} down on cell {@code cell} of floor square (x, y) in
+     * play, unlike {@link #addItem}: it falls through an open pit to the
+     * level below and is moved by an open teleporter that takes objects,
+     * and the floor sensors where it ends up are checked (#17).
+     */
+    public StepResult dropItem(int x, int y, int cell, Item item) {
+        Outcome out = new Outcome();
+        drop(x, y, cell, item, out, 0);
+        return out.result();
+    }
+
+    private void drop(int x, int y, int cell, Item item, Outcome out, int depth) {
+        if (depth < MAX_CHAIN) {
+            Dungeon.Location below = dropsThrough(x, y) ? below(x, y) : null;
+            if (below != null) {
+                below.map().drop(below.x(), below.y(), cell, item, out, depth + 1);
+                return;
+            }
+            Teleporter t = activeTeleporter(x, y, Teleporter.SCOPE_OBJECTS);
+            Dungeon.Location to = t == null ? null : destination(t);
+            if (to != null) {
+                out.sound |= t.audible();
+                int turned = t.turn(Direction.fromIndex(cell)).ordinal();
+                if (to.map() != this || to.x() != x || to.y() != y) {
+                    to.map().drop(to.x(), to.y(), turned, item, out, depth + 1);
+                    return;
+                }
+                cell = turned; // a spinner only turns it
+            }
+        }
+        addItem(x, y, cell, item);
+        updateSensors(x, y, out);
+    }
+
+    /** What picking an item up took, and what that set off (a plate released). */
+    public record Pickup(Item item, StepResult result) {
+    }
+
+    /** Picks the top item off cell {@code cell} of floor square (x, y) and checks the floor sensors there (#17). */
+    public Pickup pickUpItem(int x, int y, int cell) {
+        Item item = takeItem(x, y, cell);
+        if (item == null) {
+            return new Pickup(null, StepResult.NOTHING);
+        }
+        Outcome out = new Outcome();
+        updateSensors(x, y, out);
+        return new Pickup(item, out.result());
+    }
+
     // ---- thrown items ------------------------------------------------------
 
     /** Items in flight, oldest first. */
@@ -587,27 +806,42 @@ public final class DungeonMap {
         projectiles.add(new Projectile(item, x, y, direction, cell, range));
     }
 
+    /** What a projectile tick did: whether anything was in flight, and whether a landing clicked a sensor. */
+    public record ProjectileTick(boolean moved, boolean click) {
+        public static final ProjectileTick NOTHING = new ProjectileTick(false, false);
+    }
+
     /**
      * Moves every item in flight one square. One that can't go further (a
-     * wall or closed door ahead, or out of range) drops onto its square.
-     * Returns true if anything was in flight.
+     * wall or closed door ahead, or out of range) drops onto its square,
+     * through {@link #dropItem}, so it can press a plate or fall into a pit.
+     * Items fly over open pits; an open teleporter that takes objects sends
+     * one on from its target square, turned like the teleporter turns.
      */
-    public boolean tickProjectiles() {
+    public ProjectileTick tickProjectiles() {
         if (projectiles.isEmpty()) {
-            return false;
+            return ProjectileTick.NOTHING;
         }
-        List<Projectile> flying = new ArrayList<>();
-        for (Projectile p : projectiles) {
+        List<Projectile> current = new ArrayList<>(projectiles);
+        projectiles.clear();
+        boolean click = false;
+        for (Projectile p : current) {
             Projectile next = p.advance();
             if (p.range() > 0 && isPassable(next.x(), next.y())) {
-                flying.add(next);
+                Teleporter t = activeTeleporter(next.x(), next.y(), Teleporter.SCOPE_OBJECTS);
+                Dungeon.Location to = t == null ? null : destination(t);
+                if (to != null) {
+                    click |= t.audible();
+                    to.map().projectiles.add(new Projectile(p.item(), to.x(), to.y(), t.turn(p.direction()),
+                            t.turn(Direction.fromIndex(p.cell())).ordinal(), next.range()));
+                } else {
+                    projectiles.add(next);
+                }
             } else {
-                addItem(p.x(), p.y(), p.cell(), p.item());
+                click |= dropItem(p.x(), p.y(), p.cell(), p.item()).click();
             }
         }
-        projectiles.clear();
-        projectiles.addAll(flying);
-        return true;
+        return new ProjectileTick(true, click);
     }
 
     // ---- champions ---------------------------------------------------------

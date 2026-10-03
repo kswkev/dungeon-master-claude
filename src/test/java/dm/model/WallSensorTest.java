@@ -203,6 +203,96 @@ class WallSensorTest {
         assertTrue(m.isPitOpen(3, 1));
     }
 
+    /** Issue #14, as on Level 2 (6,4) north: [disabled alcove 1, local toggle button 49] with a falchion. */
+    @Test
+    void aRevealedAlcoveStaysAndHandsOverItsItem() {
+        local(2, WallSensor.TYPE_DISABLED, 0, 1);
+        WallSensor button = new WallSensor(2, 0, S, WallSensor.TYPE_CLICK, 0, TOGGLE, false, false, true, true, 1,
+                0, 0, 0, 49);
+        map.addWallSensor(button);
+        Item falchion = ItemCatalog.item(Item.Category.WEAPON, 9);
+        map.addItem(2, 0, S.ordinal(), falchion);
+        assertEquals(49, map.wallOrnament(2, 0, S), "the button shows");
+
+        assertTrue(click(2).fired());
+        assertEquals(1, map.wallOrnament(2, 0, S), "the alcove is revealed");
+        assertNull(party.held(), "the button click doesn't reach into the alcove");
+
+        DungeonMap.WallClick c = click(2);
+        assertFalse(c.fired(), "the button doesn't fire through the alcove");
+        assertSame(falchion, party.held());
+        assertEquals(1, map.wallOrnament(2, 0, S), "and the alcove stays");
+
+        click(2);
+        assertNull(party.held());
+        assertEquals(List.of(falchion), map.itemsAt(2, 0, S.ordinal()));
+        assertEquals(1, map.wallOrnament(2, 0, S), "putting it back keeps the alcove");
+    }
+
+    /** A lever as in DM's data (#16): a local rotating sensor (45) and a remote SET sensor (44). */
+    private void lever(int x, int tx, int ty, int cell) {
+        local(x, WallSensor.TYPE_CLICK, 0, 45);
+        remote(x, WallSensor.TYPE_CLICK, 0, SET, true, false, tx, ty, cell, 44);
+    }
+
+    @Test
+    void aLeverOpensAndClosesItsDoorInTurn() {
+        lever(1, 3, 1, 0);
+        assertEquals(44, map.wallOrnament(1, 0, S));
+        click(1);
+        assertTrue(doorHeadingOpen());
+        assertEquals(45, map.wallOrnament(1, 0, S));
+        click(1);
+        assertFalse(doorHeadingOpen(), "the second pull closes it");
+        assertEquals(44, map.wallOrnament(1, 0, S));
+        click(1);
+        assertTrue(doorHeadingOpen(), "and the third opens it again");
+    }
+
+    @Test
+    void aLeverClosesAndReopensAnOpenPit() {
+        // As on Level 2: (6,8) north -> the pit at (7,8), which starts open.
+        lever(1, 5, 1, 1);
+        click(1);
+        assertFalse(map.isPitOpen(5, 1), "the first pull closes it");
+        click(1);
+        assertTrue(map.isPitOpen(5, 1), "the next opens it again");
+        click(1);
+        assertFalse(map.isPitOpen(5, 1));
+    }
+
+    @Test
+    void twoSetLeversFeedAnAndGate() {
+        WallSensor gate = new WallSensor(6, 0, S, WallSensor.TYPE_AND_OR_GATE, 0x30, SET, false, true, true, false,
+                0, 3, 1, 0, -1);
+        map.addWallSensor(gate);
+        lever(1, 6, 0, 0);
+        lever(2, 6, 0, 1);
+
+        click(1);
+        assertFalse(doorHeadingOpen(), "one lever isn't enough");
+        click(2);
+        assertTrue(doorHeadingOpen(), "both levers on");
+        click(1);
+        assertFalse(doorHeadingOpen(), "flipping one back clears its input");
+        click(1);
+        assertTrue(doorHeadingOpen(), "and on again");
+    }
+
+    @Test
+    void anAndGateFedBySetSwitchesWithoutLevers() {
+        WallSensor gate = new WallSensor(6, 0, S, WallSensor.TYPE_AND_OR_GATE, 0x30, SET, false, true, true, false,
+                0, 3, 1, 0, -1);
+        map.addWallSensor(gate);
+        remote(1, WallSensor.TYPE_CLICK, 0, SET, true, false, 6, 0, 0, -1);
+        remote(2, WallSensor.TYPE_CLICK, 0, SET, true, false, 6, 0, 1, -1);
+        click(1);
+        click(1);
+        assertFalse(doorHeadingOpen(), "a plain button keeps setting the same input");
+        click(2);
+        assertTrue(doorHeadingOpen());
+    }
+
     @Test
     void doorButtonsToggleTheirDoor() {
         assertTrue(map.pressDoorButton(3, 1));

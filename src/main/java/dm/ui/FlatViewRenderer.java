@@ -141,13 +141,17 @@ public final class FlatViewRenderer implements ViewRenderer {
         }
         switch (sq.type()) {
             case PIT -> {
-                if (map.isPitOpen(mx, my)) {
+                if (map.isPitOpen(mx, my) && !sq.pitInvisible()) {
                     drawPit(g, d, l);
                 }
             }
             case STAIRS -> drawStairs(g, d, l, sq.stairsUp());
             case DOOR -> drawDoor(g, d, l, map.isPassable(mx, my), map.decorations().doorButton(mx, my));
-            case TELEPORTER -> drawTeleporter(g, d, l, mx, my);
+            case TELEPORTER -> {
+                if (sq.teleporterVisible() && map.isTeleporterOpen(mx, my)) {
+                    drawTeleporter(g, d, l, mx, my);
+                }
+            }
             default -> { }
         }
         drawItems(g, d, l, mx, my);

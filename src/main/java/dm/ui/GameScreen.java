@@ -53,6 +53,7 @@ public final class GameScreen {
     private final Sound clickSound;
     private LongSupplier clock = System::currentTimeMillis;
     private Runnable onBump = () -> { };
+    private Runnable onDamage = () -> { };
     private boolean bumped;
     /** Last mouse position in screen coordinates, or null when the mouse is outside the window. */
     private Point pointer;
@@ -88,8 +89,34 @@ public final class GameScreen {
         if (doors.rattled()) {
             sounds.play(doorSound);
         }
-        boolean flew = party.map().tickProjectiles();
-        return doors.moved() || flew;
+        DungeonMap.ProjectileTick flew = party.map().tickProjectiles();
+        if (flew.click()) {
+            sounds.play(clickSound);
+        }
+        boolean moved = arrived(party.settle()); // a landing item may have opened a pit under the party
+        return doors.moved() || flew.moved() || moved;
+    }
+
+    /**
+     * Plays and shows what moving the party (or the floor under it) set off:
+     * a sensor click, and fall damage bursts. Returns true if the party fell
+     * or was teleported.
+     */
+    private boolean arrived(DungeonMap.StepResult result) {
+        if (result.click()) {
+            sounds.play(clickSound);
+        }
+        if (result.damage() != null) {
+            showDamage(result.damage());
+        }
+        if (debug && result.fell()) {
+            System.out.printf("Fell to Level %d: (%d,%d)%n", party.level() + 1, party.x(), party.y());
+        }
+        if (debug && result.teleported()) {
+            System.out.printf("Teleported to Level %d: (%d,%d) facing %s%n",
+                    party.level() + 1, party.x(), party.y(), party.facing());
+        }
+        return result.fell() || result.teleported();
     }
 
     /**
@@ -99,6 +126,14 @@ public final class GameScreen {
      */
     public void setOnBump(Runnable onBump) {
         this.onBump = onBump;
+    }
+
+    /**
+     * Called whenever champions are hurt (a bump or a fall); the caller
+     * repaints once the damage burst has expired ({@link #DAMAGE_SHOWN_MS}).
+     */
+    public void setOnDamage(Runnable onDamage) {
+        this.onDamage = onDamage;
     }
 
     /** Replaces the millisecond clock, for tests. */
@@ -249,6 +284,7 @@ public final class GameScreen {
                     + (result.fired() ? " fired" : "") + (result.doorStarted() ? ", door moving" : "")
                     + (result.handChanged() ? ", hand " + name(before) + " -> " + name(party.held()) : ""));
         }
+        arrived(party.settle()); // a lever may have opened a pit under the party
     }
 
     private static String name(Item item) {
@@ -290,14 +326,15 @@ public final class GameScreen {
         if (vy >= FLOOR_CLICK_Y) {
             int cell = party.facing().cellOf(right ? 1 : 0);
             if (held == null) {
-                Item taken = map.takeItem(party.x(), party.y(), cell);
-                party.setHeld(taken);
-                if (taken != null && debug) {
-                    System.out.println("Picked up " + taken.name() + " from the floor");
+                DungeonMap.Pickup pickup = map.pickUpItem(party.x(), party.y(), cell);
+                party.setHeld(pickup.item());
+                arrived(pickup.result());
+                if (pickup.item() != null && debug) {
+                    System.out.println("Picked up " + pickup.item().name() + " from the floor");
                 }
             } else {
-                map.addItem(party.x(), party.y(), cell, held);
                 party.setHeld(null);
+                arrived(map.dropItem(party.x(), party.y(), cell, held));
                 if (debug) {
                     System.out.println("Dropped " + held.name());
                 }
@@ -358,10 +395,8 @@ public final class GameScreen {
             if (!moved) {
                 bump(step);
             } else {
-                if (result.click()) {
-                    sounds.play(clickSound);
-                }
-                if (result.levelChanged() && debug) {
+                arrived(result);
+                if (result.levelChanged() && !result.fell() && !result.teleported() && debug) {
                     System.out.printf("Took the stairs to Level %d: (%d,%d) facing %s%n",
                             party.level() + 1, party.x(), party.y(), party.facing());
                 }
@@ -377,7 +412,14 @@ public final class GameScreen {
     /** DM's wall bump: the thud, damage to the side that hit the wall with a burst on their boxes, plus the red flash. */
     private void bump(Party.Move step) {
         sounds.play(bumpSound);
-        int[] damage = party.bump(step);
+        showDamage(party.bump(step));
+        bumped = true;
+        onBump.run();
+    }
+
+    /** DM's damage burst on each hurt champion's box; the caller's onDamage repaints once it has expired. */
+    private void showDamage(int[] damage) {
+        onDamage.run();
         long until = clock.getAsLong() + DAMAGE_SHOWN_MS;
         for (int i = 0; i < damage.length; i++) {
             if (damage[i] > 0) {
@@ -388,8 +430,6 @@ public final class GameScreen {
                 }
             }
         }
-        bumped = true;
-        onBump.run();
     }
 
     public void render(Graphics2D g) {

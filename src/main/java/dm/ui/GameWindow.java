@@ -67,10 +67,8 @@ public final class GameWindow extends JFrame {
             // Repaint once more when the damage burst on the champion boxes expires.
             Timer damageTimer = new Timer(GameScreen.DAMAGE_SHOWN_MS + 20, e -> repaint());
             damageTimer.setRepeats(false);
-            game.setOnBump(() -> {
-                bumpTimer.restart();
-                damageTimer.restart();
-            });
+            game.setOnBump(bumpTimer::restart);
+            game.setOnDamage(damageTimer::restart);
 
             // Game clock: animates doors; repaints only when something moved.
             Timer tickTimer = new Timer(GameScreen.TICK_MS, e -> {

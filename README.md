@@ -83,7 +83,15 @@ Run with `"-Ddm.debug=true"` to list every decoration on Level 1.
 - Pressure plates fire as you leave one level and arrive on the next.
 - Stairs that don't lead anywhere block you like a wall.
 
-**Not yet:** pits and teleporters, creatures, combat, spells, food and water, and saving.
+**Sprint 11: done.** Pits, teleporters and four Level 2 fixes:
+- **Pits:** walking into an open pit drops the party to the level below, and every champion takes the original's fall damage (10-19, shown on their boxes). A pit opened under you by a lever drops you too. Dropped and thrown items fall through as well. Imaginary pits look real but hold you up; invisible ones don't show.
+- **Teleporters:** an active teleporter moves the party (and, depending on the teleporter, items and thrown objects) to its target, on the same level or another one, turning you as the original does. Some only spin you round on the spot. Sensors can switch teleporters on and off.
+- **Alcoves (#14):** an alcove revealed by a button stays open, and clicking it takes or gives items.
+- **Keyholes and levers (#15):** they now hang at the original's eye level, and a lever no longer jumps when pulled.
+- **Levers (#16):** every pull reverses what the lever controls: doors open and close, pits close and reopen, and gate puzzles work.
+- **Pressure plates (#17):** an item on a plate holds it down, so the door stays open after you walk off. It closes again only once the plate is empty.
+
+**Not yet:** creatures, combat, spells, food and water, and saving.
 
 ## Requirements
 
@@ -141,7 +149,9 @@ The tests cover:
 - decoration placement (including DM's random formula), inscriptions and the screen-layout table;
 - moving items between inventory slots, floor items, picking up, dropping and throwing;
 - wall sensors, alcoves, door buttons and AND/OR gates;
-- stairs between levels.
+- stairs between levels;
+- pits, teleporters, levers, alcove clicks and plates pressed by items;
+- the Sprint 11 bug reports replayed on your own Level 2. These run only when `data/` holds the game files, so CI skips them.
 
 GitHub Actions builds the project and runs the tests on every push and pull request to `develop` and `main`.
 

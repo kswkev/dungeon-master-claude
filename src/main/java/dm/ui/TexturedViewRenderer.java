@@ -246,10 +246,21 @@ public final class TexturedViewRenderer implements ViewRenderer {
         }
         if (standsOnFloor(ornament, img)) {
             y = face.y + face.height - h;
+        } else if (EYE_LEVEL_ORNAMENTS.contains(ornament)) {
+            y = (int) Math.round(face.y + EYE_LEVEL * face.height - h / 2.0);
         }
         g.drawImage(img, x, y, w, h, null);
         return new Rectangle(x, y, w, h);
     }
+
+    /**
+     * Decorations DM hangs higher than the zone centres, at eye level (#15):
+     * the gold keyhole (5) and both positions of the lever (44, 45), checked
+     * against the original. Their centre is at row 48 of the D1 front face
+     * (40 of its 111 rows down), and at the same fraction of every other face.
+     */
+    static final Set<Integer> EYE_LEVEL_ORNAMENTS = Set.of(5, 44, 45);
+    static final double EYE_LEVEL = 40 / 111.0;
 
     /**
      * Decorations that sit at the foot of the wall rather than around its
@@ -282,6 +293,9 @@ public final class TexturedViewRenderer implements ViewRenderer {
         BufferedImage front = art.sprite(index + 1);
         if (front != null && standsOnFloor(ornament, front)) {
             y = SIDE_FACE_CENTRE[d][1] + SIDE_FACE_HEIGHT[d] / 2 - h;
+        } else if (EYE_LEVEL_ORNAMENTS.contains(ornament)) {
+            int top = SIDE_FACE_CENTRE[d][1] - SIDE_FACE_HEIGHT[d] / 2;
+            y = (int) Math.round(top + EYE_LEVEL * SIDE_FACE_HEIGHT[d] - h / 2.0);
         }
         g.drawImage(img, cx - w / 2, y, w, h, null);
     }
@@ -364,12 +378,12 @@ public final class TexturedViewRenderer implements ViewRenderer {
                 }
             }
             case PIT -> {
-                if (d > 0 && map.isPitOpen(mx, my)) {
+                if (d > 0 && map.isPitOpen(mx, my) && !sq.pitInvisible()) {
                     drawLeftOrCentre(g, d, l, PIT_C, PIT_C_XY, PIT_L, PIT_L_XY);
                 }
             }
             case TELEPORTER -> {
-                if (d > 0) {
+                if (d > 0 && sq.teleporterVisible() && map.isTeleporterOpen(mx, my)) {
                     drawTeleporter(g, d, l, mx, my);
                 }
             }

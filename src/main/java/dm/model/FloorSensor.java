@@ -4,9 +4,10 @@ package dm.model;
  * A sensor on a floor square, such as a pressure plate, decoded from a
  * DUNGEON.DAT sensor thing.
  *
- * When the party steps on the square, the sensor applies its effect to its
- * target. When the party steps off, a HOLD sensor undoes it, and so does any
- * sensor with the revert flag. So far only doors respond to effects.
+ * The sensor is pressed while something it reacts to is on its square: the
+ * party, and for type 1 also any item. When it becomes pressed it applies its
+ * effect to its target; when it is released, a HOLD sensor undoes it, and so
+ * does any sensor with the revert flag. See {@link DungeonMap#partyMoved}.
  */
 public final class FloorSensor {
 
@@ -28,6 +29,7 @@ public final class FloorSensor {
     private final int targetY;
     private final int ornament;
     private boolean enabled = true;
+    private boolean pressed;
 
     /**
      * @param ornament global floor ornament index drawn on the square (e.g. 1 = square pressure plate), or -1
@@ -61,6 +63,24 @@ public final class FloorSensor {
             case TYPE_PARTY -> !party.members().isEmpty();
             default -> false;
         };
+    }
+
+    /**
+     * Whether items lying on the square press the sensor: only DM's type 1
+     * ("anything"). Type 2 reacts to the party and creatures, type 3 to the
+     * party alone.
+     */
+    public boolean acceptsItems() {
+        return enabled && type == TYPE_ANY;
+    }
+
+    /** Whether the sensor is held down (party or items on it), as of the last change on its square. */
+    public boolean pressed() {
+        return pressed;
+    }
+
+    void setPressed(boolean pressed) {
+        this.pressed = pressed;
     }
 
     /** Once-only sensors switch off after their first use. */

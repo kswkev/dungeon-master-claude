@@ -41,13 +41,13 @@ class FloorItemsTest {
         m.throwItem(SWORD, 1, 4, Direction.NORTH, true, 10);
         assertEquals(1, m.projectiles().size());
         for (int y = 3; y >= 1; y--) {
-            assertTrue(m.tickProjectiles());
+            assertTrue(m.tickProjectiles().moved());
             assertEquals(y, m.projectiles().get(0).y());
         }
-        assertTrue(m.tickProjectiles(), "the tick it lands");
+        assertTrue(m.tickProjectiles().moved(), "the tick it lands");
         assertTrue(m.projectiles().isEmpty());
         assertEquals(List.of(SWORD), m.itemsAt(1, 1, Direction.NORTH.cellOf(1)), "far-right cell, north-east");
-        assertFalse(m.tickProjectiles(), "nothing left in flight");
+        assertFalse(m.tickProjectiles().moved(), "nothing left in flight");
     }
 
     @Test
