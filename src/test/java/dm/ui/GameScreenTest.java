@@ -327,9 +327,11 @@ class GameScreenTest {
         Champion elija = openElijaWithItems();
         int food = elija.food();
         party.setHeld(ItemCatalog.item(Item.Category.JUNK, 30)); // corn
+        int before = soundsPlayed;
         screen.press(MOUTH.x, MOUTH.y);
         screen.release();
         assertNull(party.held());
+        assertEquals(before + 1, soundsPlayed, "the swallow");
         assertEquals(Math.min(food + 600, Champion.MAX_FOOD), elija.food());
         render(); // the food and water panel
     }
@@ -338,8 +340,10 @@ class GameScreenTest {
     void clickingTheMouthWithASwordDoesNothing() {
         openElijaWithItems();
         click(Slot.ACTION_HAND);
+        int before = soundsPlayed;
         screen.press(MOUTH.x, MOUTH.y);
         assertSame(SWORD, party.held());
+        assertEquals(before, soundsPlayed, "nothing swallowed");
     }
 
     @Test

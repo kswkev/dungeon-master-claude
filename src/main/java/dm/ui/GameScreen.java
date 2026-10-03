@@ -52,6 +52,7 @@ public final class GameScreen {
     private final Sound doorSound;
     private final Sound clickSound;
     private final Sound screamSound;
+    private final Sound swallowSound;
     private LongSupplier clock = System::currentTimeMillis;
     private Runnable onBump = () -> { };
     private Runnable onDamage = () -> { };
@@ -76,6 +77,7 @@ public final class GameScreen {
         this.doorSound = art.sound(GraphicsFile.SOUND_DOOR);
         this.clickSound = art.sound(GraphicsFile.SOUND_CLICK);
         this.screamSound = art.sound(GraphicsFile.SOUND_SCREAM);
+        this.swallowSound = art.sound(GraphicsFile.SOUND_SWALLOW);
     }
 
     public FormationBox formation() {
@@ -266,7 +268,11 @@ public final class GameScreen {
     /** Clicking the mouth with food, a waterskin or a potion in hand: the champion eats or drinks it. */
     private void feed(Champion champion) {
         Item item = party.held();
-        if (party.feed(champion) && debug) {
+        if (!party.feed(champion)) {
+            return;
+        }
+        sounds.play(swallowSound);
+        if (debug) {
             System.out.printf("%s consumed %s: food %d, water %d%n",
                     champion.name(), item.name(), champion.food(), champion.water());
         }
@@ -297,6 +303,9 @@ public final class GameScreen {
                 party, art::iconIndex);
         if (result.sound()) {
             sounds.play(clickSound);
+        }
+        if (result.drank()) {
+            sounds.play(swallowSound);
         }
         if (debug) {
             System.out.println("Clicked wall (" + aheadX() + "," + aheadY() + ") " + party.facing().opposite()
