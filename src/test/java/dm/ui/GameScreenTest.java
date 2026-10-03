@@ -145,6 +145,21 @@ class GameScreenTest {
     }
 
     @Test
+    void theWholeDiskIconOpensTheMenu() {
+        screen.setSaveGames(new SaveGames(saveDir));
+        recruitElija();
+        screen.press(NAME_X, NAME_Y);
+        // The disk spans viewport x 180-188, y 3-11 on DM's inventory graphic.
+        for (int[] p : new int[][] {{180, 3}, {188, 3}, {180, 11}, {188, 11}, {184, 7}}) {
+            screen.press(VIEW.x + p[0], VIEW.y + p[1]);
+            assertTrue(screen.menu().isOpen(), "at " + p[0] + "," + p[1]);
+            screen.escape();
+        }
+        screen.press(VIEW.x + 178, VIEW.y + 7);
+        assertFalse(screen.menu().isOpen(), "left of the disk");
+    }
+
+    @Test
     void escapeCancels() {
         openMenu();
         screen.escape();

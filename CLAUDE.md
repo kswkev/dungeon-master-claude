@@ -203,7 +203,7 @@ Code lives under `src/main/java/dm/`, in three layers.
   6. the rest of the view (floor or throw);
   7. the arrows.
   The arrows and the dungeon are ignored while a sheet is open.
-- **Game menu** (`GameMenu`, opened by the sheet's disk icon, `CharacterSheet.Action.DISK` at viewport (174,3,9,9)):
+- **Game menu** (`GameMenu`, opened by the sheet's disk icon, `CharacterSheet.Action.DISK` at viewport (180,3,9,9), measured on graphic 17; ScummVM's 174-182 box is another version's layout):
   - Drawn over the viewport from DM's dialog box, graphic 0 (224×136). Its pieces: message panel (10,10)-(213,51), wide button (10,62)-(213,88), half buttons (10..107 / 117..213, y 99..125).
   - The menu's own screens rearrange those pieces into a title strip and three rows: MAIN is SAVE | LOAD, QUIT | OPTIONS, CANCEL; the slot screens show 4 slot buttons and CANCEL. QUIT (SAVE AND QUIT / QUIT / CANCEL) and the OK messages use DM's own 3- and 1-choice layouts.
   - Text is gold on brown (DM's F425), titles and messages yellow.

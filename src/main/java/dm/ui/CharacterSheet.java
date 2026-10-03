@@ -74,8 +74,13 @@ public final class CharacterSheet {
     /** DM's click zones on the inventory background (ScummVM's G0447 mouse input table, less the viewport's 33 rows). */
     private static final Rectangle MOUTH = new Rectangle(56, 13, 16, 16);
     private static final Rectangle EYE = new Rectangle(12, 13, 16, 16);
-    /** The disk icon top right (DM's save command, screen 174-182 x 36-44): opens the {@link GameMenu}. */
-    private static final Rectangle DISK = new Rectangle(174, 3, 9, 9);
+    /**
+     * The disk icon top right: opens the {@link GameMenu}. Measured on the PC
+     * inventory graphic (17), where it spans x 180-188, y 3-11; ScummVM's
+     * click box (174-182) is for another version's layout and only touched
+     * the disk's edge.
+     */
+    private static final Rectangle DISK = new Rectangle(180, 3, 9, 9);
 
     /** DM's food/water panel (F345): its box, the labels' boxes, and the bars' rows. */
     private static final Point PANEL = new Point(80, 52);
