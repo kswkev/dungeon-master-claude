@@ -51,9 +51,39 @@ Without GRAPHICS.DAT the game still uses the flat-shaded view.
 - **Inscriptions** such as "HALL OF CHAMPIONS" are carved in DM's inscription font on the wall straight ahead.
 - **Door decorations** (grilles, locks, the black entrance door) and door buttons.
 - **Not yet:** decorations are visual only; clicking switches, buttons, keyholes and alcoves comes later.
-- **Accuracy:** screen positions are fitted (the original coordinate tables aren't in the data files), and the random-placement rules were reconstructed from the ReDMCSB source.
+- **Accuracy:** screen positions were fitted by hand at first (Sprint 9 moved front-wall decorations onto DM's own coordinates), and the random-placement rules were reconstructed from the ReDMCSB source.
 
 Run with `"-Ddm.debug=true"` to list every decoration on Level 1.
+
+**Sprint 7: done.**
+- **Stairs (#8):** up and down stairs now use the right graphics. The two sets had been swapped.
+- **Mirrors (#9):** champion mirrors now show their frame on side walls too, not only on the wall straight ahead.
+- **Inventory:** on a party member's character sheet, click an item to pick it up. Its icon becomes the mouse pointer. Click a cell to put the item down, or to swap it with the item already there.
+  - DM's slot rules apply: hands and backpack take anything, armour only goes where it's worn, pouches take potions, scrolls and small items, and the quiver takes weapons (only missiles past the first slot). An item that doesn't fit stays in your hand.
+  - The held item stays in hand when you switch champions or close the sheet. A candidate's items (before Resurrect) can't be touched.
+
+**Sprint 8: done.** Items lie on the floor:
+- **Drawing:** items on the floor are drawn where DM draws them, on each square's four cells and scaled with distance. These positions come from DM's own screen-layout table, which turned out to be in GRAPHICS.DAT (entry 696).
+- **Picking up and dropping:** click the bottom of the view to pick up the top item from the left or right cell just ahead of you on the party's square, or to drop the item in your hand there.
+- **Throwing:** with an item in hand, click higher up in the view to throw it from that side. It flies one square per tick for up to 4 squares and lands in front of a wall or closed door. Thrown items don't do damage yet.
+
+**Sprint 9: done.** Walls can be used (#12):
+- **Switches and buttons:** click them to work doors and other mechanisms. Levers flip as you click them.
+- **Keyholes and coin slots:** click with the right key or coin in hand. It is used up and the mechanism fires.
+- **Torch holders:** take a torch out or put one back. The holder looks empty when it is.
+- **Alcoves:** click to take an item out of an alcove or put the held item in. Items sit on the alcove's shelf.
+- **Door buttons:** click to open or close the door.
+- **Logic:** DM's hidden AND/OR gates work, and so does the rest of the wiring that sends a switch or plate to its target. Pits can be opened and closed, but this is visual only so far.
+- **Decoration positions:** front-wall decorations are now placed at DM's own coordinates from the screen-layout table. Moss, the drain grate and full-height pictures stand at the foot of the wall.
+- **Hands in the status boxes:** clicking a champion's hand in the top boxes picks up, puts down or swaps an item, just like the hand cell on the character sheet.
+
+**Sprint 10: done.** Stairs take you between levels:
+- Step onto a staircase to go up or down a level. You arrive on the square next to the matching staircase on that level, facing away from it.
+- Every level loads from DUNGEON.DAT. The window title shows which level you're on.
+- Pressure plates fire as you leave one level and arrive on the next.
+- Stairs that don't lead anywhere block you like a wall.
+
+**Not yet:** pits and teleporters, creatures, combat, spells, food and water, and saving.
 
 ## Requirements
 
@@ -106,7 +136,14 @@ The tests cover:
 - the DUNGEON.DAT loader on generated test files: both byte orders, a compressed file, a champion mirror, and broken or missing files;
 - the GRAPHICS.DAT image decoder and text decoder;
 - champion parsing, skill levels and where starting items go;
-- recruiting, and the click flow of portrait → sheet → Resurrect/Cancel.
+- recruiting, and the click flow of portrait → sheet → Resurrect/Cancel;
+- wall bumps, the formation box, pressure plates and door animation;
+- decoration placement (including DM's random formula), inscriptions and the screen-layout table;
+- moving items between inventory slots, floor items, picking up, dropping and throwing;
+- wall sensors, alcoves, door buttons and AND/OR gates;
+- stairs between levels.
+
+GitHub Actions builds the project and runs the tests on every push and pull request to `develop` and `main`.
 
 ## Project layout
 
