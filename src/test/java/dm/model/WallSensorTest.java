@@ -140,6 +140,49 @@ class WallSensorTest {
         assertEquals(8, map.wallOrnament(1, 0, S));
     }
 
+    // ---- fountains ----
+
+    /** A fountain (decoration 35) on wall (4,0), with a recruited Elija who has drunk nothing for a while. */
+    private Champion fountainAndThirstyChampion() {
+        local(4, WallSensor.TYPE_DISABLED, 0, DungeonMap.FOUNTAIN);
+        Champion c = Champion.parse(ChampionTest.ELIJA, 0);
+        party.recruit(new ChampionMirror(1, 0, S, c));
+        c.setWater(-300);
+        return c;
+    }
+
+    @Test
+    void anEmptyHandDrinksItsFillFromAFountain() {
+        Champion c = fountainAndThirstyChampion();
+        DungeonMap.WallClick result = click(4);
+        assertTrue(result.drank());
+        assertEquals(Champion.MAX_FOOD, c.water());
+    }
+
+    @Test
+    void aFountainRefillsWaterskinsAndFlasks() {
+        Champion c = fountainAndThirstyChampion();
+        party.setHeld(ItemCatalog.item(Item.Category.JUNK, ItemCatalog.WATERSKIN, 1));
+        DungeonMap.WallClick result = click(4);
+        assertTrue(result.handChanged());
+        assertFalse(result.drank(), "filling isn't drinking");
+        assertEquals(3, party.held().charges());
+        assertEquals("WATER", party.held().name());
+        assertEquals(-300, c.water());
+
+        party.setHeld(ItemCatalog.item(Item.Category.POTION, ItemCatalog.EMPTY_FLASK));
+        click(4);
+        assertEquals("WATER FLASK", party.held().name());
+    }
+
+    @Test
+    void aFountainLeavesOtherItemsAlone() {
+        fountainAndThirstyChampion();
+        party.setHeld(GOLD_KEY);
+        assertEquals(DungeonMap.WallClick.NOTHING, click(4));
+        assertSame(GOLD_KEY, party.held());
+    }
+
     @Test
     void anAlcoveTakesAndGivesItems() {
         local(2, WallSensor.TYPE_DISABLED, 0, 2); // alcove decoration

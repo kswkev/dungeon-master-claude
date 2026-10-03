@@ -371,6 +371,22 @@ public final class Party {
         return true;
     }
 
+    /**
+     * Every living champion drinks their fill from a fountain (an addition
+     * to DM, where fountains only refill waterskins and flasks). Returns
+     * false if nobody could drink.
+     */
+    public boolean drinkFromFountain() {
+        boolean drank = false;
+        for (Champion c : members) {
+            if (c.health() > 0) {
+                c.setWater(Champion.MAX_FOOD);
+                drank = true;
+            }
+        }
+        return drank;
+    }
+
     /** Fall damage for each champion, indexed like {@link #members()}. */
     private int[] fall() {
         int[] damage = new int[members.size()];

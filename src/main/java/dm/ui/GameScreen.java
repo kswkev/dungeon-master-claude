@@ -302,6 +302,7 @@ public final class GameScreen {
             System.out.println("Clicked wall (" + aheadX() + "," + aheadY() + ") " + party.facing().opposite()
                     + ": " + party.map().wallSensors(aheadX(), aheadY(), party.facing().opposite())
                     + (result.fired() ? " fired" : "") + (result.doorStarted() ? ", door moving" : "")
+                    + (result.drank() ? ", the party drank" : "")
                     + (result.handChanged() ? ", hand " + name(before) + " -> " + name(party.held()) : ""));
         }
         arrived(party.settle()); // a lever may have opened a pit under the party

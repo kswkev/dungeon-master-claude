@@ -559,9 +559,12 @@ public final class DungeonMap {
         return ornament >= 1 && ornament <= 3;
     }
 
-    /** What clicking a wall did. */
-    public record WallClick(boolean fired, boolean sound, boolean doorStarted, boolean handChanged) {
-        public static final WallClick NOTHING = new WallClick(false, false, false, false);
+    /** Global wall ornament 35, a fountain (DM Encyclopaedia's decoration list). */
+    public static final int FOUNTAIN = 35;
+
+    /** What clicking a wall did; {@code drank} means the party drank from a fountain. */
+    public record WallClick(boolean fired, boolean sound, boolean doorStarted, boolean handChanged, boolean drank) {
+        public static final WallClick NOTHING = new WallClick(false, false, false, false, false);
     }
 
     /**
@@ -589,6 +592,11 @@ public final class DungeonMap {
      * sensors don't fire, so a button that revealed the alcove doesn't hide
      * it again.
      *
+     * <p>A fountain refills a held waterskin (to 3 draughts) or turns an
+     * empty flask into a water flask, as in DM (F377), before the sensors
+     * run. Clicking it with an empty hand lets every living champion drink
+     * their fill, which DM itself doesn't do: the user asked for it.
+     *
      * @param iconOf an item's inventory icon number, which item sensors compare with their data
      */
     public WallClick clickWall(int x, int y, Direction side, Party party, ToIntFunction<Item> iconOf) {
@@ -596,6 +604,19 @@ public final class DungeonMap {
         List<WallSensor> rotate = new ArrayList<>();
         int cell = side.ordinal();
         boolean alcove = isAlcove(wallOrnament(x, y, side));
+        boolean drank = false;
+        if (wallOrnament(x, y, side) == FOUNTAIN) {
+            Item held = party.held();
+            if (held == null) {
+                drank = party.drinkFromFountain();
+            } else {
+                Item filled = Upkeep.fill(held);
+                if (filled != held) {
+                    party.setHeld(filled);
+                    out.handChanged = true;
+                }
+            }
+        }
         for (WallSensor s : new ArrayList<>(wallSensors(x, y, side))) {
             if (!s.enabled()) {
                 continue;
@@ -643,10 +664,10 @@ public final class DungeonMap {
                 }
             }
         }
-        if (!out.fired && !out.handChanged) {
+        if (!out.fired && !out.handChanged && !drank) {
             return WallClick.NOTHING;
         }
-        return new WallClick(out.fired, out.sound, out.doorStarted, out.handChanged);
+        return new WallClick(out.fired, out.sound, out.doorStarted, out.handChanged, drank);
     }
 
     /** A storage sensor: swap the stored item (icon {@code icon}) with an empty hand, or take it back. */

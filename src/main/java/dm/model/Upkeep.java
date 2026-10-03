@@ -148,6 +148,20 @@ public final class Upkeep {
         return left;
     }
 
+    /**
+     * DM's fountain (F377): a waterskin comes back full (3 draughts) and an
+     * empty flask becomes a water flask. Anything else is returned as it is.
+     */
+    public static Item fill(Item item) {
+        if (item.category() == Item.Category.JUNK && item.type() == ItemCatalog.WATERSKIN && item.charges() < 3) {
+            return item.withCharges(3);
+        }
+        if (item.category() == Item.Category.POTION && item.type() == ItemCatalog.EMPTY_FLASK) {
+            return ItemCatalog.item(Item.Category.POTION, ItemCatalog.WATER_FLASK);
+        }
+        return item;
+    }
+
     /** The potion effects that need nothing not yet modelled (YA's shield and antivenin's cure do nothing yet). */
     private static void drinkPotion(Champion c, Item potion) {
         int power = potion.charges();

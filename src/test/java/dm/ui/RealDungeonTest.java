@@ -171,6 +171,20 @@ class RealDungeonTest {
         assertEquals(15, torch.charges());
     }
 
+    /** The fountain on Level 2's wall (4,6), seen from (3,6): an empty hand drinks, a waterskin is refilled. */
+    @Test
+    void theFountainWaters() {
+        Party p = level2(3, 6, Direction.EAST);
+        p.recruit(dungeon.maps().get(0).mirrors().get(0));
+        DungeonMap map = p.map();
+        assertEquals(DungeonMap.FOUNTAIN, map.wallOrnament(4, 6, Direction.WEST));
+        assertTrue(map.clickWall(4, 6, Direction.WEST, p, i -> 0).drank());
+        assertEquals(dm.model.Champion.MAX_FOOD, p.members().get(0).water());
+        p.setHeld(ItemCatalog.item(Item.Category.JUNK, ItemCatalog.WATERSKIN));
+        map.clickWall(4, 6, Direction.WEST, p, i -> 0);
+        assertEquals(3, p.held().charges());
+    }
+
     /** #15: the gold keyhole at (0,3) north is centred at eye level, row 48 of the viewport. */
     @Test
     void theKeyholeHangsAtEyeLevel() {

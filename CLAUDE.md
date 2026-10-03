@@ -16,7 +16,7 @@ A Java/Swing remake of FTL's *Dungeon Master* (1988), built sprint by sprint.
 - Sprint 9: wall interaction (switches, buttons, keyholes, coin slots, torch holders, alcoves, door buttons, AND/OR gates, pits as targets), front wall decorations at DM's positions, and hand clicks in the status boxes (#12).
 - Sprint 10: stairs between levels.
 - Sprint 11: bugs #14-#17 (alcove clicks, eye-level keyholes and levers, levers that toggle, plates pressed by items), pits that drop the party and items a level, and teleporters.
-- Sprint 12 (in progress): sensor bits and teleporter scopes fixed (#20), champion upkeep (food, water, stamina, mana, health over time; eating and drinking). Still to come: torches and darkness, death, keyboard movement.
+- Sprint 12 (in progress): sensor bits and teleporter scopes fixed (#20), champion upkeep (food, water, stamina, mana, health over time; eating and drinking), fountains. Still to come: torches and darkness, death, keyboard movement.
 
 Creatures, combat and spells are not implemented yet.
 
@@ -177,6 +177,7 @@ Code lives under `src/main/java/dm/`, in three layers.
   - Food and water start at 1500 + random(256), cap at 2048 and bottom out at -1024.
   - `Party.feed` / `Upkeep.consume` (F349): food is eaten, a waterskin gives 800 water per draught, a water flask 1600, other potions their DM effect (YA and antivenin do nothing yet), leaving an empty flask. The swallow sound isn't identified yet.
   - Sleeping, wounds and poison aren't modelled.
+- **Fountains** (wall decoration 35, `DungeonMap.FOUNTAIN`): clicking one with a waterskin refills it to 3 and turns an empty flask into a water flask (DM's F377, `Upkeep.fill`), before the side's sensors run. Clicking with an empty hand lets every living champion drink to the 2048 maximum (`Party.drinkFromFountain`, `WallClick.drank`). That is the user's addition: DM itself has no direct drinking.
 
 **`ui/`: draws everything at the original 320×200 resolution**
 - `GameScreen` holds all screen state and click routing, with no Swing. `GameWindow` is a thin wrapper that scales the 320×200 buffer with nearest-neighbour filtering and maps mouse positions back. Tests and scratch renders drive `GameScreen.press`/`render` directly.
