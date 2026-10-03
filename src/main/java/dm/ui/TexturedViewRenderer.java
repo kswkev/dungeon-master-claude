@@ -1,20 +1,25 @@
 package dm.ui;
 
 import dm.data.GraphicsFile;
+import dm.data.IndexedImage;
 import dm.data.Zones;
 import dm.model.ChampionMirror;
+import dm.model.CreatureType;
 import dm.model.Direction;
 import dm.model.DungeonMap;
+import dm.model.Group;
 import dm.model.Item;
 import dm.model.ItemCatalog;
 import dm.model.Party;
 import dm.model.Projectile;
 import dm.model.Square;
+import dm.model.SquareType;
 
 import java.awt.Graphics2D;
 import java.awt.Point;
 import java.awt.Rectangle;
 import java.awt.image.BufferedImage;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Set;
 
@@ -45,23 +50,24 @@ public final class TexturedViewRenderer implements ViewRenderer {
             {99, 101, 102, 100, 98},
             {104, 106, 107, 105, 103},
     };
+    /** Where the wall pieces go without the zone table (the same as DM's zones 702-717 give). */
     private static final int[][] WALL_X = {
             {0, 0, 0, 191, 0},
             {0, 0, 32, 164, 0},
             {0, 0, 59, 146, 216},
-            {0, 6, 77, 135, 180},
+            {0, 7, 77, 134, 180},
     };
     private static final int[][] WALL_Y = {
             {0, 0, 0, 0, 0},
-            {8, 8, 8, 8, 8},
-            {24, 18, 18, 18, 24},
+            {9, 9, 9, 9, 9},
+            {24, 19, 19, 19, 24},
             {25, 25, 25, 25, 25},
     };
-    /** Front face of the centre square at each depth: x, y, width, height. */
+    /** Front face of the centre square at each depth: x, y, width, height (DM's wall zones 712, 709, 704). */
     static final Rectangle[] FRONT = {
             null,
-            new Rectangle(32, 8, 160, 111),
-            new Rectangle(59, 18, 106, 74),
+            new Rectangle(32, 9, 160, 111),
+            new Rectangle(59, 19, 106, 74),
             new Rectangle(77, 25, 70, 49),
     };
 
@@ -74,12 +80,14 @@ public final class TexturedViewRenderer implements ViewRenderer {
     private static final int PORTRAIT_H = 29;
 
     private final Art art;
+    private final CreatureArt creatureArt;
     private Rectangle portraitHit;
     private Rectangle wallHit;
     private Rectangle doorButtonHit;
 
     public TexturedViewRenderer(Art art) {
         this.art = art;
+        this.creatureArt = new CreatureArt(art);
     }
 
     @Override
@@ -308,28 +316,47 @@ public final class TexturedViewRenderer implements ViewRenderer {
 
     // ---- open squares: doors, stairs, pits, teleporters -------------------
     //
-    // Unlike walls, these pieces don't tile edge to edge, and their entries in
-    // DM's zone table (Zones) haven't been identified yet. Their positions are
-    // fitted to the wall geometry instead: doors stand on the plane halfway
-    // through their square, pits are centred on that plane's floor line, and
-    // stairs sit on their square's near floor edge. Depth index: [1]=D1 .. [3]=D3.
+    // Placed by DM's own layout zones (ScummVM's PC zone numbers), with DM's
+    // PC graphics; [depth][column] tables, column 0 left, 1 centre, 2 right.
+    // A right-hand square uses the left piece mirrored, as DM does.
 
-    /** Horizontal distance between neighbouring squares on each depth's mid-square plane. */
+    /** Horizontal distance between neighbouring squares on each depth's mid-square plane (teleporter, floor decorations). */
     private static final int[] MID_SPACING = {0, 128, 84, 56};
-
-    private static final int FIRST_DOOR = 246;
+    /** The door opening at each depth, for the teleporter overlay. */
     private static final Rectangle[] DOOR_PANEL = {
             null, new Rectangle(64, 14, 96, 88), new Rectangle(80, 20, 64, 61), new Rectangle(90, 28, 44, 38)};
-    private static final int[] DOOR_PILLAR = {86, 87, 88, 89};
-    private static final int[] DOOR_PILLAR_Y = {6, 11, 18, 26};
-    private static final int[] DOOR_LINTEL = {-1, 91, 92, -1};
-    private static final int[][] DOOR_LINTEL_XY = {null, {61, 10}, {77, 17}, null};
 
-    /** Pit holes (graphics 50-55): the centre and left square at each depth. */
-    private static final int[] PIT_C = {-1, 55, 53, 51};
-    private static final int[][] PIT_C_XY = {null, {43, 90}, {66, 74}, {80, 62}};
-    private static final int[] PIT_L = {-1, 54, 52, 50};
-    private static final int[][] PIT_L_XY = {null, {0, 90}, {2, 74}, {10, 62}};
+    private static final int FIRST_DOOR = 246;
+    /** Door panels: zone for a shut door; a part-open one (states 1-3) uses the zone plus its state. */
+    private static final int[][] DOOR_ZONE = {null, {3780, 3790, 3800}, {3750, 3760, 3770}, {3720, 3730, 3740}};
+    private static final int DOOR_FRAME_LEFT_D1 = 87;
+    private static final int DOOR_FRAME_LEFT_D2 = 88;
+    private static final int DOOR_FRAME_LEFT_D3C = 89;
+    private static final int DOOR_FRAME_LEFT_D3SIDE = 90;
+    private static final int DOOR_FRAME_TOP_D1 = 91;
+    private static final int DOOR_FRAME_TOP_D2 = 92;
+    /** The graphic DM cuts a broken door with (door ornament 15). */
+    private static final int DOOR_DESTROYED_MASK = 439;
+
+    /** Floor pits: graphics for the left and centre squares, zones for left, centre, right. */
+    private static final int[][] PIT_GRAPHIC = {{56, 57}, {54, 55}, {52, 53}, {50, 51}};
+    /** DM's fainter pictures for invisible pits (none at D3, where DM shows the plain one). */
+    private static final int[][] INVISIBLE_PIT_GRAPHIC = {{62, 63}, {60, 61}, {58, 59}, {50, 51}};
+    private static final int[][] PIT_ZONE = {{861, 862, 863}, {858, 859, 860}, {855, 856, 857}, {852, 853, 854}};
+    /** Holes in the ceiling under an open pit on the level above (none at D3). */
+    private static final int[][] CEILING_PIT_GRAPHIC = {{68, 69}, {66, 67}, {64, 65}, null};
+    private static final int[][] CEILING_PIT_ZONE = {{870, 871, 872}, {867, 868, 869}, {864, 865, 866}, null};
+
+    /** Stairs seen from the front: up 108-113, down 115-120 (left, centre per depth). */
+    private static final int[][] STAIRS_UP_GRAPHIC = {null, {112, 113}, {110, 111}, {108, 109}};
+    private static final int[][] STAIRS_DOWN_GRAPHIC = {null, {119, 120}, {117, 118}, {115, 116}};
+    private static final int[][] STAIRS_UP_ZONE = {null, {808, 809, 810}, {805, 806, 807}, {802, 803, 804}};
+    private static final int[][] STAIRS_DOWN_ZONE = {null, {821, 822, 823}, {818, 819, 820}, {815, 816, 817}};
+    /** Stairs seen side-on beside the view (left zone, right zone mirrored). */
+    private static final int STAIRS_SIDE_D2 = 122;
+    private static final int STAIRS_UP_SIDE_D1 = 123;
+    private static final int STAIRS_DOWN_SIDE_D1 = 124;
+    private static final int STAIRS_SIDE_D0 = 125;
 
     /**
      * Floor ornaments (pressure plates, grates, moss...): 6 pieces each from
@@ -340,58 +367,159 @@ public final class TexturedViewRenderer implements ViewRenderer {
     static final int FIRST_FLOOR_ORNAMENT = 385;
     private static final int[] FLOOR_CENTRE_Y = {0, 102, 80, 66};
 
-    /** Stairs climbing into darkness, with handrails rising away (graphics 108-113). */
-    private static final int[] STAIRS_UP_C = {-1, 113, 111, 109};
-    private static final int[][] STAIRS_UP_C_XY = {null, {32, 19}, {62, 29}, {78, 28}};
-    private static final int[] STAIRS_UP_L = {-1, 112, 110, 108};
-    private static final int[][] STAIRS_UP_L_XY = {null, {0, 19}, {-1, 30}, {14, 29}};
-    /** A stairwell opening in the floor, steps and rails dropping away (graphics 115-120). */
-    private static final int[] STAIRS_DOWN_C = {-1, 120, 118, 116};
-    private static final int[][] STAIRS_DOWN_C_XY = {null, {36, 27}, {63, 31}, {75, 25}};
-    private static final int[] STAIRS_DOWN_L = {-1, 119, 117, 115};
-    private static final int[][] STAIRS_DOWN_L_XY = {null, {0, 28}, {-2, 30}, {2, 33}};
-
+    /**
+     * An open square, in DM's order (F0116-F0127): the pit or stairs, the
+     * floor decoration, the hole in the ceiling, then the things on the
+     * square. A door seen head-on splits the things: the far cells behind
+     * its frame and panel, the near cells in front.
+     */
     private void drawFeature(Graphics2D g, DungeonMap map, Square sq, int d, int l, Direction fwd, int mx, int my) {
+        int col = l + 1;
+        boolean doorFront = sq.type() == SquareType.DOOR && sq.facesAlong(fwd);
+        boolean stairsSide = sq.type() == SquareType.STAIRS && !sq.facesAlong(fwd);
+        if (sq.type() == SquareType.STAIRS) {
+            if (stairsSide) {
+                drawStairsSide(g, d, l, sq.stairsUp());
+            } else if (d > 0) {
+                int[][] graphic = sq.stairsUp() ? STAIRS_UP_GRAPHIC : STAIRS_DOWN_GRAPHIC;
+                int[][] zone = sq.stairsUp() ? STAIRS_UP_ZONE : STAIRS_DOWN_ZONE;
+                drawZoned(g, graphic[d][l == 0 ? 1 : 0], zone[d][col], l > 0);
+            }
+        } else if (sq.type() == SquareType.PIT && map.isPitOpen(mx, my)) {
+            int[][] graphic = sq.pitInvisible() ? INVISIBLE_PIT_GRAPHIC : PIT_GRAPHIC;
+            drawZoned(g, graphic[d][l == 0 ? 1 : 0], PIT_ZONE[d][col], l > 0);
+        }
         int ornament = map.floorOrnament(mx, my);
         if (ornament >= 0 && d > 0) {
             drawFloorOrnament(g, d, l, ornament);
         }
-        // Items in the far cells sit behind a door; the near ones in front of it.
+        if (!doorFront && !stairsSide && CEILING_PIT_GRAPHIC[d] != null && map.ceilingPit(mx, my)) {
+            drawZoned(g, CEILING_PIT_GRAPHIC[d][l == 0 ? 1 : 0], CEILING_PIT_ZONE[d][col], l > 0);
+        }
+        // Things in the far cells sit behind a door; the near ones in front of it.
         drawItems(g, map, d, l, fwd, mx, my, true);
-        drawSquareFeature(g, map, sq, d, l, fwd, mx, my);
+        if (!doorFront) {
+            drawCreatures(g, map, d, l, fwd, mx, my);
+        }
+        if (doorFront && d > 0) {
+            drawDoor(g, map, d, l, mx, my);
+        }
+        if (sq.type() == SquareType.TELEPORTER && d > 0 && sq.teleporterVisible() && map.isTeleporterOpen(mx, my)) {
+            drawTeleporter(g, d, l, mx, my);
+        }
         drawItems(g, map, d, l, fwd, mx, my, false);
+        if (doorFront) {
+            drawCreatures(g, map, d, l, fwd, mx, my);
+        }
     }
 
-    private void drawSquareFeature(Graphics2D g, DungeonMap map, Square sq, int d, int l, Direction fwd,
-                                   int mx, int my) {
-        switch (sq.type()) {
-            case DOOR -> {
-                if (sq.facesAlong(fwd)) {
-                    drawDoor(g, d, l, map.doorStyle(mx, my), map.doorState(mx, my),
-                            map.decorations().door(mx, my), map.decorations().doorButton(mx, my));
-                }
-            }
-            case STAIRS -> {
-                if (d > 0 && sq.facesAlong(fwd)) {
-                    if (sq.stairsUp()) {
-                        drawLeftOrCentre(g, d, l, STAIRS_UP_C, STAIRS_UP_C_XY, STAIRS_UP_L, STAIRS_UP_L_XY);
-                    } else {
-                        drawLeftOrCentre(g, d, l, STAIRS_DOWN_C, STAIRS_DOWN_C_XY, STAIRS_DOWN_L, STAIRS_DOWN_L_XY);
+    // ---- creatures -----------------------------------------------------------
+
+    /** DM's creature view square for (depth, lateral): D3 C/L/R, D2 C/L/R, D1 C/L/R, D0 L/R; -1 if not drawn. */
+    static int creatureSquare(int d, int l) {
+        if (Math.abs(l) > 1 || (d == 0 && l == 0) || d > MAX_DEPTH) {
+            return -1;
+        }
+        if (d == 0) {
+            return l < 0 ? 9 : 10;
+        }
+        return (MAX_DEPTH - d) * 3 + (l == 0 ? 0 : l < 0 ? 1 : 2);
+    }
+
+    /**
+     * The creatures on a square, as DM's F0115 places them: by the type's
+     * coordinate set, at the cell each creature stands on (quarter-square
+     * creatures), its row or column (half-square ones, which turn sideways
+     * as a pair), or the centre (full-square ones and lone centred creatures).
+     * The facing difference picks the picture: front, side (mirrored when
+     * seen from the right) or back. Creatures at the back are drawn first.
+     */
+    private void drawCreatures(Graphics2D g, DungeonMap map, int d, int l, Direction fwd, int mx, int my) {
+        Group group = map.groupAt(mx, my);
+        int square = creatureSquare(d, l);
+        if (group == null || square < 0) {
+            return;
+        }
+        CreatureType type = group.type();
+        int delta = Math.floorMod(fwd.ordinal() - group.facing().ordinal(), 4);
+        boolean side = (delta & 1) != 0;
+        CreatureType.View view = side && type.hasSide() ? CreatureType.View.SIDE
+                : delta == 0 && type.hasBack() ? CreatureType.View.BACK : CreatureType.View.FRONT;
+        boolean flip = view == CreatureType.View.SIDE && delta == 1;
+        if (d == 2 && view == CreatureType.View.FRONT && type.specialD2Front() && type.specialD2FrontIsFlipped()) {
+            flip = true;
+        }
+        BufferedImage img = creatureArt.picture(type, view, Math.max(d, 1), flip, map);
+        if (img == null) {
+            return;
+        }
+        List<Integer> back = new ArrayList<>();
+        List<Integer> front = new ArrayList<>();
+        switch (type.size()) {
+            case FULL -> front.add(4);
+            case HALF -> {
+                if (group.centred()) {
+                    front.add(side ? 3 : 4);
+                } else {
+                    for (int i = 0; i < group.count(); i++) {
+                        int vc = fwd.viewCellOf(group.cellOf(i));
+                        if (side) {
+                            (vc <= 1 ? back : front).add(vc <= 1 ? 2 : 4);
+                        } else {
+                            front.add(vc == 0 || vc == 3 ? 0 : 1);
+                        }
                     }
                 }
             }
-            case PIT -> {
-                if (d > 0 && map.isPitOpen(mx, my) && !sq.pitInvisible()) {
-                    drawLeftOrCentre(g, d, l, PIT_C, PIT_C_XY, PIT_L, PIT_L_XY);
+            case QUARTER -> {
+                if (group.centred()) {
+                    front.add(4);
+                } else {
+                    for (int i = 0; i < group.count(); i++) {
+                        int vc = fwd.viewCellOf(group.cellOf(i));
+                        (vc <= 1 ? back : front).add(vc);
+                    }
                 }
             }
-            case TELEPORTER -> {
-                if (d > 0 && sq.teleporterVisible() && map.isTeleporterOpen(mx, my)) {
-                    drawTeleporter(g, d, l, mx, my);
-                }
-            }
-            default -> { }
         }
+        int[][] coords = CreatureArt.COORDINATES[Math.min(type.coordinateSet(), 2)][square];
+        for (List<Integer> row : List.of(back, front)) {
+            for (int cell : row) {
+                int[] at = coords[cell];
+                if (at[0] == 0 && at[1] == 0) {
+                    continue; // DM hides this cell from here
+                }
+                int x = at[0] - img.getWidth() / 2 + 1;
+                g.drawImage(img, x, at[1] - img.getHeight() + 1, null);
+            }
+        }
+    }
+
+    /** Stairs seen side-on, beside the view at D2, D1 or D0 (DM draws none at D3 or straight ahead). */
+    private void drawStairsSide(Graphics2D g, int d, int l, boolean up) {
+        if (l == 0) {
+            return;
+        }
+        int graphic;
+        int zone;
+        switch (d) {
+            case 2 -> {
+                graphic = STAIRS_SIDE_D2;
+                zone = 826;
+            }
+            case 1 -> {
+                graphic = up ? STAIRS_UP_SIDE_D1 : STAIRS_DOWN_SIDE_D1;
+                zone = up ? 828 : 830;
+            }
+            case 0 -> {
+                graphic = STAIRS_SIDE_D0;
+                zone = 832;
+            }
+            default -> {
+                return;
+            }
+        }
+        drawZoned(g, graphic, zone + (l > 0 ? 1 : 0), l > 0);
     }
 
     // ---- objects on the floor and in the air ------------------------------
@@ -470,26 +598,6 @@ public final class TexturedViewRenderer implements ViewRenderer {
         g.drawImage(img, at.x - w / 2, y, w, h, null);
     }
 
-    /**
-     * Pieces drawn for the centre square and the left square only; the right
-     * square uses the left piece mirrored at the mirrored position.
-     */
-    private void drawLeftOrCentre(Graphics2D g, int d, int l, int[] centre, int[][] centreXY, int[] left, int[][] leftXY) {
-        if (l == 0) {
-            paste(g, centre[d], centreXY[d][0], centreXY[d][1], false);
-            return;
-        }
-        BufferedImage img = art.sprite(left[d]);
-        if (img == null) {
-            return;
-        }
-        int x = leftXY[d][0];
-        if (l > 0) {
-            x = VIEWPORT.width - x - img.getWidth();
-        }
-        paste(g, left[d], x, leftXY[d][1], l > 0);
-    }
-
     private void drawFloorOrnament(Graphics2D g, int d, int l, int ornament) {
         int base = FIRST_FLOOR_ORNAMENT + ornament * 6 + (MAX_DEPTH - d) * 2;
         BufferedImage img = art.sprite(l == 0 ? base + 1 : base);
@@ -511,78 +619,142 @@ public final class TexturedViewRenderer implements ViewRenderer {
         paste(g, l == 0 ? base + 1 : base, x, y, l > 0);
     }
 
-    /** Door decorations (441 + k) are drawn for the D1 panel (96 wide) and scaled down with it. */
+    /** Door decorations (441 + k); D2 and D3 versions are shrunk with DM's palette changes. */
     static final int FIRST_DOOR_ORNAMENT = 441;
-    /** The button set into the right-hand door pillar (8x9, with a bevelled edge), checked against the original. */
+    /** The button set into the right-hand door pillar (8x9, with a bevelled edge). */
     static final int DOOR_BUTTON = 453;
-    /** Button size at D1 relative to its graphic, and its height up the pillar (0 = top of the panel). */
-    private static final double DOOR_BUTTON_SCALE = 1.0;
-    private static final double DOOR_BUTTON_HEIGHT = 0.35;
-    /** How far right of the pillar's centre the button sits at D1, in pixels (scaled with distance). */
-    private static final int DOOR_BUTTON_RIGHT = 4;
+    /** DM's door button zone (1950) plus D3R 0, D3C 1, D2C 2, D1C 3; the heights it shrinks to. */
+    private static final int DOOR_BUTTON_ZONE = 1950;
+    private static final int[] DOOR_BUTTON_HEIGHT = {4, 4, 6, 9};
 
     /**
-     * Door frame pillars and lintel, plus the panel unless the door is open or
-     * broken. A decoration rides on the panel; a button sits on the right pillar.
+     * G0207: where each kind of door decoration goes on the panel, by
+     * coordinate set and depth (D3, D2, D1): x, y, width, height. G0196 picks
+     * the set for each of the 12 door decorations; the broken-door mask uses set 1.
      */
-    private void drawDoor(Graphics2D g, int d, int l, int style, int state, int ornament, boolean button) {
+    private static final int[][][] DOOR_ORNAMENT_BOX = {
+            {{17, 8, 15, 10}, {22, 11, 21, 13}, {32, 13, 32, 19}},
+            {{0, 0, 48, 41}, {0, 0, 64, 61}, {0, 0, 96, 88}},
+            {{17, 15, 15, 10}, {22, 22, 21, 13}, {32, 31, 32, 19}},
+            {{23, 31, 13, 9}, {30, 41, 19, 12}, {44, 61, 32, 19}}};
+    private static final int[] DOOR_ORNAMENT_SET = {0, 1, 1, 1, 0, 2, 3, 1, 2, 2, 1, 1};
+    private static final int[] PAL_CHANGES_DOOR_ORNAMENT_D3 = {0, 120, 10, 30, 40, 30, 0, 60, 30, 90, 100, 110, 0, 20, 0, 130};
+    private static final int[] PAL_CHANGES_DOOR_ORNAMENT_D2 = {0, 10, 20, 30, 40, 30, 60, 70, 50, 90, 100, 110, 120, 130, 140, 150};
+    private static final int[] PAL_CHANGES_DOOR_BUTTON_D3 = {0, 0, 120, 30, 40, 30, 0, 60, 30, 90, 100, 110, 0, 10, 0, 20};
+    private static final int[] PAL_CHANGES_DOOR_BUTTON_D2 = {0, 120, 10, 30, 40, 30, 60, 70, 50, 90, 100, 110, 0, 20, 140, 130};
+
+    /**
+     * A door seen head-on, as DM draws it on the PC (F0111, ScummVM's DOS
+     * path): the frame (pillars and lintel, where that depth shows them), the
+     * button on the right pillar, then the panel in its zone. A part-open door
+     * (states 1-3) uses the next zones, which cut it as it rises; a broken one
+     * is cut by DM's mask. Standing in the doorway, only the frame's edges show.
+     */
+    private void drawDoor(Graphics2D g, DungeonMap map, int d, int l, int mx, int my) {
         if (d == 0) {
-            // Standing in the doorway: only the pillars at the screen edges show.
             if (l == 0) {
-                BufferedImage pillar = art.sprite(DOOR_PILLAR[0]);
-                if (pillar != null) {
-                    paste(g, DOOR_PILLAR[0], 0, DOOR_PILLAR_Y[0], false);
-                    paste(g, DOOR_PILLAR[0], VIEWPORT.width - pillar.getWidth(), DOOR_PILLAR_Y[0], true);
-                }
+                drawZoned(g, 86, 728, false);
             }
             return;
         }
-        int shift = MID_SPACING[d] * l;
-        Rectangle panel = DOOR_PANEL[d];
-        if (state >= 1 && state <= 4) {
-            // DM doors slide up into the lintel; states 1-3 are part-way, 4 is shut.
-            BufferedImage img = art.sprite(FIRST_DOOR + style * 3 + (MAX_DEPTH - d));
-            if (img != null) {
-                int raised = panel.height * (4 - state) / 4;
-                Graphics2D clip = (Graphics2D) g.create();
-                clip.clipRect(panel.x + shift, panel.y, panel.width, panel.height);
-                clip.drawImage(img, panel.x + shift, panel.y - raised, null);
-                BufferedImage deco = ornament >= 0 ? art.doorSprite(FIRST_DOOR_ORNAMENT + ornament) : null;
-                if (deco != null) {
-                    double scale = panel.width / (double) DOOR_PANEL[1].width;
-                    int w = (int) Math.round(deco.getWidth() * scale);
-                    int h = (int) Math.round(deco.getHeight() * scale);
-                    // Full-panel designs cover the door; small ones (grilles, locks) sit in its upper part.
-                    int y = deco.getHeight() >= DOOR_PANEL[1].height * 0.7 ? panel.y : panel.y + (int) (12 * scale);
-                    clip.drawImage(deco, panel.x + shift + (panel.width - w) / 2, y - raised, w, h, null);
-                }
-                clip.dispose();
+        int col = l + 1;
+        switch (d) {
+            case 3 -> {
+                int frame = l == 0 ? DOOR_FRAME_LEFT_D3C : DOOR_FRAME_LEFT_D3SIDE;
+                int zone = l == 0 ? 722 : l < 0 ? 718 : 720; // left pillar zone; the right one follows
+                drawZoned(g, frame, zone, false);
+                drawZoned(g, frame, zone + 1, true);
             }
-        }
-        BufferedImage pillar = art.sprite(DOOR_PILLAR[d]);
-        if (pillar != null) {
-            paste(g, DOOR_PILLAR[d], panel.x + shift - pillar.getWidth(), DOOR_PILLAR_Y[d], false);
-            paste(g, DOOR_PILLAR[d], panel.x + panel.width + shift, DOOR_PILLAR_Y[d], true);
-            BufferedImage buttonImg = button ? art.sprite(DOOR_BUTTON) : null;
-            if (buttonImg != null) {
-                double scale = DOOR_BUTTON_SCALE * panel.width / (double) DOOR_PANEL[1].width;
-                int w = Math.max(1, (int) Math.round(buttonImg.getWidth() * scale));
-                int h = Math.max(1, (int) Math.round(buttonImg.getHeight() * scale));
-                double distance = panel.width / (double) DOOR_PANEL[1].width;
-                int px = panel.x + panel.width + shift + (pillar.getWidth() - w) / 2
-                        + (int) Math.round(DOOR_BUTTON_RIGHT * distance);
-                int py = panel.y + (int) Math.round(panel.height * DOOR_BUTTON_HEIGHT) - h / 2;
-                g.drawImage(buttonImg, px, py, w, h, null);
-                if (d == 1 && l == 0) {
-                    doorButtonHit = new Rectangle(px + VIEWPORT.x, py + VIEWPORT.y, w, h);
+            case 2 -> {
+                drawZoned(g, DOOR_FRAME_TOP_D2, 729 + col, false);
+                if (l == 0) {
+                    drawZoned(g, DOOR_FRAME_LEFT_D2, 724, false);
+                    drawZoned(g, DOOR_FRAME_LEFT_D2, 725, true);
+                }
+            }
+            default -> {
+                drawZoned(g, DOOR_FRAME_TOP_D1, 732 + col, false);
+                if (l == 0) {
+                    drawZoned(g, DOOR_FRAME_LEFT_D1, 726, false);
+                    drawZoned(g, DOOR_FRAME_LEFT_D1, 727, true);
                 }
             }
         }
-        if (DOOR_LINTEL[d] >= 0) {
-            paste(g, DOOR_LINTEL[d], DOOR_LINTEL_XY[d][0] + shift, DOOR_LINTEL_XY[d][1], false);
+        if (map.decorations().doorButton(mx, my)) {
+            int button = d == 3 ? (l == 0 ? 1 : l > 0 ? 0 : -1) : (l == 0 ? 4 - d : -1);
+            if (button >= 0) {
+                drawDoorButton(g, button, d == 1);
+            }
+        }
+        int state = map.doorState(mx, my);
+        if (state == DungeonMap.DOOR_OPEN) {
+            return;
+        }
+        BufferedImage panel = doorPanel(map.doorStyle(mx, my), d, map.decorations().door(mx, my),
+                state == DungeonMap.DOOR_BROKEN);
+        if (panel == null) {
+            return;
+        }
+        int zone = DOOR_ZONE[d][col] + (state >= 1 && state <= 3 ? state : 0);
+        drawZoned(g, panel, zone, false);
+    }
+
+    /** A door's panel for depth {@code d}, its decoration (or the broken-door mask) painted on as DM does. */
+    private BufferedImage doorPanel(int style, int d, int ornament, boolean broken) {
+        IndexedImage door = art.indexed(FIRST_DOOR + style * 3 + (MAX_DEPTH - d));
+        if (door == null) {
+            return null;
+        }
+        byte[] pixels = door.pixels().clone();
+        if (ornament >= 0 && ornament < DOOR_ORNAMENT_SET.length) {
+            paint(pixels, door.width(), art.indexed(FIRST_DOOR_ORNAMENT + ornament), DOOR_ORNAMENT_SET[ornament], d);
+        }
+        if (broken) {
+            paint(pixels, door.width(), art.indexed(DOOR_DESTROYED_MASK), 1, d);
+        }
+        return Bitmaps.toImage(new IndexedImage(door.width(), door.height(), pixels), Art.TRANSPARENT,
+                Bitmaps.palette());
+    }
+
+    /** DM's F0109: a decoration pasted onto a door, its gold (colour 9) see-through; its colour 10 cuts holes. */
+    private static void paint(byte[] door, int doorWidth, IndexedImage ornament, int set, int d) {
+        if (ornament == null) {
+            return;
+        }
+        int[] box = DOOR_ORNAMENT_BOX[set][MAX_DEPTH - d];
+        IndexedImage img = d == 1 ? ornament
+                : Bitmaps.shrink(ornament, box[2], box[3], d == 2 ? PAL_CHANGES_DOOR_ORNAMENT_D2 : PAL_CHANGES_DOOR_ORNAMENT_D3);
+        int height = door.length / doorWidth;
+        for (int y = 0; y < Math.min(img.height(), box[3]); y++) {
+            for (int x = 0; x < Math.min(img.width(), box[2]); x++) {
+                int c = img.pixel(x, y);
+                int dx = box[0] + x;
+                int dy = box[1] + y;
+                if (c != 9 && dx < doorWidth && dy < height) {
+                    door[dy * doorWidth + dx] = (byte) c;
+                }
+            }
         }
     }
 
+    /** DM's door button (F0110) in its zone, shrunk for D2 and D3; at D1 it can be pressed. */
+    private void drawDoorButton(Graphics2D g, int index, boolean clickable) {
+        IndexedImage src = art.indexed(DOOR_BUTTON);
+        if (src == null) {
+            return;
+        }
+        IndexedImage img = src;
+        if (index < 3) {
+            int h = DOOR_BUTTON_HEIGHT[index];
+            int w = Math.max(1, Math.round(src.width() * h / (float) src.height()));
+            img = Bitmaps.shrink(src, w, h, index == 2 ? PAL_CHANGES_DOOR_BUTTON_D2 : PAL_CHANGES_DOOR_BUTTON_D3);
+        }
+        Rectangle drawn = drawZoned(g, Bitmaps.toImage(img, Art.TRANSPARENT, Bitmaps.palette()),
+                DOOR_BUTTON_ZONE + index, false);
+        if (clickable && drawn != null) {
+            doorButtonHit = new Rectangle(drawn.x + VIEWPORT.x, drawn.y + VIEWPORT.y, drawn.width, drawn.height);
+        }
+    }
     /** DM's teleporters are a shimmering blue field; drawn as a translucent overlay with fixed sparkles. */
     private void drawTeleporter(Graphics2D g, int d, int l, int mx, int my) {
         Rectangle panel = DOOR_PANEL[d];
@@ -601,15 +773,53 @@ public final class TexturedViewRenderer implements ViewRenderer {
         }
     }
 
+    /** DM's wall zones by [depth][lateral + 2] (ScummVM's PC zone numbers 702-717); -1 where none. */
+    private static final int[][] WALL_ZONE = {
+            {-1, 716, -1, 717, -1},
+            {-1, 713, 712, 714, -1},
+            {707, 710, 709, 711, 708},
+            {702, 705, 704, 706, 703},
+    };
+
     private void drawWall(Graphics2D g, int d, int l, boolean flipped) {
+        // The opposite side's piece, mirrored, has this side's silhouette.
+        int graphic = flipped ? WALL[d][-l + 2] : WALL[d][l + 2];
+        if (WALL_ZONE[d][l + 2] >= 0 && drawZoned(g, graphic, WALL_ZONE[d][l + 2], flipped) != null) {
+            return;
+        }
         int x = WALL_X[d][l + 2];
         int y = WALL_Y[d][l + 2];
-        if (!flipped) {
-            g.drawImage(art.sprite(WALL[d][l + 2]), x, y, null);
-        } else {
-            // The opposite side's piece, mirrored, has this side's silhouette.
-            g.drawImage(art.spriteFlipped(WALL[d][-l + 2]), x, y, null);
+        g.drawImage(flipped ? art.spriteFlipped(graphic) : art.sprite(graphic), x, y, null);
+    }
+
+    // ---- DM's layout zones ---------------------------------------------------
+
+    /**
+     * Draws graphic {@code graphic} (colour 10 see-through) where DM's layout
+     * puts it in zone {@code zone}, mirrored if asked; returns where it went
+     * (viewport coordinates), or null if the zone doesn't place it.
+     */
+    private Rectangle drawZoned(Graphics2D g, int graphic, int zone, boolean flip) {
+        BufferedImage img = flip ? art.spriteFlipped(graphic) : art.sprite(graphic);
+        return drawZoned(g, img, zone, flip);
+    }
+
+    /**
+     * Draws {@code img} (already mirrored when {@code flipped}) in zone
+     * {@code zone}. As in DM, the zone may cut the picture; for a mirrored
+     * picture the cut is measured from its other edge.
+     */
+    private Rectangle drawZoned(Graphics2D g, BufferedImage img, int zone, boolean flipped) {
+        if (img == null) {
+            return null;
         }
+        int[] c = art.coord(zone, img.getWidth(), img.getHeight());
+        if (c == null) {
+            return null;
+        }
+        int sx = flipped ? img.getWidth() - c[4] - c[2] : c[4];
+        g.drawImage(img.getSubimage(sx, c[5], c[2], c[3]), c[0], c[1], null);
+        return new Rectangle(c[0], c[1], c[2], c[3]);
     }
 
     private void paste(Graphics2D g, int graphic, int x, int y, boolean flipped) {
@@ -619,14 +829,24 @@ public final class TexturedViewRenderer implements ViewRenderer {
         }
     }
 
-    /** The mirror sits centred on the front wall, a little above its middle; smaller with distance. */
+    /** DM's zone for the champion portrait in a mirror at D1 (737), which puts it at (96, 35). */
+    private static final int PORTRAIT_ZONE = 737;
+    /** How far above the face's middle the mirror's centre sits at D1, so the glass meets the portrait zone. */
+    private static final int MIRROR_RAISE = 14;
+
+    /** The mirror sits centred on the front wall, above its middle; smaller with distance. */
     private void drawMirror(Graphics2D g, int d, ChampionMirror mirror) {
         Rectangle face = FRONT[d];
         double scale = face.width / (double) FRONT[1].width;
         int w = (int) Math.round(MIRROR_W * scale);
         int h = (int) Math.round(MIRROR_H * scale);
         int x = face.x + (face.width - w) / 2;
-        int y = (int) Math.round(face.y + face.height / 2.0 - h / 2.0 - 6 * scale);
+        int y = (int) Math.round(face.y + face.height / 2.0 - h / 2.0 - MIRROR_RAISE * scale);
+        int[] portraitZone = d == 1 ? art.coord(PORTRAIT_ZONE, PORTRAIT_W, PORTRAIT_H) : null;
+        if (portraitZone != null) {
+            x = portraitZone[0] - GLASS_X;
+            y = portraitZone[1] - GLASS_Y;
+        }
         BufferedImage frame = art.sprite(GraphicsFile.MIRROR_FRONT);
         if (frame != null) {
             g.drawImage(frame, x, y, w, h, null);

@@ -55,7 +55,7 @@ class DecorationFinderTest {
     }
 
     private static OrnamentLists allRandom(int... wall) {
-        return new OrnamentLists(wall, wall.length, new int[0], 0, new int[0]);
+        return new OrnamentLists(new int[0], wall, wall.length, new int[0], 0, new int[0]);
     }
 
     @Test
@@ -74,7 +74,7 @@ class DecorationFinderTest {
     @Test
     void wallSensorOrnamentBeatsRandomAndTextBecomesAnInscription() {
         int[] wall = {0, 7, 9}; // ordinal 1 is the inscription stone
-        OrnamentLists lists = new OrnamentLists(wall, 0, new int[0], 0, new int[0]);
+        OrnamentLists lists = new OrnamentLists(new int[0], wall, 0, new int[0], 0, new int[0]);
         Thing sensor = new Thing(Thing.SENSOR, 0, Direction.SOUTH.ordinal(), new int[] {0xFFFE, 0, 3 << 12, 0});
         Thing text = new Thing(Thing.TEXT, 0, Direction.WEST.ordinal(), new int[] {0xFFFE, 1});
         Decorations d = decorate(0x0F, lists, sensor, text);
@@ -102,7 +102,7 @@ class DecorationFinderTest {
 
     @Test
     void doorRecordGivesDecorationAndButton() {
-        OrnamentLists lists = new OrnamentLists(new int[0], 0, new int[0], 0, new int[] {7, 3});
+        OrnamentLists lists = new OrnamentLists(new int[0], new int[0], 0, new int[0], 0, new int[] {7, 3});
         Square[][] squares = {{new Square(0x94)}};
         @SuppressWarnings("unchecked")
         List<List<Thing>>[] things = new List[] {List.of(List.of(

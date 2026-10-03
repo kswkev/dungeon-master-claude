@@ -18,8 +18,9 @@ A Java/Swing remake of FTL's *Dungeon Master* (1988), built sprint by sprint.
 - Sprint 11: bugs #14-#17 (alcove clicks, eye-level keyholes and levers, levers that toggle, plates pressed by items), pits that drop the party and items a level, and teleporters.
 - Sprint 12: sensor bits and teleporter scopes fixed (#20), champion upkeep (food, water, stamina, mana, health over time; eating and drinking), fountains, torches and darkness, death, and keyboard movement.
 - Sprint 13: save, load and quit from the disk icon on the character sheet (a game menu built from DM's dialog art, 4 save slots).
+- Sprint 14: creatures you can see (groups from DUNGEON.DAT drawn with DM's art, blocking the party, facing it, saved), and the whole view on DM's own layout zones (doors, stairs, pits, ceiling pits, mirrors).
 
-Creatures, combat and spells are not implemented yet.
+Creature AI and attacks (Sprint 15), combat (Sprint 16) and spells are not implemented yet.
 
 ## Commands
 
@@ -63,6 +64,8 @@ Code lives under `src/main/java/dm/`, in three layers.
   - Word 2: target **map index** (not level) in bits 8-15.
   - Verified on the PC file: all 175 teleporters lead to an open square on an existing map.
   - A teleporter that targets its own square is a "spinner": it only turns the party.
+- **Creature groups** (`GroupFinder` → `dm.model.Group`): thing type 4, 16 bytes: next, possessions (their own thing list), type byte (0-26, `CreatureType`), cells byte (2 bits per creature; 0xFF one creature centred), 4 hit-point words, then direction bits 8-9 and count-1 bits 5-6. A map's allowed creature types are the first of its ornament lists (`OrnamentLists.creatures`, `DungeonMap.creatureTypes`).
+  - `CreatureType` holds DM's G0243/G0219 data (from ScummVM): size (quarter/half/full), which pictures exist (front, side, back, attack, in that order from 584 + firstGraphic), coordinate set (0 ground, 1 large, 2 flying), transparent colour, and the replacement colour sets (1-based) for colours 9 and 10.
 - **Things** (`Thing`, `Thing.Store`):
   - A thing id packs the cell (bits 14-15), type (10-13) and index (0-9). Each record's first word links to the next thing, and 0xFFFE ends the list.
   - Squares with things take entries from the square-first-things table in column-major order, starting at that column's cumulative count.
@@ -87,8 +90,8 @@ Code lives under `src/main/java/dm/`, in three layers.
   - 3000-3006: front wall decoration *centres* (type 0 points), in the same order. A second set at 3007 sits a few px lower; all decorations use the first. With these, alcove objects sit on the shelf.
   - DM's per-decoration coordinate sets aren't in the zone table, so some decorations are placed by hand. `TexturedViewRenderer.FLOOR_LEVEL_ORNAMENTS` (the moss tuft 33 and the drain grate 34, as the user reported) and full-height pictures stand at the foot of the wall, on side faces too. Add more as they're spotted against the original.
   - `EYE_LEVEL_ORNAMENTS` (#15) are centred higher: row 48 of the viewport at D1 (40 of the face's 111 rows), and the same fraction of every other front or side face. They are 4-6, 15-32, 44-45 and 51-53 (keyholes, locks, slots, gems, the skull, the hook and ring, and the lever positions), all confirmed by the user against the original.
-  - 3200-3394 look like creature positions (5 per view square). 1500-1510 look like floor-decoration points.
-  - Doors, stairs and pits are still fitted. Their ranges haven't been found.
+  - 1500-1510 look like floor-decoration points.
+  - **Layout engine** (`Zones.coord`, `Art.coord`): a port of DM's F0635 GET_COORD (ScummVM's DisplayMan::getCoord). It anchors a picture in a zone by the zone's type (0-8 anchors, 9 sizes, 10-18 relative to a grandparent's size), walks up the parents and clips; it returns {x, y, w, h, srcX, srcY} in viewport coordinates. Zone numbers are ScummVM's PC ones: walls 702-717, door frames 718-734, wall portrait 737, stairs front 802-825 and side 826-833, floor pits 852-863, ceiling pits 864-872, door button 1950 (+0 D3R, +1 D3C, +2 D2C, +3 D1C), door panels 3720-3800 (+state for part-open). `RealDungeonTest.wallZonesMatchTheTable` pins the walls.
 - **Ornament lists** (`OrnamentLists`): each map's creature/wall/floor/door ornament lists come straight after its squares.
   - Counts are in map words B (wall bits 0-3, random wall 4-7, floor 8-11, random floor 12-15) and C (creatures bits 4-7, doors bits 0-3).
   - Things refer to decorations by a 1-based ordinal into these lists.
@@ -137,6 +140,7 @@ Code lives under `src/main/java/dm/`, in three layers.
   - `applyEffect` opens, closes and toggles pits and teleporters (live `pitOpen`/`teleporterOpen`).
 - `Party` holds up to 4 `Champion`s. `recruit(mirror)` adds the champion and marks the `ChampionMirror` as taken, so it renders empty. `facingMirror()` is the untaken mirror on the adjacent wall straight ahead.
 - **Formation:** `members()` is the recruit order, which is also the colour and status-box order. `at(position)` is the formation, using DM's cells: `FRONT_LEFT` 0, `FRONT_RIGHT` 1, `BACK_RIGHT` 2, `BACK_LEFT` 3. `bump(move)` damages the two positions on the side that hit the wall.
+- **Creatures (Sprint 14, no AI yet):** `DungeonMap.groups`/`groupAt`/`hasCreatures`. The party can't step onto a creature square; that's a plain block without a bump (`Party.blockedByCreatures`). Thrown items stop in front and land. Each tick, `DungeonMap.faceParty` turns any group that sees the party along a clear row or column within 3 squares (a stand-in for Sprint 15's AI). Groups are saved (`SaveGames.VERSION` 2). The ASCII map shows them as M.
 - **Doors and sensors in `DungeonMap`:**
   - Doors have live state (0 open … 4 closed, 5 broken), seeded from the square byte. `moveDoor`/`toggleDoor` set a target, and `tickDoors()` steps toward it once per game tick. As in DM, the door sound plays on every step except the last (`DoorTick.rattled`), so a full open or close rattles 3 times.
   - `isPassable` uses the live state, so use it (not `Square.isPassable`) for doors.
@@ -235,12 +239,16 @@ Code lives under `src/main/java/dm/`, in three layers.
   - `FlatViewRenderer` (the original Sprint 1 renderer) as the fallback.
   Both draw back to front, outermost squares first, and record `portraitHit`.
 - **`TexturedViewRenderer`** works like DM: no 3D maths, just pre-drawn pieces pasted at fixed viewport positions.
-  - **Walls:** a table indexed by [depth][lateral+2] gives the graphic, x and y (D1 front 160×111 at (32,8), D2 106×74 at (59,18), D3 70×49 at (77,25)). These were measured from the art: each side piece contains its square's visible front face plus its side face, and each front face ends exactly where the next nearer centre piece begins.
+  - **Walls:** drawn in DM's wall zones (`WALL_ZONE`); the table indexed by [depth][lateral+2] gives the graphic, and a fallback x and y equal to the zones' (D1 front 160×111 at (32,9), D2 106×74 at (59,19), D3 70×49 at (77,25)). The zones moved D1/D2 down a pixel from Sprint 4's measured table.
   - **Flipping:** when (x + y + facing) is odd, the floor, ceiling and centre walls are mirrored, and each side uses the opposite side's piece mirrored.
-  - **Doors, stairs and pits:** their positions are fitted from mid-square perspective planes. Treat those constants as tunable. Sprint 8 found that GRAPHICS.DAT's zone table (entry 696) holds some of DM's coordinates; the ranges for these haven't been identified yet, so check there before fitting anything new.
-  - **Stairs:** 108-113 are *up* stairs (steps climbing into darkness) and 115-120 are *down* stairs (a stairwell opening in the floor), in pairs of left then centre piece for D3, D2 and D1. The side-on pieces (114, 121, 123, 124) aren't drawn yet.
-  - **Pits** are graphics 50-55; invisible pits aren't drawn.
+  - **Doors, stairs and pits** follow ScummVM's PC drawSquare functions (F0116-F0127): per view square, the graphic, the zone, and whether the left piece is mirrored for the right. Order: pit or stairs, floor decoration, ceiling pit, far things, creatures, door, near things.
+  - **Stairs:** the PC stairs graphics start at 108: up front D3L/C 108-109, D2 110-111, D1 112-113, D0 114; down 115-121 likewise; side pieces D2 122, D1 up 123, D1 down 124, D0 125. Stairs seen side-on (`!facesAlong`) use the side pieces at D2/D1/D0 left and right.
+  - **Pits:** floor pits 50-57 (D3L/C, D2L/C, D1L/C, D0L/C; DM's numbers +1 on the PC), invisible-pit variants 58-63 (D3 uses the plain one), ceiling pits 64-69 where the square above is an open pit (`DungeonMap.ceilingPit`, `Dungeon.above`).
+  - **Doors** (F0111): frames from the wall set (front 86, left pillars D1C 87, D2C 88, D3C 89, D3L/R 90, lintels 91/92); the panel 246 + style×3 + (D3 0, D2 1, D1 2), with its decoration painted on by DM's G0207 boxes (G0196 picks the box set; D2/D3 shrunk with DM's palette changes; colour 9 see-through, colour 10 cuts holes) and a broken door cut by mask 439. Part-open doors use zone + state. The button (453) is shrunk for D2/D3 by height.
+  - **Mirrors:** at D1 the portrait goes in zone 737 (96,35) and the frame around it; D2/D3 frames are raised to match.
   - **Teleporters** are drawn (as a translucent overlay) only when visible and open. Graphics 70-75 look like DM's field masks and 76/77 like 32×32 field patterns; using them is still to do.
+  - **Creatures** (`drawCreatures`, `CreatureArt`, after ScummVM's F0115 creature block): view squares D3 C/L/R, D2, D1, D0 L/R; positions from DM's coordinate sets G0224 (x centre, bottom y) by cell: quarter-square creatures on their view cell (0-3), half-square ones on a column (0/1) facing you or a row (2 back, 4 front) side-on, full-square and centred ones at 4. Back cells first. The facing difference picks the picture: back (0), side (odd; mirrored at 1), front. D2/D3 shrink to 20/32 and 16/32 with DM's creature palette changes, the transparent colour changed with them.
+  - **Colours 9 and 10:** a map's creature types replace them with DM's replacement colour sets (G0220, six light levels each), across the whole viewport, as DM's palette does. `GameScreen.drawView` passes them to `Darkness.apply`, which remaps even at full light. In D2/D3 creature pictures, 9/10 become the set's D2/D3 colour.
   - **Objects** use the zone points, scaled by DM's object scales: 32/32 at D0, then 27/21 (D1 near/far), 18/14 (D2), 12 (D3). Far cells are drawn before a door and near cells after it; items in flight come last. **Floor ornaments** (pressure plates etc.) are 6 pieces each from graphic 385, centred on each depth's mid-square floor line. Graphics 415-420 are the black-flame-pit *ornament*, not pits.
   - **Door design:** `DungeonMap.doorStyle` (bits 8-15 of the map's graphics-set word, chosen by bit 0 of the door thing) picks one of 4 designs (graphics 246 + style×3).
   - **Orientation:** bit 3 of a door or stairs square (`Square.runsNorthSouth`) decides whether it's seen head-on.

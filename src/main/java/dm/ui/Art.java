@@ -71,6 +71,21 @@ public final class Art {
         return gfx == null || gfx.zones() == null ? null : gfx.zones().point(id);
     }
 
+    /**
+     * Where DM's layout puts a {@code width} x {@code height} picture in zone
+     * {@code id}: {x, y, w, h, srcX, srcY} in viewport coordinates (see
+     * {@link dm.data.Zones#coord}), or null without the zone table or when
+     * nothing shows.
+     */
+    public int[] coord(int id, int width, int height) {
+        return gfx == null || gfx.zones() == null ? null : gfx.zones().coord(id, width, height);
+    }
+
+    /** The raw palette-indexed picture {@code index}, or null; for drawing with DM's own colour rules. */
+    public IndexedImage indexed(int index) {
+        return gfx == null ? null : gfx.image(index);
+    }
+
     /** Sound entry {@code index}, or null when it isn't available. */
     public Sound sound(int index) {
         return gfx == null ? null : gfx.sound(index);

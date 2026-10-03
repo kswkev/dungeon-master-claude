@@ -13,7 +13,7 @@ import java.io.IOException;
  * word C bits 4-7 creature types, 0-3 door ornaments. The random decorations
  * are drawn from the first "random" entries of the wall and floor lists.
  */
-record OrnamentLists(int[] wall, int randomWall, int[] floor, int randomFloor, int[] door) {
+record OrnamentLists(int[] creatures, int[] wall, int randomWall, int[] floor, int randomFloor, int[] door) {
 
     static OrnamentLists read(byte[] data, int start, int end, int ornamentCounts, int otherCounts)
             throws IOException {
@@ -24,11 +24,12 @@ record OrnamentLists(int[] wall, int randomWall, int[] floor, int randomFloor, i
         if (start + creatures + walls + floors + doors > end) {
             throw new IOException("ornament lists run past the raw map data");
         }
+        int[] creatureTypes = bytes(data, start, creatures);
         int at = start + creatures;
         int[] wall = bytes(data, at, walls);
         int[] floor = bytes(data, at + walls, floors);
         int[] door = bytes(data, at + walls + floors, doors);
-        return new OrnamentLists(wall, Math.min((ornamentCounts >>> 4) & 15, walls),
+        return new OrnamentLists(creatureTypes, wall, Math.min((ornamentCounts >>> 4) & 15, walls),
                 floor, Math.min(ornamentCounts >>> 12, floors), door);
     }
 
