@@ -1,5 +1,7 @@
 package dm.model;
 
+import java.io.Serializable;
+
 /**
  * A sensor on a floor square, such as a pressure plate, decoded from a
  * DUNGEON.DAT sensor thing.
@@ -9,7 +11,9 @@ package dm.model;
  * effect to its target; when it is released, a HOLD sensor undoes it, and so
  * does any sensor with the revert flag. See {@link DungeonMap#partyMoved}.
  */
-public final class FloorSensor {
+public final class FloorSensor implements Serializable {
+
+    private static final long serialVersionUID = 1L;
 
     public enum Effect { SET, CLEAR, TOGGLE, HOLD }
 

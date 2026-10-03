@@ -1,5 +1,6 @@
 package dm.model;
 
+import java.io.Serializable;
 import java.util.Collections;
 import java.util.EnumMap;
 import java.util.List;
@@ -15,7 +16,9 @@ import java.util.Map;
  * The stats are 2 digits each, in {@link Stat} order. Skills are 1 digit
  * per hidden skill; the 4 base skills are derived from them.
  */
-public final class Champion {
+public final class Champion implements Serializable {
+
+    private static final long serialVersionUID = 1L;
 
     public enum Stat {
         LUCK, STRENGTH, DEXTERITY, WISDOM, VITALITY, ANTI_MAGIC, ANTI_FIRE;

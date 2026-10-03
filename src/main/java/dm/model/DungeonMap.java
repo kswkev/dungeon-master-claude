@@ -1,5 +1,6 @@
 package dm.model;
 
+import java.io.Serializable;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.HashMap;
@@ -18,7 +19,9 @@ import java.util.function.ToIntFunction;
  * per {@link #tickProjectiles()}. Pits open and close, and wall sensors
  * change state when clicked ({@link #clickWall}).
  */
-public final class DungeonMap {
+public final class DungeonMap implements Serializable {
+
+    private static final long serialVersionUID = 1L;
 
     public static final int DOOR_OPEN = 0;
     public static final int DOOR_CLOSED = 4;

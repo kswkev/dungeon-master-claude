@@ -1,5 +1,6 @@
 package dm.model;
 
+import java.io.Serializable;
 import java.util.List;
 
 /**
@@ -7,7 +8,9 @@ import java.util.List;
  * teleporters. Maps sit in dungeon-wide coordinates ({@link DungeonMap#offsetX()}),
  * so stairs and pits lead to the same dungeon-wide square one level up or down.
  */
-public final class Dungeon {
+public final class Dungeon implements Serializable {
+
+    private static final long serialVersionUID = 1L;
 
     private final List<DungeonMap> maps;
 

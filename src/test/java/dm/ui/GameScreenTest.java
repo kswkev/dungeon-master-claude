@@ -1,5 +1,6 @@
 package dm.ui;
 
+import dm.data.SaveGames;
 import dm.data.Sound;
 import dm.model.Champion;
 import dm.model.ChampionMirror;
@@ -15,11 +16,14 @@ import dm.model.Square;
 import dm.model.WallSensor;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.io.TempDir;
 
 import java.awt.Graphics2D;
 import java.awt.Point;
 import java.awt.Rectangle;
 import java.awt.image.BufferedImage;
+import java.nio.file.Files;
+import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.List;
 
@@ -92,6 +96,169 @@ class GameScreenTest {
         assertEquals(1, screen.bars().damageShown(0, now));
         now += GameScreen.DAMAGE_SHOWN_MS;
         assertEquals(0, screen.bars().damageShown(0, now), "burst expires");
+    }
+
+    // ---- the game menu: save, load, quit ----
+
+    @TempDir
+    Path saveDir;
+
+    private void clickMenu(GameMenu.Choice choice) {
+        clickMenu(choice, 0);
+    }
+
+    private void clickMenu(GameMenu.Choice choice, int slot) {
+        Point p = GameMenu.centre(screen.menu().screen(), choice, slot);
+        screen.press(p.x, p.y);
+        screen.release();
+    }
+
+    /** Recruits Elija, opens her sheet and clicks the disk icon. */
+    private void openMenu() {
+        screen.setSaveGames(new SaveGames(saveDir));
+        if (party.members().isEmpty()) {
+            recruitElija();
+        }
+        if (!screen.sheet().isOpen()) {
+            screen.press(NAME_X, NAME_Y);
+        }
+        Point disk = CharacterSheet.diskCentre();
+        screen.press(disk.x, disk.y);
+        assertTrue(screen.menu().isOpen());
+        assertEquals(GameMenu.Screen.MAIN, screen.menu().screen());
+        render();
+    }
+
+    @Test
+    void cancelGoesBackToTheSheetAndTheGameIsPausedMeanwhile() {
+        openMenu();
+        long time = party.time();
+        assertFalse(screen.tick());
+        assertEquals(time, party.time(), "the clock stops while the menu is up");
+        screen.key(MovementPanel.Action.BACKWARD);
+        assertEquals(1, party.y(), "and the party can't move");
+        clickMenu(GameMenu.Choice.OPTIONS);
+        assertEquals(GameMenu.Screen.MAIN, screen.menu().screen(), "OPTIONS does nothing yet");
+        clickMenu(GameMenu.Choice.CANCEL);
+        assertFalse(screen.menu().isOpen());
+        assertTrue(screen.sheet().isOpen(), "back to the sheet");
+    }
+
+    @Test
+    void theWholeDiskIconOpensTheMenu() {
+        screen.setSaveGames(new SaveGames(saveDir));
+        recruitElija();
+        screen.press(NAME_X, NAME_Y);
+        // The disk spans viewport x 180-188, y 3-11 on DM's inventory graphic.
+        for (int[] p : new int[][] {{180, 3}, {188, 3}, {180, 11}, {188, 11}, {184, 7}}) {
+            screen.press(VIEW.x + p[0], VIEW.y + p[1]);
+            assertTrue(screen.menu().isOpen(), "at " + p[0] + "," + p[1]);
+            screen.escape();
+        }
+        screen.press(VIEW.x + 178, VIEW.y + 7);
+        assertFalse(screen.menu().isOpen(), "left of the disk");
+    }
+
+    @Test
+    void escapeCancels() {
+        openMenu();
+        screen.escape();
+        assertFalse(screen.menu().isOpen());
+    }
+
+    @Test
+    void escapeOpensTheMenuFromTheDungeonView() {
+        screen.setSaveGames(new SaveGames(saveDir));
+        assertFalse(screen.sheet().isOpen());
+        screen.escape();
+        assertTrue(screen.menu().isOpen());
+        assertEquals(GameMenu.Screen.MAIN, screen.menu().screen());
+        render();
+        clickMenu(GameMenu.Choice.CANCEL);
+        assertFalse(screen.menu().isOpen());
+        assertFalse(screen.sheet().isOpen(), "back to the dungeon, where it was opened");
+    }
+
+    @Test
+    void afterTheEndEscapeStillOffersALoad() {
+        screen.setSaveGames(new SaveGames(saveDir));
+        recruitElija();
+        screen.escape();
+        clickMenu(GameMenu.Choice.SAVE);
+        clickMenu(GameMenu.Choice.SLOT, 1);
+        clickMenu(GameMenu.Choice.OK);
+        Champion elija = party.members().get(0);
+        elija.takeDamage(elija.health() - 1);
+        pressForward(); // the fatal bump
+        assertTrue(screen.gameOver());
+        screen.escape();
+        render(); // the menu over the last scene
+        clickMenu(GameMenu.Choice.LOAD);
+        clickMenu(GameMenu.Choice.SLOT, 1);
+        clickMenu(GameMenu.Choice.OK);
+        assertFalse(screen.gameOver());
+        assertTrue(screen.party().members().get(0).health() > 0, "alive again, as saved");
+    }
+
+    @Test
+    void aSavedGameCanBeLoadedBack() {
+        openMenu();
+        clickMenu(GameMenu.Choice.SAVE);
+        assertEquals(GameMenu.Screen.SAVE_SLOTS, screen.menu().screen());
+        render();
+        clickMenu(GameMenu.Choice.SLOT, 1);
+        assertEquals(GameMenu.Screen.MESSAGE, screen.menu().screen(), "GAME SAVED");
+        render();
+        clickMenu(GameMenu.Choice.OK);
+        assertTrue(screen.sheet().isOpen());
+        screen.press(NAME_X, NAME_Y); // close the sheet
+
+        screen.key(MovementPanel.Action.BACKWARD);
+        assertEquals(2, party.y(), "walked off after saving");
+
+        openMenu();
+        clickMenu(GameMenu.Choice.LOAD);
+        render(); // slot 1 full, the rest empty
+        clickMenu(GameMenu.Choice.SLOT, 2);
+        assertEquals(GameMenu.Screen.LOAD_SLOTS, screen.menu().screen(), "an empty slot loads nothing");
+        clickMenu(GameMenu.Choice.SLOT, 1);
+        assertEquals(GameMenu.Screen.MESSAGE, screen.menu().screen(), "GAME LOADED");
+        clickMenu(GameMenu.Choice.OK);
+        assertEquals(1, screen.party().y(), "back where it was saved");
+        assertEquals("ELIJA", screen.party().members().get(0).name());
+        assertFalse(screen.sheet().isOpen());
+        render();
+    }
+
+    @Test
+    void saveAndQuitSavesThenQuits() {
+        int[] quits = {0};
+        screen.setOnQuit(() -> quits[0]++);
+        openMenu();
+        clickMenu(GameMenu.Choice.QUIT);
+        assertEquals(GameMenu.Screen.QUIT, screen.menu().screen());
+        render();
+        clickMenu(GameMenu.Choice.SAVE_AND_QUIT);
+        assertEquals(GameMenu.Screen.SAVE_SLOTS, screen.menu().screen());
+        clickMenu(GameMenu.Choice.SLOT, 3);
+        assertEquals(1, quits[0]);
+        assertTrue(Files.exists(saveDir.resolve("slot3.dmsave")));
+    }
+
+    @Test
+    void quitWithoutSaving() {
+        int[] quits = {0};
+        screen.setOnQuit(() -> quits[0]++);
+        openMenu();
+        clickMenu(GameMenu.Choice.QUIT);
+        clickMenu(GameMenu.Choice.CANCEL);
+        assertEquals(0, quits[0]);
+        assertFalse(screen.menu().isOpen());
+        openMenu();
+        clickMenu(GameMenu.Choice.QUIT);
+        clickMenu(GameMenu.Choice.QUIT_NOW);
+        assertEquals(1, quits[0]);
+        assertFalse(Files.exists(saveDir.resolve("slot1.dmsave")));
     }
 
     @Test

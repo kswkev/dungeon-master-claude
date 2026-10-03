@@ -1,12 +1,15 @@
 package dm.model;
 
+import java.io.Serializable;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
 import java.util.Random;
 
 /** The party: its champions, and its position and facing on the current map. */
-public final class Party {
+public final class Party implements Serializable {
+
+    private static final long serialVersionUID = 1L;
 
     /** Relative moves offered by the movement arrow panel. */
     public enum Move {

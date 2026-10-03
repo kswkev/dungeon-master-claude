@@ -11,6 +11,7 @@ import java.awt.Color;
 import java.awt.Graphics2D;
 import java.awt.Rectangle;
 import java.awt.image.BufferedImage;
+import java.util.Arrays;
 import java.util.List;
 
 /**
@@ -49,6 +50,11 @@ public final class ChampionBars {
     public void showDamage(int slot, int amount, long until) {
         damageShown[slot] = amount;
         damageUntil[slot] = until;
+    }
+
+    /** Takes every damage burst off (a game was loaded). */
+    void clearDamage() {
+        Arrays.fill(damageUntil, 0);
     }
 
     /** The damage currently shown on box {@code slot} at time {@code now}, or 0. */

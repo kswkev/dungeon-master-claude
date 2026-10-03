@@ -1,10 +1,12 @@
 package dm.model;
 
+import java.io.Serializable;
+
 /**
  * One map square. Keeps the raw byte so later sprints can decode the
  * per-type attribute bits (door state, stairs direction, pit open flag...).
  */
-public record Square(int raw) {
+public record Square(int raw) implements Serializable {
 
     public static final Square SOLID = new Square(0);
 
