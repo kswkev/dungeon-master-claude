@@ -575,7 +575,13 @@ public final class GameScreen {
         if (step != null) {
             DungeonMap.StepResult result = party.step(step);
             moved = result != null;
-            if (!moved) {
+            if (!moved && party.blockedByCreatures()) {
+                if (debug) {
+                    System.out.println("Creatures block the way: " + party.map().groups().stream()
+                            .filter(gr -> Math.abs(gr.x() - party.x()) + Math.abs(gr.y() - party.y()) == 1)
+                            .map(Object::toString).toList());
+                }
+            } else if (!moved) {
                 bump(step);
             } else {
                 arrived(result);
@@ -720,7 +726,10 @@ public final class GameScreen {
      */
     private void drawView(Graphics2D g) {
         int palette = party.paletteIndex();
-        if (palette == 0) {
+        int[] sets = CreatureArt.replacementSets(party.map().creatureTypes());
+        int[] colour9 = sets[0] < 0 ? null : CreatureArt.levels(sets[0]);
+        int[] colour10 = sets[1] < 0 ? null : CreatureArt.levels(sets[1]);
+        if (palette == 0 && colour9 == null && colour10 == null) {
             view.draw(g, party);
             return;
         }
@@ -733,7 +742,7 @@ public final class GameScreen {
             vg.dispose();
         }
         Rectangle v = ViewRenderer.VIEWPORT;
-        Darkness.apply(viewBuffer, v, palette);
+        Darkness.apply(viewBuffer, v, palette, colour9, colour10);
         g.drawImage(viewBuffer.getSubimage(v.x, v.y, v.width, v.height), v.x, v.y, null);
     }
 

@@ -1,5 +1,6 @@
 package dm.data;
 
+import dm.model.CreatureType;
 import dm.model.Direction;
 import dm.model.DungeonMap;
 import dm.model.Square;
@@ -9,7 +10,9 @@ import java.nio.file.Files;
 import java.nio.file.NoSuchFileException;
 import java.nio.file.Path;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.List;
+import java.util.Objects;
 
 /**
  * Loader for the original Dungeon Master DUNGEON.DAT.
@@ -189,6 +192,9 @@ public final class DungeonFile {
             FloorItemFinder.place(map, squares, squareThings);
             WallSensorFinder.find(squares, squareThings, lists.wall()).forEach(map::addWallSensor);
             TeleporterFinder.find(squares, squareThings).forEach(map::addTeleporter);
+            GroupFinder.find(squareThings, store).forEach(map::addGroup);
+            map.setCreatureTypes(Arrays.stream(lists.creatures()).mapToObj(CreatureType::of)
+                    .filter(Objects::nonNull).toList());
             map.initSensors();
             map.setDecorations(new DecorationFinder(lists, ornamentSeed, m, text)
                     .find(squares, squareThings));

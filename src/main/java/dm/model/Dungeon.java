@@ -54,6 +54,25 @@ public final class Dungeon implements Serializable {
         return null;
     }
 
+    /**
+     * The square at the same dungeon-wide position one level up, or null:
+     * DM draws a hole in the ceiling where that square is an open pit.
+     */
+    public Location above(DungeonMap map, int x, int y) {
+        int level = map.level() - 1;
+        for (DungeonMap m : maps) {
+            if (m == map || m.level() != level) {
+                continue;
+            }
+            int tx = x + map.offsetX() - m.offsetX();
+            int ty = y + map.offsetY() - m.offsetY();
+            if (m.inBounds(tx, ty)) {
+                return new Location(m, tx, ty);
+            }
+        }
+        return null;
+    }
+
     /** Where the stairs at (sx, sy) lead: the partner stairs one level up or down, or null. */
     public Location stairsPartner(DungeonMap map, int sx, int sy, boolean up) {
         int level = map.level() + (up ? -1 : 1);

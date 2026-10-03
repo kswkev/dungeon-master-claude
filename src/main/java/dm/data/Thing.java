@@ -20,6 +20,7 @@ record Thing(int type, int index, int cell, int[] words) {
     static final int TELEPORTER = 1;
     static final int TEXT = 2;
     static final int SENSOR = 3;
+    static final int GROUP = 4;
     static final int WEAPON = 5;
     static final int ARMOUR = 6;
     static final int SCROLL = 7;
@@ -65,7 +66,8 @@ record Thing(int type, int index, int cell, int[] words) {
             return out;
         }
 
-        private List<Thing> chain(int id) {
+        /** The things linked from {@code id} (a creature group's possessions, for one). */
+        List<Thing> chain(int id) {
             List<Thing> list = new ArrayList<>();
             while (id != END_OF_LIST && id != NONE && list.size() < MAX_LIST_LENGTH) {
                 int type = (id >>> 10) & 15;

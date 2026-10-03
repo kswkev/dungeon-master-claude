@@ -210,6 +210,37 @@ class RealDungeonTest {
         assertTrue(loaded.map().isPitOpen(7, 8), "and the lever still works");
     }
 
+    /** Sprint 14: Level 2's creatures are its 12 mummies and 20 screamers in 15 groups, and a save keeps them. */
+    @Test
+    void level2sCreatures(@TempDir Path dir) throws Exception {
+        DungeonMap level2 = dungeon.maps().get(1);
+        assertEquals(15, level2.groups().size());
+        assertEquals(12, level2.groups().stream().filter(g -> g.type() == dm.model.CreatureType.MUMMY)
+                .mapToInt(dm.model.Group::count).sum());
+        assertEquals(20, level2.groups().stream().filter(g -> g.type() == dm.model.CreatureType.SCREAMER)
+                .mapToInt(dm.model.Group::count).sum());
+        assertEquals(dm.model.CreatureType.MUMMY, level2.groupAt(1, 19).type());
+        Party p = level2(3, 19, Direction.WEST);
+        SaveGames saves = new SaveGames(dir);
+        saves.save(1, p);
+        assertEquals(15, saves.load(1).map().groups().size());
+    }
+
+    /** Sprint 14: DM's wall zones put every wall piece where our fallback table does. */
+    @Test
+    void wallZonesMatchTheTable() throws Exception {
+        assumeTrue(Files.exists(GRAPHICS), "needs the original GRAPHICS.DAT");
+        Art art = Art.load(GRAPHICS);
+        int[][] zone = {{712, 97, 32, 9}, {709, 102, 59, 19}, {704, 107, 77, 25}, {705, 106, 7, 25},
+                {706, 105, 134, 25}, {710, 101, 0, 19}, {711, 100, 146, 19}, {713, 96, 0, 9}, {714, 95, 164, 9}};
+        for (int[] z : zone) {
+            java.awt.image.BufferedImage img = art.sprite(z[1]);
+            int[] c = art.coord(z[0], img.getWidth(), img.getHeight());
+            assertEquals(z[2], c[0], "x of zone " + z[0]);
+            assertEquals(z[3], c[1], "y of zone " + z[0]);
+        }
+    }
+
     /** #15: the gold keyhole at (0,3) north is centred at eye level, row 48 of the viewport. */
     @Test
     void theKeyholeHangsAtEyeLevel() {

@@ -105,7 +105,12 @@ Run with `"-Ddm.debug=true"` to list every decoration on Level 1.
 - QUIT asks whether to save first: SAVE AND QUIT, QUIT or CANCEL.
 - The game is paused while the menu is open; CANCEL or Esc goes back. Esc works even after the party has died, to load a saved game.
 
-**Not yet:** creatures, combat and spells.
+**Sprint 14: done.** Creatures, and the view on DM's own layout:
+- The dungeon's creatures appear where DUNGEON.DAT puts them, drawn as the original draws them: front, side or back depending on which way they face, smaller and darker further away, in each level's own creature colours.
+- They stand in the way (no bump), stop thrown items, and turn to face you when they can see you. They don't move or attack yet.
+- Doors, stairs (now also seen side-on), pits (including the faint invisible ones and holes in the ceiling) and the champion mirrors are placed by the original's own screen layout data rather than by hand.
+
+**Not yet:** creature movement and attacks, combat and spells.
 
 ## Requirements
 

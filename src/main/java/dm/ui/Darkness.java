@@ -58,14 +58,35 @@ public final class Darkness {
 
     /** Redraws {@code area} of {@code image} in dungeon palette {@code palette} (0 changes nothing). */
     public static void apply(BufferedImage image, Rectangle area, int palette) {
-        if (palette <= 0) {
+        apply(image, area, palette, null, null);
+    }
+
+    /**
+     * As {@link #apply(BufferedImage, Rectangle, int)}, with colours 9 and 10
+     * replaced by a map's creature colour sets ({@code colour9} and
+     * {@code colour10}: RGB for the six light levels, or null to keep DM's
+     * own), as DM does on maps whose creatures name them. That applies at
+     * full light too.
+     */
+    public static void apply(BufferedImage image, Rectangle area, int palette, int[] colour9, int[] colour10) {
+        if (palette <= 0 && colour9 == null && colour10 == null) {
             return;
+        }
+        Map<Integer, int[]> byColour = BY_COLOUR;
+        if (colour9 != null || colour10 != null) {
+            byColour = new HashMap<>(BY_COLOUR);
+            if (colour9 != null) {
+                byColour.put(rgb(PALETTES[0][9]), colour9);
+            }
+            if (colour10 != null) {
+                byColour.put(rgb(PALETTES[0][10]), colour10);
+            }
         }
         int grey = rgb(PALETTES[palette][15]) & 0xFF; // how bright white still is
         for (int y = area.y; y < area.y + area.height; y++) {
             for (int x = area.x; x < area.x + area.width; x++) {
                 int argb = image.getRGB(x, y);
-                int[] versions = BY_COLOUR.get(argb & 0xFFFFFF);
+                int[] versions = byColour.get(argb & 0xFFFFFF);
                 int out;
                 if (versions != null) {
                     out = versions[palette];
