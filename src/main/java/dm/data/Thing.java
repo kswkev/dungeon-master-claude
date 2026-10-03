@@ -17,6 +17,7 @@ import java.util.List;
 record Thing(int type, int index, int cell, int[] words) {
 
     static final int DOOR = 0;
+    static final int TELEPORTER = 1;
     static final int TEXT = 2;
     static final int SENSOR = 3;
     static final int WEAPON = 5;

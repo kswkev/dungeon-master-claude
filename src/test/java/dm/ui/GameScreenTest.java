@@ -1,5 +1,6 @@
 package dm.ui;
 
+import dm.data.Sound;
 import dm.model.Champion;
 import dm.model.ChampionMirror;
 import dm.model.Decorations;
@@ -19,6 +20,7 @@ import java.awt.Graphics2D;
 import java.awt.Point;
 import java.awt.Rectangle;
 import java.awt.image.BufferedImage;
+import java.util.ArrayList;
 import java.util.List;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -506,6 +508,19 @@ class GameScreenTest {
         assertEquals(1, p.level());
         assertEquals(2, p.y(), "beside the up stairs, at the open end");
         assertEquals(Direction.SOUTH, p.facing(), "facing away from them");
+    }
+
+    @Test
+    void fallingIntoAPitScreams() {
+        // An open pit at (1,1) over a plain floor one level down; no plates, so the scream is the only sound.
+        DungeonMap top = DungeonMap.fromAscii(0, "###", "#O#", "#.#", "###");
+        DungeonMap bottom = DungeonMap.fromAscii(1, "###", "#.#", "#.#", "###");
+        Party p = new Party(List.of(top, bottom), 0, 1, 2, Direction.NORTH);
+        List<Sound> played = new ArrayList<>();
+        GameScreen s = new GameScreen(p, Art.none(), played::add, false);
+        s.press(MovementPanel.AREA.x + 40, MovementPanel.AREA.y + 10); // forward
+        assertSame(bottom, p.map());
+        assertEquals(1, played.size(), "the fall's scream");
     }
 
     @Test

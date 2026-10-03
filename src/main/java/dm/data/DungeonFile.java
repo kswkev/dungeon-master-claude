@@ -187,6 +187,8 @@ public final class DungeonFile {
             FloorSensorFinder.find(squares, squareThings, lists.floor()).forEach(map::addSensor);
             FloorItemFinder.place(map, squares, squareThings);
             WallSensorFinder.find(squares, squareThings, lists.wall()).forEach(map::addWallSensor);
+            TeleporterFinder.find(squares, squareThings).forEach(map::addTeleporter);
+            map.initSensors();
             map.setDecorations(new DecorationFinder(lists, ornamentSeed, m, text)
                     .find(squares, squareThings));
             maps.add(map);

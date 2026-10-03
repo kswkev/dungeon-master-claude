@@ -7,6 +7,7 @@ import java.util.List;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertSame;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /** Pressure plates opening doors, on a corridor like the Hall exit: door at (1,1), plate at (2,1). */
@@ -139,6 +140,74 @@ class FloorSensorTest {
         party.move(Party.Move.FORWARD);
         ticks(4);
         assertFalse(map.isPassable(1, 1));
+    }
+
+    private static final Item SWORD = ItemCatalog.item(Item.Category.WEAPON, 10);
+
+    /** Issue #17, as on Level 2 (25,1) -> door (27,0): an "anything" plate, SET with revert. */
+    @Test
+    void anItemOnThePlateHoldsTheDoorOpen() {
+        plate(FloorSensor.TYPE_ANY, FloorSensor.Effect.SET, false, true);
+        DungeonMap.StepResult r = map.dropItem(2, 1, 0, SWORD);
+        assertTrue(r.doorStarted());
+        assertTrue(r.click());
+        ticks(4);
+        assertTrue(map.isPassable(1, 1), "dropping an item opens the door");
+
+        DungeonMap.Pickup p = map.pickUpItem(2, 1, 0);
+        assertSame(SWORD, p.item());
+        assertTrue(p.result().doorStarted());
+        ticks(4);
+        assertEquals(DungeonMap.DOOR_CLOSED, map.doorState(1, 1), "picking it up closes it");
+    }
+
+    @Test
+    void theDoorStaysOpenWhileAnItemIsLeftBehind() {
+        plate(FloorSensor.TYPE_ANY, FloorSensor.Effect.SET, false, true);
+        party.move(Party.Move.FORWARD); // onto the plate
+        map.dropItem(2, 1, 0, SWORD);
+        party.move(Party.Move.BACKWARD);
+        ticks(4);
+        assertTrue(map.isPassable(1, 1), "the sword still presses the plate");
+
+        party.move(Party.Move.FORWARD);
+        map.pickUpItem(2, 1, 0);
+        ticks(4);
+        assertTrue(map.isPassable(1, 1), "the party still stands on it");
+        party.move(Party.Move.BACKWARD);
+        ticks(4);
+        assertEquals(DungeonMap.DOOR_CLOSED, map.doorState(1, 1), "empty at last");
+    }
+
+    @Test
+    void aThrownItemLandingOnThePlateOpensTheDoor() {
+        plate(FloorSensor.TYPE_ANY, FloorSensor.Effect.SET, false, true);
+        map.throwItem(SWORD, 3, 1, Direction.WEST, false, 4);
+        map.tickProjectiles();
+        DungeonMap.ProjectileTick landed = map.tickProjectiles(); // the closed door stops it on the plate
+        assertTrue(landed.click());
+        assertFalse(map.itemsAt(2, 1, Direction.WEST.cellOf(0)).isEmpty());
+        ticks(4);
+        assertTrue(map.isPassable(1, 1));
+    }
+
+    @Test
+    void partyPlatesIgnoreItems() {
+        plate(FloorSensor.TYPE_PARTY, FloorSensor.Effect.SET, false, true);
+        assertFalse(map.dropItem(2, 1, 0, SWORD).doorStarted());
+        ticks(4);
+        assertEquals(DungeonMap.DOOR_CLOSED, map.doorState(1, 1));
+    }
+
+    @Test
+    void itemsAlreadyOnAPlateAtTheStartDontFireIt() {
+        map.addItem(2, 1, 0, SWORD);
+        plate(FloorSensor.TYPE_ANY, FloorSensor.Effect.TOGGLE, false, false);
+        map.initSensors();
+        assertFalse(map.dropItem(2, 1, 1, SWORD).doorStarted(), "already pressed");
+        party.move(Party.Move.FORWARD);
+        ticks(4);
+        assertEquals(DungeonMap.DOOR_CLOSED, map.doorState(1, 1), "still pressed when the party arrives");
     }
 
     @Test
