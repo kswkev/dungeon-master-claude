@@ -390,6 +390,24 @@ public final class GameScreen {
         return party.held() != null;
     }
 
+    /**
+     * A movement key ({@link KeyMap}): the same as clicking that arrow, which
+     * lights up while the key is held. Ignored while a sheet is open or once
+     * the game is over, like the arrows.
+     */
+    public void key(MovementPanel.Action action) {
+        if (action == null || gameOver || sheet.isOpen()) {
+            return;
+        }
+        arrows.setPressed(action);
+        move(action);
+    }
+
+    /** A movement key was let go: its arrow stops being lit. */
+    public void keyReleased() {
+        arrows.setPressed(null);
+    }
+
     public void release() {
         arrows.setPressed(null);
         sheet.setPressingEye(false);

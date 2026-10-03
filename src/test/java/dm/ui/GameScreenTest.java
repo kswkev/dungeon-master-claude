@@ -95,6 +95,26 @@ class GameScreenTest {
     }
 
     @Test
+    void keysMoveLikeTheArrows() {
+        screen.key(MovementPanel.Action.BACKWARD); // from (1,1) facing north to (1,2)
+        assertEquals(2, party.y());
+        screen.keyReleased();
+        screen.key(MovementPanel.Action.TURN_LEFT);
+        assertEquals(Direction.WEST, party.facing());
+        screen.key(MovementPanel.Action.FORWARD); // into the wall
+        assertEquals(1, bumps, "a bump, as with the arrow");
+        render();
+    }
+
+    @Test
+    void keysAreIgnoredWhileASheetIsOpen() {
+        recruitElija();
+        screen.press(NAME_X, NAME_Y);
+        screen.key(MovementPanel.Action.BACKWARD);
+        assertEquals(1, party.y());
+    }
+
+    @Test
     void aFatalBumpKillsAndEndsTheGame() {
         recruitElija();
         Champion elija = party.members().get(0);

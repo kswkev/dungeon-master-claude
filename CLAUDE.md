@@ -5,7 +5,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 ## Project
 
 A Java/Swing remake of FTL's *Dungeon Master* (1988), built sprint by sprint.
-- Sprint 1: walk Level 1 with DM's six-button arrow panel, which is the only input.
+- Sprint 1: walk Level 1 with DM's six-button arrow panel.
 - Sprint 2: the Hall of Champions. Mirror portraits, the character sheet, Resurrect (not Reincarnate), and champion bars along the top.
 - Sprint 3: wall bumps. The original thud, 1 damage to the front-row champions with DM's damage burst on their boxes, plus the red flash.
 - Sprint 4: the original dungeon textures. Walls, floor and ceiling are pixel-exact; doors, stairs and pits are fitted. Wall/floor decorations are deferred.
@@ -16,7 +16,7 @@ A Java/Swing remake of FTL's *Dungeon Master* (1988), built sprint by sprint.
 - Sprint 9: wall interaction (switches, buttons, keyholes, coin slots, torch holders, alcoves, door buttons, AND/OR gates, pits as targets), front wall decorations at DM's positions, and hand clicks in the status boxes (#12).
 - Sprint 10: stairs between levels.
 - Sprint 11: bugs #14-#17 (alcove clicks, eye-level keyholes and levers, levers that toggle, plates pressed by items), pits that drop the party and items a level, and teleporters.
-- Sprint 12 (in progress): sensor bits and teleporter scopes fixed (#20), champion upkeep (food, water, stamina, mana, health over time; eating and drinking), fountains, torches and darkness, death. Still to come: keyboard movement.
+- Sprint 12: sensor bits and teleporter scopes fixed (#20), champion upkeep (food, water, stamina, mana, health over time; eating and drinking), fountains, torches and darkness, death, and keyboard movement.
 
 Creatures, combat and spells are not implemented yet.
 
@@ -202,6 +202,7 @@ Code lives under `src/main/java/dm/`, in three layers.
   6. the rest of the view (floor or throw);
   7. the arrows.
   The arrows and the dungeon are ignored while a sheet is open.
+- **Keyboard** (`KeyMap`, `GameScreen.key`): keys go through the same path as the arrow buttons, lighting the arrow while held. The PC numpad works (7/8/9 turn left, forward, turn right; 4/5/6 left, back, right), with Num Lock off too: keypad keys are told apart by `KEY_LOCATION_NUMPAD`, so the keypad's Left sidesteps while the arrow key's Left turns. The arrow keys work (up/down move, left/right turn), and so do W/A/S/D with Q/E to turn. Keys are ignored while a sheet is open or after the end.
 - Screen regions match the original layout:
   - the dungeon view is the `ViewRenderer.VIEWPORT` rectangle (the character sheet replaces it while open);
   - the arrows are `MovementPanel.AREA`;

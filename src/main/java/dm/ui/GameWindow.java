@@ -14,6 +14,8 @@ import java.awt.Point;
 import java.awt.Rectangle;
 import java.awt.RenderingHints;
 import java.awt.Toolkit;
+import java.awt.event.KeyAdapter;
+import java.awt.event.KeyEvent;
 import java.awt.event.MouseAdapter;
 import java.awt.event.MouseEvent;
 import java.awt.image.BufferedImage;
@@ -81,6 +83,7 @@ public final class GameWindow extends JFrame {
             MouseAdapter mouse = new MouseAdapter() {
                 @Override
                 public void mousePressed(MouseEvent e) {
+                    requestFocusInWindow();
                     if (e.getButton() == MouseEvent.BUTTON1) {
                         int[] p = toScreen(e.getX(), e.getY());
                         game.press(p[0], p[1]);
@@ -118,6 +121,32 @@ public final class GameWindow extends JFrame {
             };
             addMouseListener(mouse);
             addMouseMotionListener(mouse);
+
+            setFocusable(true);
+            addKeyListener(new KeyAdapter() {
+                @Override
+                public void keyPressed(KeyEvent e) {
+                    MovementPanel.Action action = KeyMap.action(e.getKeyCode(), e.getKeyLocation());
+                    if (action != null) {
+                        game.key(action);
+                        repaint();
+                    }
+                }
+
+                @Override
+                public void keyReleased(KeyEvent e) {
+                    if (KeyMap.action(e.getKeyCode(), e.getKeyLocation()) != null) {
+                        game.keyReleased();
+                        repaint();
+                    }
+                }
+            });
+        }
+
+        @Override
+        public void addNotify() {
+            super.addNotify();
+            requestFocusInWindow(); // keys go to the game as soon as the window shows
         }
 
         /** While an item is held its icon, drawn by the game, is the pointer, so the system cursor is hidden. */
