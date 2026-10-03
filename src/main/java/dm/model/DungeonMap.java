@@ -301,8 +301,11 @@ public final class DungeonMap {
 
     /**
      * Re-checks the floor sensors on (x, y) after the party or an item came
-     * or went (#17). A sensor that becomes pressed applies its effect; one
-     * that is released undoes it if it is a HOLD or revert sensor.
+     * or went (#17). A sensor that becomes pressed applies its effect, and a
+     * HOLD sensor that is released undoes it. The revert flag swaps pressing
+     * and releasing, as "revert effect when stepping in and out" in DM: a
+     * SET + revert plate fires when it's left, and a HOLD + revert plate
+     * clears while pressed (Level 2's (25,3) holds the pit at (24,5) shut).
      */
     private void updateSensors(int x, int y, Outcome out) {
         for (FloorSensor s : sensors) {
@@ -314,30 +317,23 @@ public final class DungeonMap {
                 continue;
             }
             s.setPressed(now);
+            boolean trigger = now != s.revert();
             FloorSensor.Effect effect;
-            if (now) {
+            if (s.effect() == FloorSensor.Effect.HOLD) {
+                effect = trigger ? FloorSensor.Effect.SET : FloorSensor.Effect.CLEAR;
+            } else if (trigger) {
                 effect = s.effect();
-            } else if (s.effect() == FloorSensor.Effect.HOLD || s.revert()) {
-                effect = opposite(s.effect());
             } else {
                 continue;
             }
             applyEffect(s.targetX(), s.targetY(), 0, effect, out, 0);
             out.sound |= s.audible();
-            if (now) {
+            if (trigger) {
                 s.used();
             }
         }
     }
 
-    /** The effect that undoes {@code effect}: set and clear swap, a toggle toggles back. */
-    private static FloorSensor.Effect opposite(FloorSensor.Effect effect) {
-        return switch (effect) {
-            case SET, HOLD -> FloorSensor.Effect.CLEAR;
-            case CLEAR -> FloorSensor.Effect.SET;
-            case TOGGLE -> FloorSensor.Effect.TOGGLE;
-        };
-    }
 
     /** What a chain of sensor effects did, collected as it runs. */
     private static final class Outcome {
@@ -387,11 +383,17 @@ public final class DungeonMap {
                         if (gate.type() != WallSensor.TYPE_AND_OR_GATE || !gate.enabled()) {
                             continue;
                         }
+                        // Like a plate: satisfied is pressed, revert swaps the two, HOLD clears on leaving.
                         boolean was = gate.gateSatisfied();
-                        if (gate.gateInput(cell, effect)) {
+                        boolean now = gate.gateInput(cell, effect);
+                        boolean trigger = now != gate.revert();
+                        if (gate.effect() == FloorSensor.Effect.HOLD) {
+                            if (now || was) {
+                                fire(gate, trigger ? FloorSensor.Effect.SET : FloorSensor.Effect.CLEAR,
+                                        out, depth + 1, null);
+                            }
+                        } else if (trigger) {
                             fire(gate, gate.effect(), out, depth + 1, null);
-                        } else if (was && gate.revert()) {
-                            fire(gate, opposite(gate.effect()), out, depth + 1, null);
                         }
                     }
                 }
@@ -495,8 +497,8 @@ public final class DungeonMap {
         return inBounds(x, y) && squares[x][y].type() == SquareType.TELEPORTER && teleporterOpen[x][y];
     }
 
-    /** The open teleporter on (x, y) that moves {@code what} (a {@link Teleporter} scope bit), or null. */
-    public Teleporter activeTeleporter(int x, int y, int what) {
+    /** The open teleporter on (x, y) that moves {@code what}, or null. */
+    public Teleporter activeTeleporter(int x, int y, Teleporter.Kind what) {
         Teleporter t = teleporterAt(x, y);
         return t != null && isTeleporterOpen(x, y) && t.moves(what) ? t : null;
     }
@@ -577,10 +579,8 @@ public final class DungeonMap {
      * Sensors that fired locally then rotate their side once each.
      *
      * <p>Levers toggle (#16). DM's levers are a pair of click sensors: a
-     * local one that rotates the side (flipping the picture) and a remote one
-     * that, in the data, always says SET, yet in the game each pull reverses
-     * its target. So on a side with a local rotating sensor, a remote click
-     * sensor's pull toggles its target: a door or pit, or a gate input,
+     * local one that rotates the side (flipping the picture) and a remote
+     * TOGGLE one that reverses its target: a door or pit, or a gate input,
      * which then goes on and off with the lever.
      *
      * <p>As in DM, clicking a side that shows an alcove is an alcove click
@@ -596,18 +596,21 @@ public final class DungeonMap {
         List<WallSensor> rotate = new ArrayList<>();
         int cell = side.ordinal();
         boolean alcove = isAlcove(wallOrnament(x, y, side));
-        boolean lever = hasLocalRotation(x, y, side);
         for (WallSensor s : new ArrayList<>(wallSensors(x, y, side))) {
             if (!s.enabled()) {
                 continue;
             }
             Item held = party.held();
+            // Revert turns the item tests round (DM Encyclopaedia): an empty hand
+            // instead of any item, any other item instead of the one named.
+            boolean match = held != null && iconOf.applyAsInt(held) == s.data();
+            boolean wanted = s.revert() ? held != null && !match : match;
             boolean fires = switch (s.type()) {
                 case WallSensor.TYPE_CLICK -> !alcove;
-                case WallSensor.TYPE_CLICK_WITH_ANY_ITEM -> held != null;
-                case WallSensor.TYPE_CLICK_WITH_ITEM -> held != null && iconOf.applyAsInt(held) == s.data();
+                case WallSensor.TYPE_CLICK_WITH_ANY_ITEM -> (held != null) != s.revert();
+                case WallSensor.TYPE_CLICK_WITH_ITEM -> wanted;
                 case WallSensor.TYPE_CLICK_WITH_ITEM_USED_UP -> {
-                    if (held != null && iconOf.applyAsInt(held) == s.data()) {
+                    if (wanted) {
                         party.setHeld(null);
                         out.handChanged = true;
                         yield true;
@@ -618,8 +621,7 @@ public final class DungeonMap {
                 default -> false; // disabled sensors, gates (fed by events) and types not handled yet
             };
             if (fires) {
-                boolean pulled = lever && s.type() == WallSensor.TYPE_CLICK && !s.local() && !s.revert();
-                fire(s, pulled ? FloorSensor.Effect.TOGGLE : s.effect(), out, 0, rotate);
+                fire(s, s.effect(), out, 0, rotate);
             }
         }
         // Each local firing rotates the side once: the first sensor moves to the end.
@@ -645,16 +647,6 @@ public final class DungeonMap {
             return WallClick.NOTHING;
         }
         return new WallClick(out.fired, out.sound, out.doorStarted, out.handChanged);
-    }
-
-    /** Whether a side has a sensor that rotates it when clicked: the moving half of a lever. */
-    private boolean hasLocalRotation(int x, int y, Direction side) {
-        for (WallSensor s : wallSensors(x, y, side)) {
-            if (s.local() && s.type() == WallSensor.TYPE_CLICK && s.localAction() != WallSensor.ACTION_ADD_EXPERIENCE) {
-                return true;
-            }
-        }
-        return false;
     }
 
     /** A storage sensor: swap the stored item (icon {@code icon}) with an empty hand, or take it back. */
@@ -758,7 +750,7 @@ public final class DungeonMap {
                 below.map().drop(below.x(), below.y(), cell, item, out, depth + 1);
                 return;
             }
-            Teleporter t = activeTeleporter(x, y, Teleporter.SCOPE_OBJECTS);
+            Teleporter t = activeTeleporter(x, y, Teleporter.Kind.ITEM);
             Dungeon.Location to = t == null ? null : destination(t);
             if (to != null) {
                 out.sound |= t.audible();
@@ -828,7 +820,7 @@ public final class DungeonMap {
         for (Projectile p : current) {
             Projectile next = p.advance();
             if (p.range() > 0 && isPassable(next.x(), next.y())) {
-                Teleporter t = activeTeleporter(next.x(), next.y(), Teleporter.SCOPE_OBJECTS);
+                Teleporter t = activeTeleporter(next.x(), next.y(), Teleporter.Kind.ITEM);
                 Dungeon.Location to = t == null ? null : destination(t);
                 if (to != null) {
                     click |= t.audible();

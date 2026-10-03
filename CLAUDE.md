@@ -57,7 +57,7 @@ Code lives under `src/main/java/dm/`, in three layers.
   - Pits: bit 3 open, bit 2 imaginary (drawn, nothing falls), bit 0 invisible (not drawn, things still fall).
   - Teleporters: bit 3 open (active), bit 2 visible.
 - **Teleporters** (`TeleporterFinder` → `dm.model.Teleporter`): thing type 1 on a teleporter square, layout from ReDMCSB.
-  - Word 1: target X bits 0-4, Y bits 5-9, rotation bits 10-11, absolute rotation bit 12, scope bits 13-14 (1 objects, 2 creatures and the party), audible bit 15.
+  - Word 1: target X bits 0-4, Y bits 5-9, rotation bits 10-11, absolute rotation bit 12, scope bits 13-14 (0 items, 1 creatures, 2 items and the party, 3 everything; checked in the original on Level 2 (13,16), #20), audible bit 15.
   - Word 2: target **map index** (not level) in bits 8-15.
   - Verified on the PC file: all 175 teleporters lead to an open square on an existing map.
   - A teleporter that targets its own square is a "spinner": it only turns the party.
@@ -108,7 +108,7 @@ Code lives under `src/main/java/dm/`, in three layers.
   - Handled types: 0 disabled, 1 click, 2 any item, 3 specific item (kept), 4 specific item (used up: keyholes, coin slots), 5 AND/OR gate, 13 single-object storage (torch holders). Others are ignored.
 - **Wall-side objects:** things on a wall square whose cell is the side, such as alcove and torch-holder contents. `FloorItemFinder` loads them into the same piles, except on champion-mirror sides.
   - Word 1: type in bits 0-6.
-  - Word 2: once-only bit 0, effect bits 1-2 (set/clear/toggle/hold), revert bit 3, audible bit 4, floor-ornament ordinal bits 12-15.
+  - Word 2 (`SensorBits`, from the DM Encyclopaedia): once-only bit 2, effect bits 3-4 (set/clear/toggle/hold), revert bit 5, audible bit 6, delay bits 7-10 (not modelled), local bit 11, ornament ordinal bits 12-15. Bits 0-1 are clear on all 660 sensors. Until #20 everything was read two bits too low.
   - Word 3: target X in bits 6-10, Y in bits 11-15.
   - The layout was verified on the Level 1 Hall plate (6,9) → door (5,9).
   - Only door targets do anything yet.
@@ -130,7 +130,7 @@ Code lives under `src/main/java/dm/`, in three layers.
   - Only the current map ticks.
 - **Pits and teleporters** (`Party.settle`, run after every step, after wall clicks, and on every tick):
   - An open, non-imaginary pit (`dropsThrough`) drops the party to the same dungeon-wide square one level down (`Dungeon.below`), keeping its facing. Each champion takes DM's fall damage (attack 20: 10 + random(10), no armour yet; `Party.setRandom` for tests). It keeps falling through further pits.
-  - An open teleporter whose scope includes creatures moves the party to its target and turns it (relative, or absolute with `Teleporter.turn`). Teleporters chain, up to 8 hops; a spinner only turns.
+  - An open teleporter whose scope includes the party (2 or 3) moves it to its target and turns it (relative, or absolute with `Teleporter.turn`). Teleporters chain, up to 8 hops; a spinner only turns.
   - `StepResult` carries `fell`, `teleported` and per-member `damage`; `and()` merges results.
   - `applyEffect` opens, closes and toggles pits and teleporters (live `pitOpen`/`teleporterOpen`).
 - `Party` holds up to 4 `Champion`s. `recruit(mirror)` adds the champion and marks the `ChampionMirror` as taken, so it renders empty. `facingMirror()` is the untaken mirror on the adjacent wall straight ahead.
@@ -138,7 +138,7 @@ Code lives under `src/main/java/dm/`, in three layers.
 - **Doors and sensors in `DungeonMap`:**
   - Doors have live state (0 open … 4 closed, 5 broken), seeded from the square byte. `moveDoor`/`toggleDoor` set a target, and `tickDoors()` steps toward it once per game tick. As in DM, the door sound plays on every step except the last (`DoorTick.rattled`), so a full open or close rattles 3 times.
   - `isPassable` uses the live state, so use it (not `Square.isPassable`) for doors.
-  - Floor sensors have a live `pressed` state: pressed while the party (if `triggeredBy` it) or, for type 1 only (`acceptsItems`), any item is on the square. Becoming pressed fires the effect; being released undoes it if HOLD or revert (#17). DM's type 2 is party/creature and type 3 party only, so neither counts items.
+  - Floor sensors have a live `pressed` state: pressed while the party (if `triggeredBy` it) or, for type 1 only (`acceptsItems`), any item is on the square. Becoming pressed fires the effect; a released HOLD sensor clears. Revert swaps pressing and releasing: SET+revert fires on leaving, HOLD+revert clears while pressed (Level 2 (25,3) holds the pit at (24,5) shut). DM's type 2 is party/creature and type 3 party only, so neither counts items.
   - The map tracks the party while it's on it (`partyMoved`, `partyLeft`, `placeParty`). `updateSensors(x, y)` re-checks a square after the party moves, or after `dropItem`/`pickUpItem`. `initSensors` sets the starting state silently after loading.
   - Type-3 (party) sensors need ≥1 champion. In DM an empty party is the ghost Theron.
 - **Floor items:** `FloorItemFinder` puts every object thing on a non-wall square into `DungeonMap`'s piles (`itemsAt`/`addItem`/`takeItem`), one pile per cell (0 NW, 1 NE, 2 SE, 3 SW), with the top item last.
@@ -150,12 +150,12 @@ Code lives under `src/main/java/dm/`, in three layers.
   - The decoration shown is the *last* sensor's decoration that has one (`wallOrnament`), so rotation flips pictures: a switch's lever, or a torch holder going empty.
   - After the sensors, an alcove (global decoration 1-3) swaps items with the hand.
   - **Alcove clicks (#14):** if the side shows an alcove *before* the click, only item sensors (types 2-4) run; plain click and storage sensors don't, so a button that revealed an alcove doesn't hide it again.
-  - **Levers (#16):** a lever is a local rotating click sensor plus a remote click sensor whose data always says SET. On a side with a local rotating sensor, the remote one's pull sends TOGGLE, so every pull reverses its door, pit or gate input. Checked on Level 2: (6,8) → pit (7,8), (4,10) → door (5,9).
+  - **Levers (#16):** a lever is a local rotating click sensor plus a remote TOGGLE click sensor, so every pull reverses its door, pit or gate input. Item sensors (types 2-4) with revert want an empty hand / any other item instead. Checked on Level 2: (6,8) → pit (7,8), (4,10) → door (5,9).
   - `iconOf` comes from the UI (`Art.iconIndex`), because icon numbers live in GRAPHICS.DAT.
 - **`applyEffect`:**
   - doors: set = open, clear = close, toggle;
   - pits: live `isPitOpen` state, visual only;
-  - wall squares: each AND/OR gate there gets the effect as input bit = cell. When the value hits the target it fires; with revert it fires the opposite when it leaves the target.
+  - wall squares: each AND/OR gate there gets the effect as input bit = cell. A gate is "pressed" while its value equals the target, with the same HOLD/revert rules as plates.
   - Floor plates use it too. HOLD counts as SET.
 - `pressDoorButton` toggles a door.
 - **Throwing:** `DungeonMap.throwItem` adds a `Projectile`, and `tickProjectiles()` (run from `GameScreen.tick()`) moves it one square per tick.

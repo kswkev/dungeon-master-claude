@@ -33,6 +33,7 @@ class WallSensorTest {
     private static final FloorSensor.Effect SET = FloorSensor.Effect.SET;
     private static final FloorSensor.Effect CLEAR = FloorSensor.Effect.CLEAR;
     private static final FloorSensor.Effect TOGGLE = FloorSensor.Effect.TOGGLE;
+    private static final FloorSensor.Effect HOLD = FloorSensor.Effect.HOLD;
 
     private DungeonMap map;
     private Party party;
@@ -158,8 +159,8 @@ class WallSensorTest {
 
     @Test
     void anAndGateOpensItsDoorOnlyWithBothInputsAndRevertsWhenOneGoesOff() {
-        // Gate on wall (6,0): inputs 0 and 1 must both be on (data 0x30); revert; opens the door at (3,1).
-        WallSensor gate = new WallSensor(6, 0, S, WallSensor.TYPE_AND_OR_GATE, 0x30, SET, false, true, true, false,
+        // Gate on wall (6,0): inputs 0 and 1 must both be on (data 0x30); HOLD: the door at (3,1) is open only while they are.
+        WallSensor gate = new WallSensor(6, 0, S, WallSensor.TYPE_AND_OR_GATE, 0x30, HOLD, false, false, true, false,
                 0, 3, 1, 0, -1);
         map.addWallSensor(gate);
         remote(1, WallSensor.TYPE_CLICK, 0, TOGGLE, true, false, 6, 0, 0, -1);
@@ -170,7 +171,7 @@ class WallSensorTest {
         click(2);
         assertTrue(doorHeadingOpen(), "both on");
         click(1);
-        assertFalse(doorHeadingOpen(), "revert closes it again");
+        assertFalse(doorHeadingOpen(), "HOLD closes it again");
     }
 
     @Test
@@ -229,10 +230,10 @@ class WallSensorTest {
         assertEquals(1, map.wallOrnament(2, 0, S), "putting it back keeps the alcove");
     }
 
-    /** A lever as in DM's data (#16): a local rotating sensor (45) and a remote SET sensor (44). */
+    /** A lever as in DM's data (#16): a local rotating sensor (45) and a remote TOGGLE sensor (44). */
     private void lever(int x, int tx, int ty, int cell) {
         local(x, WallSensor.TYPE_CLICK, 0, 45);
-        remote(x, WallSensor.TYPE_CLICK, 0, SET, true, false, tx, ty, cell, 44);
+        remote(x, WallSensor.TYPE_CLICK, 0, TOGGLE, true, false, tx, ty, cell, 44);
     }
 
     @Test
@@ -263,7 +264,7 @@ class WallSensorTest {
 
     @Test
     void twoSetLeversFeedAnAndGate() {
-        WallSensor gate = new WallSensor(6, 0, S, WallSensor.TYPE_AND_OR_GATE, 0x30, SET, false, true, true, false,
+        WallSensor gate = new WallSensor(6, 0, S, WallSensor.TYPE_AND_OR_GATE, 0x30, HOLD, false, false, true, false,
                 0, 3, 1, 0, -1);
         map.addWallSensor(gate);
         lever(1, 6, 0, 0);
@@ -281,7 +282,7 @@ class WallSensorTest {
 
     @Test
     void anAndGateFedBySetSwitchesWithoutLevers() {
-        WallSensor gate = new WallSensor(6, 0, S, WallSensor.TYPE_AND_OR_GATE, 0x30, SET, false, true, true, false,
+        WallSensor gate = new WallSensor(6, 0, S, WallSensor.TYPE_AND_OR_GATE, 0x30, HOLD, false, false, true, false,
                 0, 3, 1, 0, -1);
         map.addWallSensor(gate);
         remote(1, WallSensor.TYPE_CLICK, 0, SET, true, false, 6, 0, 0, -1);

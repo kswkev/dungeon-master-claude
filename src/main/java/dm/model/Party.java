@@ -256,7 +256,7 @@ public final class Party {
     /**
      * Lets the square under the party act on it, as many times as it takes:
      * an open pit (not an imaginary one) drops it to the same spot one level
-     * down, hurting every champion; an open teleporter that moves creatures
+     * down, hurting every champion; an open teleporter that moves the party
      * sends it to its target, turned as the teleporter says (one that
      * targets its own square is a spinner: it only turns). Called after
      * every step, and by the game whenever a sensor may have opened a pit or
@@ -271,7 +271,7 @@ public final class Party {
                         .and(new DungeonMap.StepResult(false, false, false, true, false, fall()));
                 continue;
             }
-            Teleporter t = map.activeTeleporter(x, y, Teleporter.SCOPE_CREATURES);
+            Teleporter t = map.activeTeleporter(x, y, Teleporter.Kind.PARTY);
             Dungeon.Location to = t == null ? null : map.destination(t);
             if (to == null) {
                 break;

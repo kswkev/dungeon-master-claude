@@ -119,6 +119,41 @@ class RealDungeonTest {
         assertFalse(p.map().get(p.x(), p.y()).looksSolid());
     }
 
+    /** #20: the scope-0 teleporter at (13,16) lets the party walk onto it... */
+    @Test
+    void theItemsOnlyTeleporterLeavesThePartyAlone() {
+        Party p = level2(12, 16, Direction.EAST);
+        DungeonMap.StepResult r = p.step(Party.Move.FORWARD);
+        assertFalse(r.teleported());
+        assertEquals(13, p.x());
+        assertEquals(16, p.y());
+    }
+
+    /** ...but a thrown item is sent to the plate at (14,14), which closes the pit at (13,15), as in the original. */
+    @Test
+    void anItemThrownIntoTheTeleporterClosesThePit() {
+        Party p = level2(12, 16, Direction.EAST);
+        DungeonMap map = p.map();
+        assertTrue(map.isPitOpen(13, 15));
+        map.throwItem(ItemCatalog.item(Item.Category.WEAPON, 10), 12, 16, Direction.EAST, false, Party.THROW_RANGE);
+        for (int i = 0; i < Party.THROW_RANGE + 1; i++) {
+            map.tickProjectiles();
+        }
+        assertTrue(map.hasItems(14, 14), "teleported onto the plate");
+        assertFalse(map.isPitOpen(13, 15));
+    }
+
+    /** #20's sensor bits: the HOLD + revert plate at (25,3) keeps the pit at (24,5) shut while an item is on it. */
+    @Test
+    void anItemOnThePlateHoldsThePitShut() {
+        DungeonMap map = level2(25, 4, Direction.NORTH).map();
+        assertTrue(map.isPitOpen(24, 5));
+        map.dropItem(25, 3, 0, ItemCatalog.item(Item.Category.WEAPON, 10));
+        assertFalse(map.isPitOpen(24, 5));
+        map.pickUpItem(25, 3, 0);
+        assertTrue(map.isPitOpen(24, 5));
+    }
+
     /** #15: the gold keyhole at (0,3) north is centred at eye level, row 48 of the viewport. */
     @Test
     void theKeyholeHangsAtEyeLevel() {

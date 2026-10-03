@@ -1,7 +1,6 @@
 package dm.data;
 
 import dm.model.Direction;
-import dm.model.FloorSensor;
 import dm.model.Square;
 import dm.model.SquareType;
 import dm.model.WallSensor;
@@ -18,8 +17,8 @@ import java.util.List;
  * <pre>
  *   word 1  bits 0-6 type, bits 7-15 data (for item sensors, the required
  *           item's inventory icon number; for gates, the start and target values)
- *   word 2  bit 0 once only, bits 1-2 effect (set/clear/toggle/hold),
- *           bit 3 revert, bit 4 audible, bit 11 local,
+ *   word 2  bit 2 once only, bits 3-4 effect (set/clear/toggle/hold),
+ *           bit 5 revert, bit 6 audible, bits 7-10 delay, bit 11 local,
  *           bits 12-15 wall ornament ordinal (1-based into the map's list)
  *   word 3  remote: bits 4-5 target cell, 6-10 target X, 11-15 target Y;
  *           local: bits 4-15 the action (10 = add experience, else rotate)
@@ -58,10 +57,10 @@ final class WallSensorFinder {
         return new WallSensor(x, y, side,
                 words[1] & 0x7F,
                 words[1] >>> 7,
-                FloorSensor.Effect.values()[(attributes >>> 1) & 3],
-                (attributes & 1) != 0,
-                (attributes & 0x08) != 0,
-                (attributes & 0x10) != 0,
+                SensorBits.effect(attributes),
+                SensorBits.onceOnly(attributes),
+                SensorBits.revert(attributes),
+                SensorBits.audible(attributes),
                 local,
                 local ? target >>> 4 : 0,
                 (target >>> 6) & 0x1F,

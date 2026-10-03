@@ -26,11 +26,12 @@ class WallSensorFinderTest {
 
     @Test
     void goldKeyhole() {
-        // Level 2 (0,3) north: keyhole wanting icon 184 (GOLD KEY), toggles the door at (1,3).
+        // Level 2 (0,3) north: keyhole wanting icon 184 (GOLD KEY), once only, opens the door at (1,3).
         WallSensor s = decode((184 << 7) | 4, 0xC004, 0x1840);
         assertEquals(WallSensor.TYPE_CLICK_WITH_ITEM_USED_UP, s.type());
         assertEquals(184, s.data());
-        assertEquals(FloorSensor.Effect.TOGGLE, s.effect());
+        assertEquals(FloorSensor.Effect.SET, s.effect());
+        assertTrue(s.onceOnly());
         assertFalse(s.local());
         assertEquals(1, s.targetX());
         assertEquals(3, s.targetY());
@@ -40,14 +41,14 @@ class WallSensorFinderTest {
 
     @Test
     void switchPair() {
-        // Level 2 (13,19) east: a local sensor that flips the lever, and an audible one feeding the gate at (17,20).
+        // Level 2 (13,19) east: a local sensor that flips the lever, and a TOGGLE one feeding the gate at (17,20).
         WallSensor lever = decode(1, 0xA800, 0x0010);
         assertTrue(lever.local());
         assertEquals(1, lever.localAction());
         assertEquals(110, lever.ornament());
         WallSensor remote = decode(1, 0xB010, 0xA440);
         assertFalse(remote.local());
-        assertTrue(remote.audible());
+        assertEquals(FloorSensor.Effect.TOGGLE, remote.effect(), "a lever pull reverses its input (#16)");
         assertEquals(17, remote.targetX());
         assertEquals(20, remote.targetY());
         assertEquals(0, remote.targetCell());
@@ -56,12 +57,12 @@ class WallSensorFinderTest {
 
     @Test
     void gateAndTorchHolder() {
-        // Level 2 (17,20) south: AND gate needing inputs 0 and 1 (data 0x30), audible, revert, opening (18,20).
+        // Level 2 (17,20) south: AND gate needing inputs 0 and 1 (data 0x30), holding (18,20) open while satisfied.
         WallSensor gate = decode((48 << 7) | 5, 0x0018, 0xA480);
         assertEquals(WallSensor.TYPE_AND_OR_GATE, gate.type());
         assertEquals(48, gate.data());
-        assertTrue(gate.revert());
-        assertTrue(gate.audible());
+        assertEquals(FloorSensor.Effect.HOLD, gate.effect());
+        assertFalse(gate.revert());
         assertEquals(18, gate.targetX());
         assertEquals(20, gate.targetY());
         assertEquals(-1, gate.ornament(), "ordinal 0: no decoration");
