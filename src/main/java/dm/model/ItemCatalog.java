@@ -257,6 +257,26 @@ public final class ItemCatalog {
         };
     }
 
+    private static final int JEWEL_SYMAL = 2;
+    private static final int ILLUMULET = 3;
+
+    /**
+     * The item as DM draws it in {@code slot}: a torch in a hand is lit, its
+     * flame shrinking with its charges (icons 4-7), and a Jewel Symal or
+     * Illumulet worn on the neck shows its "equipped" icon (DM's F033).
+     */
+    public static Item shownIn(Item item, Slot slot) {
+        int variant = item.nameVariant();
+        if (Light.isTorch(item) && (slot == Slot.READY_HAND || slot == Slot.ACTION_HAND)) {
+            variant = Light.litTorchVariant(item);
+        } else if (slot == Slot.NECK && item.category() == Item.Category.JUNK
+                && (item.type() == JEWEL_SYMAL || item.type() == ILLUMULET)) {
+            variant = 1;
+        }
+        return variant == item.nameVariant() ? item
+                : new Item(item.category(), item.type(), item.name(), variant, item.wornOn(), item.charges());
+    }
+
     /** How much food eating {@code item} gives, or 0 if it isn't food. */
     public static int foodValue(Item item) {
         int t = item.type();

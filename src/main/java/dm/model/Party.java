@@ -316,8 +316,9 @@ public final class Party {
      */
     public Tick tick() {
         time++;
+        boolean burnt = time % Light.BURN_PERIOD == 0 && burnTorches();
         if (time % Upkeep.PERIOD != 0 || members.isEmpty()) {
-            return Tick.NOTHING;
+            return burnt ? new Tick(true, null) : Tick.NOTHING;
         }
         int[] damage = new int[members.size()];
         boolean hurt = false;
@@ -329,6 +330,47 @@ public final class Party {
             }
         }
         return new Tick(true, hurt ? damage : null);
+    }
+
+    /** The hand slots DM scans for torches, in its order: action hand, then ready hand. */
+    private static final Slot[] HANDS = {Slot.ACTION_HAND, Slot.READY_HAND};
+
+    /** F338: every torch in a champion's hand loses a charge. Returns whether any did. */
+    private boolean burnTorches() {
+        boolean changed = false;
+        for (Champion c : members) {
+            for (Slot hand : HANDS) {
+                Item item = c.items().get(hand);
+                if (Light.isTorch(item) && item.charges() > 0) {
+                    c.replace(hand, item.withCharges(item.charges() - 1));
+                    changed = true;
+                }
+            }
+        }
+        return changed;
+    }
+
+    /**
+     * Which of DM's six dungeon palettes the view is drawn with, 0 (bright)
+     * to {@link Light#DARKEST}: a difficulty-0 map (Level 1) is always lit;
+     * elsewhere the light comes from torches in the champions' hands and
+     * Illumulets worn on their necks (F337).
+     */
+    public int paletteIndex() {
+        if (map.difficulty() == 0) {
+            return 0;
+        }
+        List<Item> hands = new ArrayList<>();
+        int magical = 0;
+        for (Champion c : members) {
+            for (Slot hand : HANDS) {
+                hands.add(c.items().get(hand));
+            }
+            if (Light.isIllumulet(c.items().get(Slot.NECK))) {
+                magical += Light.illumulet();
+            }
+        }
+        return Light.palette(Light.amount(hands, magical));
     }
 
     /**

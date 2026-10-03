@@ -3,6 +3,7 @@ package dm.ui;
 import dm.data.GraphicsFile;
 import dm.model.Champion;
 import dm.model.Item;
+import dm.model.ItemCatalog;
 import dm.model.Party;
 import dm.model.Slot;
 
@@ -119,8 +120,8 @@ public final class ChampionBars {
                 }
             } else {
                 PixelFont.draw(g, c.name(), x + 2, 2, COLORS[i]);
-                drawHand(g, c.items().get(Slot.READY_HAND), x + READY_HAND_X, HAND_Y);
-                drawHand(g, c.items().get(Slot.ACTION_HAND), x + ACTION_HAND_X, HAND_Y);
+                drawHand(g, shown(c, Slot.READY_HAND), x + READY_HAND_X, HAND_Y);
+                drawHand(g, shown(c, Slot.ACTION_HAND), x + ACTION_HAND_X, HAND_Y);
             }
             drawBar(g, x + BAR_X[0], c.health(), c.maxHealth(), COLORS[i]);
             drawBar(g, x + BAR_X[1], c.stamina(), c.maxStamina(), COLORS[i]);
@@ -149,6 +150,12 @@ public final class ChampionBars {
             PixelFont.draw(g, n, tx + o[0], ty + o[1], Art.PALETTE[0]);
         }
         PixelFont.draw(g, n, tx, ty, Art.PALETTE[15]);
+    }
+
+    /** The item in a hand as DM draws it (a torch there is lit). */
+    private static Item shown(Champion c, Slot hand) {
+        Item item = c.items().get(hand);
+        return item == null ? null : ItemCatalog.shownIn(item, hand);
     }
 
     private void drawHand(Graphics2D g, Item item, int x, int y) {

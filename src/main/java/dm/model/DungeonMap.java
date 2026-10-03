@@ -436,6 +436,21 @@ public final class DungeonMap {
         offsetY = y;
     }
 
+    private int difficulty;
+
+    /**
+     * The map's difficulty (bits 12-15 of its definition's third word). DM
+     * keeps a difficulty-0 map fully lit whatever the party carries (F337),
+     * which is why the first level needs no torch.
+     */
+    public int difficulty() {
+        return difficulty;
+    }
+
+    public void setDifficulty(int difficulty) {
+        this.difficulty = difficulty;
+    }
+
     /** Where a party coming off stairs stands, and which way it faces (away from the stairs). */
     public record StairsExit(int x, int y, Direction facing) {
     }

@@ -474,7 +474,7 @@ public final class GameScreen {
         if (sheet.isOpen()) {
             sheet.draw(g, holding());
         } else {
-            view.draw(g, party);
+            drawView(g);
         }
         if (bumped) {
             g.setColor(new Color(200, 0, 0));
@@ -487,6 +487,33 @@ public final class GameScreen {
             PixelFont.draw(g, party.x() + "," + party.y() + " " + party.facing(), 236, 190, Color.YELLOW);
         }
         drawHeldItem(g);
+    }
+
+    /** Screen-sized buffer the dungeon view is drawn into before {@link Darkness} dims it. */
+    private final BufferedImage viewBuffer = new BufferedImage(WIDTH, HEIGHT, BufferedImage.TYPE_INT_RGB);
+
+    /**
+     * The dungeon view in the palette the party's light calls for (DM's
+     * F337). Only the viewport darkens; the rest of the screen keeps the
+     * bright palette, as in DM.
+     */
+    private void drawView(Graphics2D g) {
+        int palette = party.paletteIndex();
+        if (palette == 0) {
+            view.draw(g, party);
+            return;
+        }
+        Graphics2D vg = viewBuffer.createGraphics();
+        try {
+            vg.setColor(Color.BLACK);
+            vg.fillRect(0, 0, WIDTH, HEIGHT);
+            view.draw(vg, party);
+        } finally {
+            vg.dispose();
+        }
+        Rectangle v = ViewRenderer.VIEWPORT;
+        Darkness.apply(viewBuffer, v, palette);
+        g.drawImage(viewBuffer.getSubimage(v.x, v.y, v.width, v.height), v.x, v.y, null);
     }
 
     /** The held item replaces the mouse pointer: its icon centred on the pointer, over everything else. */

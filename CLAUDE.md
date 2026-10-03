@@ -16,7 +16,7 @@ A Java/Swing remake of FTL's *Dungeon Master* (1988), built sprint by sprint.
 - Sprint 9: wall interaction (switches, buttons, keyholes, coin slots, torch holders, alcoves, door buttons, AND/OR gates, pits as targets), front wall decorations at DM's positions, and hand clicks in the status boxes (#12).
 - Sprint 10: stairs between levels.
 - Sprint 11: bugs #14-#17 (alcove clicks, eye-level keyholes and levers, levers that toggle, plates pressed by items), pits that drop the party and items a level, and teleporters.
-- Sprint 12 (in progress): sensor bits and teleporter scopes fixed (#20), champion upkeep (food, water, stamina, mana, health over time; eating and drinking), fountains. Still to come: torches and darkness, death, keyboard movement.
+- Sprint 12 (in progress): sensor bits and teleporter scopes fixed (#20), champion upkeep (food, water, stamina, mana, health over time; eating and drinking), fountains, torches and darkness. Still to come: death, keyboard movement.
 
 Creatures, combat and spells are not implemented yet.
 
@@ -177,6 +177,12 @@ Code lives under `src/main/java/dm/`, in three layers.
   - Food and water start at 1500 + random(256), cap at 2048 and bottom out at -1024.
   - `Party.feed` / `Upkeep.consume` (F349): food is eaten, a waterskin gives 800 water per draught, a water flask 1600, other potions their DM effect (YA and antivenin do nothing yet), leaving an empty flask. Each plays the swallow (`SOUND_SWALLOW` 678, confirmed by ear), as does drinking at a fountain.
   - Sleeping, wounds and poison aren't modelled.
+- **Light** (`Light`, ReDMCSB F337/F338/F301; tables from ScummVM):
+  - A map of difficulty 0 (bits 12-15 of the map definition's third word; only Level 1) is always fully lit.
+  - Elsewhere the light is the torches in the champions' hands (each worth its charges through DM's power-to-light table, the four brightest first, each half the one before, plus one more) and 12 for each Illumulet worn on a neck. It picks one of DM's six dungeon palettes (thresholds 99/75/50/25/1).
+  - Torches in hands lose a charge every 512 ticks (`Party.tick`). In a hand a torch is drawn lit, its flame shrinking with its charges (icons 4-7, `ItemCatalog.shownIn`); elsewhere it's unlit.
+  - `GameScreen.drawView` draws the view off-screen and `Darkness` remaps the viewport's palette colours to the chosen palette (ScummVM's G021 values; colours 9 and 10 from the ST rows). Colour 4 (cyan) stays bright, as in DM. Other colours are dimmed by that palette's white.
+  - Not yet: DM's extra colour changes for creatures and decorations at D2/D3, and light spells.
 - **Fountains** (wall decoration 35, `DungeonMap.FOUNTAIN`): clicking one with a waterskin refills it to 3 and turns an empty flask into a water flask (DM's F377, `Upkeep.fill`), before the side's sensors run. Clicking with an empty hand lets every living champion drink to the 2048 maximum (`Party.drinkFromFountain`, `WallClick.drank`). That is the user's addition: DM itself has no direct drinking.
 
 **`ui/`: draws everything at the original 320×200 resolution**

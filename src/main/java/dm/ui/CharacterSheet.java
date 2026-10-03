@@ -4,6 +4,7 @@ import dm.data.GraphicsFile;
 import dm.model.Champion;
 import dm.model.ChampionMirror;
 import dm.model.Item;
+import dm.model.ItemCatalog;
 import dm.model.Slot;
 
 import java.awt.Color;
@@ -232,7 +233,7 @@ public final class CharacterSheet {
     private void drawItems(Graphics2D g) {
         for (Map.Entry<Slot, Item> e : champion.items().entrySet()) {
             Point p = SLOT_ICONS.get(e.getKey());
-            BufferedImage icon = art.icon(e.getValue());
+            BufferedImage icon = art.icon(ItemCatalog.shownIn(e.getValue(), e.getKey()));
             if (icon != null) {
                 g.drawImage(icon, p.x, p.y, null);
             } else {
