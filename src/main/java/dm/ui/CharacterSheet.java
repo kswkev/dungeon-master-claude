@@ -206,6 +206,9 @@ public final class CharacterSheet {
             } else {
                 drawSkillsAndStats(v);
             }
+            if (pressingEye) {
+                drawLookingEye(v);
+            }
             drawButtons(v);
             if (!holding) {
                 drawTooltip(v);
@@ -273,6 +276,20 @@ public final class CharacterSheet {
             y += STAT_LINE;
         }
     }
+
+    /**
+     * While the eye is held DM draws it looking down to the right (icon 203,
+     * F352) over the background's eye; letting go brings back icon 202,
+     * which is what the background already shows.
+     */
+    private void drawLookingEye(Graphics2D g) {
+        BufferedImage eye = art.icon(EYE_LOOKING);
+        if (eye != null) {
+            g.drawImage(eye, EYE.x, EYE.y, null);
+        }
+    }
+
+    private static final int EYE_LOOKING = 203;
 
     /** DM's F345: the empty panel with FOOD and WATER labels and a bar for each. */
     private void drawFoodAndWater(Graphics2D g) {

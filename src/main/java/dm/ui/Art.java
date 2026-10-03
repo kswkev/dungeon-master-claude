@@ -185,7 +185,15 @@ public final class Art {
 
     /** The 16x16 inventory icon for an item, found by its name in GRAPHICS.DAT's object name list. */
     public BufferedImage icon(Item item) {
-        int index = iconIndex(item);
+        return icon(iconIndex(item));
+    }
+
+    /**
+     * Icon number {@code index} from the icon sheets, or null. Icons past the
+     * object names are the interface's own, e.g. 202/203 the inventory eye
+     * not looking and looking.
+     */
+    public BufferedImage icon(int index) {
         if (index < 0) {
             return null;
         }

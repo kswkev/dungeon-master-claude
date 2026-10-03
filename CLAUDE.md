@@ -210,7 +210,7 @@ Code lives under `src/main/java/dm/`, in three layers.
   - the spell and action areas are drawn as empty outlines for now.
 - `CharacterSheet` slot positions come from DM's inventory background (graphic 17).
   - On a party member's sheet, clicking a cell (`Action.SLOT`, `slotAt`) picks up, places or swaps through `GameScreen.clickSlot`. A candidate's items can't be touched.
-  - The mouth (`Action.MOUTH`, viewport (56,13)) feeds the held item. A member's panel shows DM's food/water panel (graphic 20 keyed on red, labels 30/31 keyed on dark grey, F344 bars); holding the eye (`Action.EYE`, (12,13)) shows skills and statistics instead. Candidates always show their statistics.
+  - The mouth (`Action.MOUTH`, viewport (56,13)) feeds the held item. A member's panel shows DM's food/water panel (graphic 20 keyed on red, labels 30/31 keyed on dark grey, F344 bars); holding the eye (`Action.EYE`, (12,13)) shows skills and statistics instead, and draws the eye looking down to the right (icon 203 via `Art.icon(int)`; 202, the background's own, is the eye not looking). Candidates always show their statistics.
   - An item that doesn't fit stays in hand.
   - With no sheet open, a click in the bottom of the view (`GameScreen.FLOOR_CLICK_Y` and below) picks up from or drops onto the party square's left or right cell ahead. A click higher up with an item in hand throws it from that side.
   - While an item is held, `GameWindow` hides the OS cursor and `GameScreen` draws `Art.iconSprite` (the icon with background colour 12 transparent) centred on the pointer, on top of everything. Text uses `PixelFont`, a hand-made 5×5 font, because the PC GRAPHICS.DAT has no UI font image.
