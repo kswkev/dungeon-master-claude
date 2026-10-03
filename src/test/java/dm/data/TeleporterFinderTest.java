@@ -24,18 +24,20 @@ class TeleporterFinderTest {
         assertEquals(29, t.targetX());
         assertEquals(4, t.targetY());
         assertEquals(Direction.EAST, t.turn(Direction.SOUTH), "absolute");
-        assertTrue(t.moves(Teleporter.SCOPE_OBJECTS));
-        assertTrue(t.moves(Teleporter.SCOPE_CREATURES));
+        assertTrue(t.moves(Teleporter.Kind.ITEM));
+        assertTrue(t.moves(Teleporter.Kind.PARTY));
         assertTrue(t.audible());
     }
 
     @Test
-    void relativeRotationAndObjectsOnly() {
+    void relativeRotationAndCreaturesOnly() {
         int word1 = 5 | (6 << 5) | (3 << 10) | (1 << 13);
         Teleporter t = TeleporterFinder.decode(0, 0, new int[] {0xFFFE, word1, 4 << 8});
         assertEquals(4, t.targetMap());
         assertEquals(Direction.EAST, t.turn(Direction.SOUTH), "three quarter-turns clockwise from south");
-        assertFalse(t.moves(Teleporter.SCOPE_CREATURES));
+        assertFalse(t.moves(Teleporter.Kind.PARTY));
+        assertFalse(t.moves(Teleporter.Kind.ITEM));
+        assertTrue(t.moves(Teleporter.Kind.CREATURE));
         assertFalse(t.audible());
     }
 }

@@ -33,6 +33,7 @@ class WallSensorTest {
     private static final FloorSensor.Effect SET = FloorSensor.Effect.SET;
     private static final FloorSensor.Effect CLEAR = FloorSensor.Effect.CLEAR;
     private static final FloorSensor.Effect TOGGLE = FloorSensor.Effect.TOGGLE;
+    private static final FloorSensor.Effect HOLD = FloorSensor.Effect.HOLD;
 
     private DungeonMap map;
     private Party party;
@@ -139,6 +140,49 @@ class WallSensorTest {
         assertEquals(8, map.wallOrnament(1, 0, S));
     }
 
+    // ---- fountains ----
+
+    /** A fountain (decoration 35) on wall (4,0), with a recruited Elija who has drunk nothing for a while. */
+    private Champion fountainAndThirstyChampion() {
+        local(4, WallSensor.TYPE_DISABLED, 0, DungeonMap.FOUNTAIN);
+        Champion c = Champion.parse(ChampionTest.ELIJA, 0);
+        party.recruit(new ChampionMirror(1, 0, S, c));
+        c.setWater(-300);
+        return c;
+    }
+
+    @Test
+    void anEmptyHandDrinksItsFillFromAFountain() {
+        Champion c = fountainAndThirstyChampion();
+        DungeonMap.WallClick result = click(4);
+        assertTrue(result.drank());
+        assertEquals(Champion.MAX_FOOD, c.water());
+    }
+
+    @Test
+    void aFountainRefillsWaterskinsAndFlasks() {
+        Champion c = fountainAndThirstyChampion();
+        party.setHeld(ItemCatalog.item(Item.Category.JUNK, ItemCatalog.WATERSKIN, 1));
+        DungeonMap.WallClick result = click(4);
+        assertTrue(result.handChanged());
+        assertFalse(result.drank(), "filling isn't drinking");
+        assertEquals(3, party.held().charges());
+        assertEquals("WATER", party.held().name());
+        assertEquals(-300, c.water());
+
+        party.setHeld(ItemCatalog.item(Item.Category.POTION, ItemCatalog.EMPTY_FLASK));
+        click(4);
+        assertEquals("WATER FLASK", party.held().name());
+    }
+
+    @Test
+    void aFountainLeavesOtherItemsAlone() {
+        fountainAndThirstyChampion();
+        party.setHeld(GOLD_KEY);
+        assertEquals(DungeonMap.WallClick.NOTHING, click(4));
+        assertSame(GOLD_KEY, party.held());
+    }
+
     @Test
     void anAlcoveTakesAndGivesItems() {
         local(2, WallSensor.TYPE_DISABLED, 0, 2); // alcove decoration
@@ -158,8 +202,8 @@ class WallSensorTest {
 
     @Test
     void anAndGateOpensItsDoorOnlyWithBothInputsAndRevertsWhenOneGoesOff() {
-        // Gate on wall (6,0): inputs 0 and 1 must both be on (data 0x30); revert; opens the door at (3,1).
-        WallSensor gate = new WallSensor(6, 0, S, WallSensor.TYPE_AND_OR_GATE, 0x30, SET, false, true, true, false,
+        // Gate on wall (6,0): inputs 0 and 1 must both be on (data 0x30); HOLD: the door at (3,1) is open only while they are.
+        WallSensor gate = new WallSensor(6, 0, S, WallSensor.TYPE_AND_OR_GATE, 0x30, HOLD, false, false, true, false,
                 0, 3, 1, 0, -1);
         map.addWallSensor(gate);
         remote(1, WallSensor.TYPE_CLICK, 0, TOGGLE, true, false, 6, 0, 0, -1);
@@ -170,7 +214,7 @@ class WallSensorTest {
         click(2);
         assertTrue(doorHeadingOpen(), "both on");
         click(1);
-        assertFalse(doorHeadingOpen(), "revert closes it again");
+        assertFalse(doorHeadingOpen(), "HOLD closes it again");
     }
 
     @Test
@@ -229,10 +273,10 @@ class WallSensorTest {
         assertEquals(1, map.wallOrnament(2, 0, S), "putting it back keeps the alcove");
     }
 
-    /** A lever as in DM's data (#16): a local rotating sensor (45) and a remote SET sensor (44). */
+    /** A lever as in DM's data (#16): a local rotating sensor (45) and a remote TOGGLE sensor (44). */
     private void lever(int x, int tx, int ty, int cell) {
         local(x, WallSensor.TYPE_CLICK, 0, 45);
-        remote(x, WallSensor.TYPE_CLICK, 0, SET, true, false, tx, ty, cell, 44);
+        remote(x, WallSensor.TYPE_CLICK, 0, TOGGLE, true, false, tx, ty, cell, 44);
     }
 
     @Test
@@ -263,7 +307,7 @@ class WallSensorTest {
 
     @Test
     void twoSetLeversFeedAnAndGate() {
-        WallSensor gate = new WallSensor(6, 0, S, WallSensor.TYPE_AND_OR_GATE, 0x30, SET, false, true, true, false,
+        WallSensor gate = new WallSensor(6, 0, S, WallSensor.TYPE_AND_OR_GATE, 0x30, HOLD, false, false, true, false,
                 0, 3, 1, 0, -1);
         map.addWallSensor(gate);
         lever(1, 6, 0, 0);
@@ -281,7 +325,7 @@ class WallSensorTest {
 
     @Test
     void anAndGateFedBySetSwitchesWithoutLevers() {
-        WallSensor gate = new WallSensor(6, 0, S, WallSensor.TYPE_AND_OR_GATE, 0x30, SET, false, true, true, false,
+        WallSensor gate = new WallSensor(6, 0, S, WallSensor.TYPE_AND_OR_GATE, 0x30, HOLD, false, false, true, false,
                 0, 3, 1, 0, -1);
         map.addWallSensor(gate);
         remote(1, WallSensor.TYPE_CLICK, 0, SET, true, false, 6, 0, 0, -1);

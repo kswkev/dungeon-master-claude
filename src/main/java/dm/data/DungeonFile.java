@@ -28,7 +28,7 @@ import java.util.List;
  *     word  raw map data offset, 4 unused bytes, byte X offset, byte Y offset
  *     word  bits 11-15 height-1, bits 6-10 width-1, bits 0-5 level
  *     word  ornament counts: bits 8-11 floor, 0-3 wall (plus random-ornament counts)
- *     word  bits 4-7 creature type count, 0-3 door ornament count
+ *     word  bits 12-15 difficulty (0: always lit), 4-7 creature type count, 0-3 door ornament count
  *     word  graphics sets: bits 12-15 door set 1, 8-11 door set 0
  *   column cumulative square-thing counts (word per map column, all maps)
  *   square first things (words), text data (words), thing data per type
@@ -182,6 +182,7 @@ public final class DungeonFile {
             DungeonMap map = new DungeonMap(levels[m], squares, ChampionFinder.find(squareThings, text),
                     doorStyles(squares, squareThings, graphicsSets[m]));
             map.setOffset(offsetX[m], offsetY[m]);
+            map.setDifficulty(otherCounts[m] >>> 12);
             OrnamentLists lists = OrnamentLists.read(data, base + widths[m] * heights[m],
                     rawStart + rawMapBytes, ornamentCounts[m], otherCounts[m]);
             FloorSensorFinder.find(squares, squareThings, lists.floor()).forEach(map::addSensor);

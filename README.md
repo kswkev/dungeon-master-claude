@@ -91,7 +91,15 @@ Run with `"-Ddm.debug=true"` to list every decoration on Level 1.
 - **Levers (#16):** every pull reverses what the lever controls: doors open and close, pits close and reopen, and gate puzzles work.
 - **Pressure plates (#17):** an item on a plate holds it down, so the door stays open after you walk off. It closes again only once the plate is empty.
 
-**Not yet:** creatures, combat, spells, food and water, and saving.
+**Sprint 12: done.** The champions live in the dungeon. The rules are ported from the reverse-engineered original (ReDMCSB):
+- **Food and water:** champions slowly get hungry and thirsty. Stamina, mana and health come back over time, faster after a rest, and every step tires them a little. Starving champions lose stamina and then health. Their sheet shows the original FOOD and WATER bars; hold the eye to see skills and statistics instead.
+- **Eating and drinking:** click a champion's mouth with food, a waterskin or a potion in hand. Fountains refill waterskins and empty flasks, and clicking one with an empty hand lets the whole party drink its fill (an addition: the original only refills).
+- **Light:** Level 1 is always lit. Deeper levels are dark except for torches held in hands (and worn Illumulets). Torches burn down, their flames shrink, and the view darkens through the original's six light levels.
+- **Death:** a champion whose health runs out drops everything, with their bones on top, and their box shows a skull. When the whole party dies, the game ends.
+- **Keyboard:** move with the numeric keypad as on the PC (7 8 9 turn left, forward, turn right; 4 5 6 left, back, right), the arrow keys, or W A S D with Q and E to turn.
+- **Fixes:** the sensor data was being read two bits off, and teleporters that move only items were treated as moving nothing (#20). Plates, levers, keyholes and gates now follow the original's own data.
+
+**Not yet:** creatures, combat, spells, and saving.
 
 ## Requirements
 

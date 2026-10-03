@@ -98,7 +98,7 @@ public final class ItemCatalog {
         floor(502, "BLUE GEM");
         floor(503, "GOLD COIN", "COPPER COIN");
         floor(504, "DRUMSTICK");
-        floor(505, "WATERSKIN");
+        floor(505, "WATERSKIN", "WATER");
         floor(506, "ELVEN DOUBLET", "ELVEN HUKE");
         floor(507, "LEATHER BOOTS");
         floor(508, "BEZERKER HELM", "HELMET", "BASINET");
@@ -200,16 +200,94 @@ public final class ItemCatalog {
 
     /** Builds the item for a category and type number; unknown numbers get a generic name. */
     public static Item item(Item.Category category, int type) {
+        return item(category, type, 0);
+    }
+
+    /**
+     * Builds an item with {@code charges} charges. A waterskin that holds
+     * water is named WATER, which is how DM's icon list names the full one.
+     */
+    public static Item item(Item.Category category, int type, int charges) {
         return switch (category) {
-            case WEAPON -> new Item(category, type, name(WEAPONS, type), type == 45 ? 1 : 0, null);
+            case WEAPON -> new Item(category, type, name(WEAPONS, type), type == 45 ? 1 : 0, null, charges);
             case ARMOUR -> new Item(category, type, name(ARMOUR, type), armourVariant(type),
-                    type < ARMOUR_SLOTS.length ? ARMOUR_SLOTS[type] : null);
-            case POTION -> new Item(category, type, name(POTIONS, type), 0, null);
-            case JUNK -> new Item(category, type, name(JUNK, type), junkVariant(type),
-                    NECK_JUNK.contains(type) ? Slot.NECK : null);
-            case SCROLL -> new Item(category, type, "SCROLL", 0, null);
-            case CONTAINER -> new Item(category, type, "CHEST", 0, null);
+                    type < ARMOUR_SLOTS.length ? ARMOUR_SLOTS[type] : null, charges);
+            case POTION -> new Item(category, type, name(POTIONS, type), 0, null, charges);
+            case JUNK -> new Item(category, type, type == WATERSKIN && charges > 0 ? "WATER" : name(JUNK, type),
+                    junkVariant(type), NECK_JUNK.contains(type) ? Slot.NECK : null, charges);
+            case SCROLL -> new Item(category, type, "SCROLL", 0, null, charges);
+            case CONTAINER -> new Item(category, type, "CHEST", 0, null, charges);
         };
+    }
+
+    // ---- DM's item data (graphics.dat item 559 on the ST; the PC keeps it in the program) ----
+
+    /** Junk type numbers and potion types that eating and drinking care about. */
+    public static final int WATERSKIN = 1;
+    public static final int FIRST_FOOD = 29;   // APPLE
+    public static final int LAST_FOOD = 36;    // DRAGON STEAK
+    public static final int WATER_FLASK = 15;
+    public static final int EMPTY_FLASK = 20;
+
+    /** Food value of APPLE .. DRAGON STEAK (G242_ai_Graphic559_FoodAmounts, as in ScummVM's DM engine). */
+    private static final int[] FOOD_AMOUNTS = {500, 600, 650, 820, 550, 350, 990, 1400};
+
+    /** Weights in tenths of a kilogram (G238/G239/G241, from ScummVM's DM engine). */
+    private static final int[] WEAPON_WEIGHTS = {
+            1, 1, 11, 12, 9, 30, 47, 24, 5, 33, 32, 26, 35, 36, 33, 37, 30, 39, 43, 65, 31, 41, 50, 36, 110,
+            10, 28, 2, 2, 19, 10, 3, 1, 8, 26, 1, 2, 35, 29, 21, 33, 8, 18, 8, 30, 36};
+    private static final int[] ARMOUR_WEIGHTS = {
+            3, 4, 3, 6, 16, 4, 4, 3, 3, 4, 2, 4, 5, 3, 3, 4, 6, 8, 14, 6, 5, 5, 5, 4, 6, 11, 14, 15, 11, 10,
+            14, 21, 65, 53, 52, 41, 16, 16, 19, 120, 80, 28, 34, 17, 108, 72, 24, 30, 35, 141, 90, 31, 40, 14,
+            57, 81, 3, 2};
+    private static final int[] JUNK_WEIGHTS = {
+            1, 3, 2, 2, 4, 15, 1, 1, 1, 2, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 81, 2, 3, 2, 4,
+            4, 3, 8, 5, 11, 4, 6, 2, 3, 2, 2, 2, 6, 9, 3, 10, 1, 0, 1, 1, 2, 0, 8};
+
+    /** DM's F140: a full waterskin weighs 2 more per draught; a chest's contents aren't modelled yet. */
+    static int weight(Item item) {
+        int t = item.type();
+        return switch (item.category()) {
+            case WEAPON -> t < WEAPON_WEIGHTS.length ? WEAPON_WEIGHTS[t] : 0;
+            case ARMOUR -> t < ARMOUR_WEIGHTS.length ? ARMOUR_WEIGHTS[t] : 0;
+            case JUNK -> (t < JUNK_WEIGHTS.length ? JUNK_WEIGHTS[t] : 0) + (t == WATERSKIN ? item.charges() << 1 : 0);
+            case POTION -> t == EMPTY_FLASK ? 1 : 3;
+            case SCROLL -> 1;
+            case CONTAINER -> 50;
+        };
+    }
+
+    private static final int JEWEL_SYMAL = 2;
+    private static final int ILLUMULET = 3;
+
+    /**
+     * The item as DM draws it in {@code slot}: a torch in a hand is lit, its
+     * flame shrinking with its charges (icons 4-7), and a Jewel Symal or
+     * Illumulet worn on the neck shows its "equipped" icon (DM's F033).
+     */
+    public static Item shownIn(Item item, Slot slot) {
+        int variant = item.nameVariant();
+        if (Light.isTorch(item) && (slot == Slot.READY_HAND || slot == Slot.ACTION_HAND)) {
+            variant = Light.litTorchVariant(item);
+        } else if (slot == Slot.NECK && item.category() == Item.Category.JUNK
+                && (item.type() == JEWEL_SYMAL || item.type() == ILLUMULET)) {
+            variant = 1;
+        }
+        return variant == item.nameVariant() ? item
+                : new Item(item.category(), item.type(), item.name(), variant, item.wornOn(), item.charges());
+    }
+
+    /** How much food eating {@code item} gives, or 0 if it isn't food. */
+    public static int foodValue(Item item) {
+        int t = item.type();
+        return item.category() == Item.Category.JUNK && t >= FIRST_FOOD && t <= LAST_FOOD
+                ? FOOD_AMOUNTS[t - FIRST_FOOD] : 0;
+    }
+
+    /** Whether DM lets the item be put in the mouth: food, waterskins and potions. */
+    public static boolean isConsumable(Item item) {
+        return item.category() == Item.Category.POTION
+                || item.category() == Item.Category.JUNK && (item.type() == WATERSKIN || foodValue(item) > 0);
     }
 
     static boolean isMissileWeapon(int type) {
@@ -251,6 +329,7 @@ public final class ItemCatalog {
         }
         all.add("SCROLL");
         all.add("CHEST");
+        all.add("WATER");
         return all;
     }
 }

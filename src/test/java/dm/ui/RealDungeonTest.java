@@ -119,6 +119,72 @@ class RealDungeonTest {
         assertFalse(p.map().get(p.x(), p.y()).looksSolid());
     }
 
+    /** #20: the scope-0 teleporter at (13,16) lets the party walk onto it... */
+    @Test
+    void theItemsOnlyTeleporterLeavesThePartyAlone() {
+        Party p = level2(12, 16, Direction.EAST);
+        DungeonMap.StepResult r = p.step(Party.Move.FORWARD);
+        assertFalse(r.teleported());
+        assertEquals(13, p.x());
+        assertEquals(16, p.y());
+    }
+
+    /** ...but a thrown item is sent to the plate at (14,14), which closes the pit at (13,15), as in the original. */
+    @Test
+    void anItemThrownIntoTheTeleporterClosesThePit() {
+        Party p = level2(12, 16, Direction.EAST);
+        DungeonMap map = p.map();
+        assertTrue(map.isPitOpen(13, 15));
+        map.throwItem(ItemCatalog.item(Item.Category.WEAPON, 10), 12, 16, Direction.EAST, false, Party.THROW_RANGE);
+        for (int i = 0; i < Party.THROW_RANGE + 1; i++) {
+            map.tickProjectiles();
+        }
+        assertTrue(map.hasItems(14, 14), "teleported onto the plate");
+        assertFalse(map.isPitOpen(13, 15));
+    }
+
+    /** #20's sensor bits: the HOLD + revert plate at (25,3) keeps the pit at (24,5) shut while an item is on it. */
+    @Test
+    void anItemOnThePlateHoldsThePitShut() {
+        DungeonMap map = level2(25, 4, Direction.NORTH).map();
+        assertTrue(map.isPitOpen(24, 5));
+        map.dropItem(25, 3, 0, ItemCatalog.item(Item.Category.WEAPON, 10));
+        assertFalse(map.isPitOpen(24, 5));
+        map.pickUpItem(25, 3, 0);
+        assertTrue(map.isPitOpen(24, 5));
+    }
+
+    /** Item charges: Level 1's waterskin at (4,15) is full (3 draughts), and Zed's torch has its full light power. */
+    @Test
+    void chargesAreDecoded() {
+        DungeonMap level1 = dungeon.maps().get(0);
+        Item skin = level1.itemsAt(4, 15, 0).isEmpty() ? null : level1.itemsAt(4, 15, 0).get(0);
+        for (int c = 0; skin == null && c < 4; c++) {
+            skin = level1.itemsAt(4, 15, c).isEmpty() ? null : level1.itemsAt(4, 15, c).get(0);
+        }
+        assertNotNull(skin);
+        assertEquals("WATER", skin.name());
+        assertEquals(3, skin.charges());
+        Item torch = level1.mirrors().stream().filter(m -> m.champion().name().equals("ZED")).findFirst()
+                .orElseThrow().champion().items().values().stream()
+                .filter(i -> i.name().equals("TORCH")).findFirst().orElseThrow();
+        assertEquals(15, torch.charges());
+    }
+
+    /** The fountain on Level 2's wall (4,6), seen from (3,6): an empty hand drinks, a waterskin is refilled. */
+    @Test
+    void theFountainWaters() {
+        Party p = level2(3, 6, Direction.EAST);
+        p.recruit(dungeon.maps().get(0).mirrors().get(0));
+        DungeonMap map = p.map();
+        assertEquals(DungeonMap.FOUNTAIN, map.wallOrnament(4, 6, Direction.WEST));
+        assertTrue(map.clickWall(4, 6, Direction.WEST, p, i -> 0).drank());
+        assertEquals(dm.model.Champion.MAX_FOOD, p.members().get(0).water());
+        p.setHeld(ItemCatalog.item(Item.Category.JUNK, ItemCatalog.WATERSKIN));
+        map.clickWall(4, 6, Direction.WEST, p, i -> 0);
+        assertEquals(3, p.held().charges());
+    }
+
     /** #15: the gold keyhole at (0,3) north is centred at eye level, row 48 of the viewport. */
     @Test
     void theKeyholeHangsAtEyeLevel() {

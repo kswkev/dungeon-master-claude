@@ -12,9 +12,8 @@ import java.util.List;
  * Sensor record words after the link:
  * <pre>
  *   word 1  bits 0-6 type, bits 7-15 data
- *   word 2  bit 0 once only, bits 1-2 effect (0 set, 1 clear, 2 toggle,
- *           3 hold), bit 3 revert on leaving, bit 4 audible,
- *           bits 12-15 floor ornament ordinal (1-based into the map's list)
+ *   word 2  see {@link SensorBits}; bits 12-15 floor ornament ordinal
+ *           (1-based into the map's list)
  *   word 3  bits 6-10 target X, bits 11-15 target Y
  * </pre>
  * The layout was checked against the original Level 1 plate at (6,9), which
@@ -49,10 +48,10 @@ final class FloorSensorFinder {
         int ordinal = attributes >>> 12;
         int ornament = ordinal > 0 && ordinal <= floorOrnaments.length ? floorOrnaments[ordinal - 1] : -1;
         return new FloorSensor(x, y, type,
-                FloorSensor.Effect.values()[(attributes >>> 1) & 3],
-                (attributes & 1) != 0,
-                (attributes & 0x08) != 0,
-                (attributes & 0x10) != 0,
+                SensorBits.effect(attributes),
+                SensorBits.onceOnly(attributes),
+                SensorBits.revert(attributes),
+                SensorBits.audible(attributes),
                 (target >>> 6) & 0x1F,
                 target >>> 11,
                 ornament);

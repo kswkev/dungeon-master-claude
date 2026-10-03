@@ -61,6 +61,9 @@ public final class Party {
     private Direction facing;
     /** The item on the mouse pointer (DM's leader hand), shared by the whole party. */
     private Item held;
+    /** DM's game clock, one per game tick, and when the party last moved (rest speeds recovery). */
+    private long time;
+    private long lastMove;
 
     /** A party on a single map; its stairs lead nowhere and block like walls. */
     public Party(DungeonMap map, int x, int y, Direction facing) {
@@ -126,7 +129,10 @@ public final class Party {
         if (isFull() || mirror.taken()) {
             return false;
         }
-        members.add(mirror.champion());
+        Champion c = mirror.champion();
+        members.add(c);
+        c.setFood(1500 + random.nextInt(256)); // DM's F280
+        c.setWater(1500 + random.nextInt(256));
         for (int p = 0; p < MAX_MEMBERS; p++) {
             if (positions[p] == null) {
                 positions[p] = mirror.champion();
@@ -211,6 +217,7 @@ public final class Party {
      * ({@link #settle()}).
      */
     public DungeonMap.StepResult step(Move move) {
+        payForStep();
         Direction d = Direction.fromIndex(facing.ordinal() + move.turns);
         int nx = x + d.dx;
         int ny = y + d.dy;
@@ -225,6 +232,7 @@ public final class Party {
                 return null;
             }
         }
+        lastMove = time;
         DungeonMap.StepResult result = moveTo(map, nx, ny);
         if (stairs != null) {
             DungeonMap.StairsExit exit = stairs.map().stairsExit(stairs.x(), stairs.y());
@@ -256,7 +264,7 @@ public final class Party {
     /**
      * Lets the square under the party act on it, as many times as it takes:
      * an open pit (not an imaginary one) drops it to the same spot one level
-     * down, hurting every champion; an open teleporter that moves creatures
+     * down, hurting every champion; an open teleporter that moves the party
      * sends it to its target, turned as the teleporter says (one that
      * targets its own square is a spinner: it only turns). Called after
      * every step, and by the game whenever a sensor may have opened a pit or
@@ -271,7 +279,7 @@ public final class Party {
                         .and(new DungeonMap.StepResult(false, false, false, true, false, fall()));
                 continue;
             }
-            Teleporter t = map.activeTeleporter(x, y, Teleporter.SCOPE_CREATURES);
+            Teleporter t = map.activeTeleporter(x, y, Teleporter.Kind.PARTY);
             Dungeon.Location to = t == null ? null : map.destination(t);
             if (to == null) {
                 break;
@@ -287,12 +295,219 @@ public final class Party {
         return result;
     }
 
+    // ---- upkeep -------------------------------------------------------------
+
+    /** What a game tick did to the champions. */
+    public record Tick(boolean changed, int[] damage) {
+        public static final Tick NOTHING = new Tick(false, null);
+    }
+
+    /** The game clock: game ticks since the start. */
+    public long time() {
+        return time;
+    }
+
+    /**
+     * Advances DM's game clock by one tick. Every {@link Upkeep#PERIOD} ticks
+     * each living champion gets hungrier and thirstier, and regains stamina,
+     * mana and health ({@link Upkeep#applyTimeEffects}). Returns whether
+     * anything changed, and the damage each member took (from stamina spent
+     * below zero), indexed like {@link #members()}.
+     */
+    public Tick tick() {
+        time++;
+        boolean burnt = time % Light.BURN_PERIOD == 0 && burnTorches();
+        if (time % Upkeep.PERIOD != 0 || members.isEmpty()) {
+            return burnt ? new Tick(true, null) : Tick.NOTHING;
+        }
+        int[] damage = new int[members.size()];
+        boolean hurt = false;
+        for (int i = 0; i < members.size(); i++) {
+            Champion c = members.get(i);
+            if (c.health() > 0) {
+                damage[i] = c.takeDamage(Upkeep.applyTimeEffects(c, time, lastMove));
+                hurt |= damage[i] > 0;
+            }
+        }
+        return new Tick(true, hurt ? damage : null);
+    }
+
+    /** The hand slots DM scans for torches, in its order: action hand, then ready hand. */
+    private static final Slot[] HANDS = {Slot.ACTION_HAND, Slot.READY_HAND};
+
+    /** F338: every torch in a champion's hand loses a charge. Returns whether any did. */
+    private boolean burnTorches() {
+        boolean changed = false;
+        for (Champion c : members) {
+            for (Slot hand : HANDS) {
+                Item item = c.items().get(hand);
+                if (Light.isTorch(item) && item.charges() > 0) {
+                    c.replace(hand, item.withCharges(item.charges() - 1));
+                    changed = true;
+                }
+            }
+        }
+        return changed;
+    }
+
+    /**
+     * Which of DM's six dungeon palettes the view is drawn with, 0 (bright)
+     * to {@link Light#DARKEST}: a difficulty-0 map (Level 1) is always lit;
+     * elsewhere the light comes from torches in the champions' hands and
+     * Illumulets worn on their necks (F337).
+     */
+    public int paletteIndex() {
+        if (map.difficulty() == 0) {
+            return 0;
+        }
+        List<Item> hands = new ArrayList<>();
+        int magical = 0;
+        for (Champion c : members) {
+            for (Slot hand : HANDS) {
+                hands.add(c.items().get(hand));
+            }
+            if (Light.isIllumulet(c.items().get(Slot.NECK))) {
+                magical += Light.illumulet();
+            }
+        }
+        return Light.palette(Light.amount(hands, magical));
+    }
+
+    /**
+     * DM's F366: every move attempt, blocked or not, tires each living
+     * champion by 1, or more when heavily laden. A champion with no stamina
+     * left is hurt instead.
+     */
+    private void payForStep() {
+        for (Champion c : members) {
+            if (c.health() > 0) {
+                c.takeDamage(c.decrementStamina(Upkeep.stepCost(load(c), c.maxLoad())));
+            }
+        }
+    }
+
+    /** A champion's load, counting the item on the pointer for the leader as DM does. */
+    public int load(Champion c) {
+        int load = c.load();
+        if (held != null && leader() == c) {
+            load += held.weight();
+        }
+        return load;
+    }
+
+    /** DM's leader, whose hand is the pointer: the first living member, or null. */
+    public Champion leader() {
+        for (Champion c : members) {
+            if (c.health() > 0) {
+                return c;
+            }
+        }
+        return null;
+    }
+
+    // ---- death --------------------------------------------------------------
+
+    /** Champions already laid to rest; their bones lie where they fell. */
+    private final List<Champion> buried = new ArrayList<>();
+
+    /** Junk type of the bones a dead champion leaves (DM's C05_JUNK_BONES). */
+    static final int BONES = 5;
+
+    /**
+     * DM's F318: the order a dead champion's things fall in, so that the hands
+     * end up on top of the pile. (DM's quiver and backpack rows mapped to ours.)
+     */
+    private static final Slot[] DROP_ORDER = {
+            Slot.FEET, Slot.LEGS, Slot.QUIVER_4, Slot.QUIVER_2, Slot.QUIVER_3, Slot.QUIVER_1,
+            Slot.POUCH_2, Slot.POUCH_1, Slot.TORSO,
+            Slot.BACKPACK_1, Slot.BACKPACK_10, Slot.BACKPACK_11, Slot.BACKPACK_12, Slot.BACKPACK_13,
+            Slot.BACKPACK_14, Slot.BACKPACK_15, Slot.BACKPACK_16, Slot.BACKPACK_17,
+            Slot.BACKPACK_2, Slot.BACKPACK_3, Slot.BACKPACK_4, Slot.BACKPACK_5, Slot.BACKPACK_6,
+            Slot.BACKPACK_7, Slot.BACKPACK_8, Slot.BACKPACK_9,
+            Slot.NECK, Slot.HEAD, Slot.READY_HAND, Slot.ACTION_HAND};
+
+    public boolean isDead(Champion c) {
+        return c.health() == 0;
+    }
+
+    /**
+     * DM's F319 for every member whose health has run out since the last
+     * call: everything they carried falls onto their cell of the party's
+     * square, their bones on top (the bones remember which member they were,
+     * as DM's do, for a resurrection at an altar later), and they leave the
+     * formation. Returns the newly dead.
+     */
+    public List<Champion> bury() {
+        List<Champion> dead = new ArrayList<>();
+        for (Champion c : members) {
+            if (c.health() > 0 || buried.contains(c)) {
+                continue;
+            }
+            buried.add(c);
+            dead.add(c);
+            int position = positionOf(c);
+            int cell = Direction.fromIndex(Math.max(position, 0) + facing.ordinal()).ordinal();
+            for (Slot slot : DROP_ORDER) {
+                Item item = c.take(slot);
+                if (item != null) {
+                    map.dropItem(x, y, cell, item);
+                }
+            }
+            map.dropItem(x, y, cell, ItemCatalog.item(Item.Category.JUNK, BONES, members.indexOf(c)));
+            if (position >= 0) {
+                positions[position] = null;
+            }
+        }
+        return dead;
+    }
+
+    /** True once every member of a party that had any is dead: the game is over. */
+    public boolean allDead() {
+        return !members.isEmpty() && leader() == null;
+    }
+
+    /**
+     * Puts the held item in {@code c}'s mouth (DM's F349): food is eaten, a
+     * waterskin loses a draught, a potion leaves an empty flask. Returns
+     * false, changing nothing, if the item can't be eaten or drunk.
+     */
+    public boolean feed(Champion c) {
+        if (held == null || c.health() == 0) {
+            return false;
+        }
+        Item before = held;
+        Item after = Upkeep.consume(c, before);
+        if (after == before) {
+            return false;
+        }
+        held = after;
+        return true;
+    }
+
+    /**
+     * Every living champion drinks their fill from a fountain (an addition
+     * to DM, where fountains only refill waterskins and flasks). Returns
+     * false if nobody could drink.
+     */
+    public boolean drinkFromFountain() {
+        boolean drank = false;
+        for (Champion c : members) {
+            if (c.health() > 0) {
+                c.setWater(Champion.MAX_FOOD);
+                drank = true;
+            }
+        }
+        return drank;
+    }
+
     /** Fall damage for each champion, indexed like {@link #members()}. */
     private int[] fall() {
         int[] damage = new int[members.size()];
         int half = FALL_ATTACK / 2;
         for (int i = 0; i < damage.length; i++) {
-            damage[i] = members.get(i).takeDamage(half + random.nextInt(half));
+            if (members.get(i).health() > 0) {
+                damage[i] = members.get(i).takeDamage(half + random.nextInt(half));
+            }
         }
         return damage;
     }

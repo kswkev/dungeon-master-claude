@@ -5,7 +5,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 ## Project
 
 A Java/Swing remake of FTL's *Dungeon Master* (1988), built sprint by sprint.
-- Sprint 1: walk Level 1 with DM's six-button arrow panel, which is the only input.
+- Sprint 1: walk Level 1 with DM's six-button arrow panel.
 - Sprint 2: the Hall of Champions. Mirror portraits, the character sheet, Resurrect (not Reincarnate), and champion bars along the top.
 - Sprint 3: wall bumps. The original thud, 1 damage to the front-row champions with DM's damage burst on their boxes, plus the red flash.
 - Sprint 4: the original dungeon textures. Walls, floor and ceiling are pixel-exact; doors, stairs and pits are fitted. Wall/floor decorations are deferred.
@@ -16,6 +16,7 @@ A Java/Swing remake of FTL's *Dungeon Master* (1988), built sprint by sprint.
 - Sprint 9: wall interaction (switches, buttons, keyholes, coin slots, torch holders, alcoves, door buttons, AND/OR gates, pits as targets), front wall decorations at DM's positions, and hand clicks in the status boxes (#12).
 - Sprint 10: stairs between levels.
 - Sprint 11: bugs #14-#17 (alcove clicks, eye-level keyholes and levers, levers that toggle, plates pressed by items), pits that drop the party and items a level, and teleporters.
+- Sprint 12: sensor bits and teleporter scopes fixed (#20), champion upkeep (food, water, stamina, mana, health over time; eating and drinking), fountains, torches and darkness, death, and keyboard movement.
 
 Creatures, combat and spells are not implemented yet.
 
@@ -57,7 +58,7 @@ Code lives under `src/main/java/dm/`, in three layers.
   - Pits: bit 3 open, bit 2 imaginary (drawn, nothing falls), bit 0 invisible (not drawn, things still fall).
   - Teleporters: bit 3 open (active), bit 2 visible.
 - **Teleporters** (`TeleporterFinder` → `dm.model.Teleporter`): thing type 1 on a teleporter square, layout from ReDMCSB.
-  - Word 1: target X bits 0-4, Y bits 5-9, rotation bits 10-11, absolute rotation bit 12, scope bits 13-14 (1 objects, 2 creatures and the party), audible bit 15.
+  - Word 1: target X bits 0-4, Y bits 5-9, rotation bits 10-11, absolute rotation bit 12, scope bits 13-14 (0 items, 1 creatures, 2 items and the party, 3 everything; checked in the original on Level 2 (13,16), #20), audible bit 15.
   - Word 2: target **map index** (not level) in bits 8-15.
   - Verified on the PC file: all 175 teleporters lead to an open square on an existing map.
   - A teleporter that targets its own square is a "spinner": it only turns the party.
@@ -74,7 +75,7 @@ Code lives under `src/main/java/dm/`, in three layers.
   - Each image is a nibble stream: a 6-colour local palette, then single-pixel or run commands, including "copy from the row above". The javadoc on `ImageDecoder` has the details.
   - Entries 671 and up are sounds and data, not images. Entry 694 is the object name list, indexed by icon number.
   - Sounds (671–693 and 701–712) are a big-endian sample count followed by unsigned 8-bit mono PCM, played at `SOUND_SAMPLE_RATE` (5500 Hz).
-  - `GraphicsFile.sound()` reads them. Which index is which effect has to be checked by ear with `-Ddm.soundtest`. The user confirmed 687 as the wall bump and 677 as the scream (`SOUND_SCREAM`), which plays as a pit fall starts and, in DM, when a champion dies.
+  - `GraphicsFile.sound()` reads them. Which index is which effect has to be checked by ear with `-Ddm.soundtest`. The user confirmed 687 as the wall bump, 678 as the swallow and 677 as the scream (`SOUND_SCREAM`), which plays as a pit fall starts and, in DM, when a champion dies.
   - The useful entry indexes are constants on `GraphicsFile` (inventory 17, portraits 26, icon sheets 42-48, mirror 346, floor objects 498-583).
   - Icon sheets use colour 12 as their background; `Art.iconSprite` makes it transparent for the pointer.
 - **Screen layout** (`Zones`, entry 696): DM's "zones", so some screen coordinates *are* in the PC data after all.
@@ -108,7 +109,7 @@ Code lives under `src/main/java/dm/`, in three layers.
   - Handled types: 0 disabled, 1 click, 2 any item, 3 specific item (kept), 4 specific item (used up: keyholes, coin slots), 5 AND/OR gate, 13 single-object storage (torch holders). Others are ignored.
 - **Wall-side objects:** things on a wall square whose cell is the side, such as alcove and torch-holder contents. `FloorItemFinder` loads them into the same piles, except on champion-mirror sides.
   - Word 1: type in bits 0-6.
-  - Word 2: once-only bit 0, effect bits 1-2 (set/clear/toggle/hold), revert bit 3, audible bit 4, floor-ornament ordinal bits 12-15.
+  - Word 2 (`SensorBits`, from the DM Encyclopaedia): once-only bit 2, effect bits 3-4 (set/clear/toggle/hold), revert bit 5, audible bit 6, delay bits 7-10 (not modelled), local bit 11, ornament ordinal bits 12-15. Bits 0-1 are clear on all 660 sensors. Until #20 everything was read two bits too low.
   - Word 3: target X in bits 6-10, Y in bits 11-15.
   - The layout was verified on the Level 1 Hall plate (6,9) → door (5,9).
   - Only door targets do anything yet.
@@ -130,7 +131,7 @@ Code lives under `src/main/java/dm/`, in three layers.
   - Only the current map ticks.
 - **Pits and teleporters** (`Party.settle`, run after every step, after wall clicks, and on every tick):
   - An open, non-imaginary pit (`dropsThrough`) drops the party to the same dungeon-wide square one level down (`Dungeon.below`), keeping its facing. Each champion takes DM's fall damage (attack 20: 10 + random(10), no armour yet; `Party.setRandom` for tests). It keeps falling through further pits.
-  - An open teleporter whose scope includes creatures moves the party to its target and turns it (relative, or absolute with `Teleporter.turn`). Teleporters chain, up to 8 hops; a spinner only turns.
+  - An open teleporter whose scope includes the party (2 or 3) moves it to its target and turns it (relative, or absolute with `Teleporter.turn`). Teleporters chain, up to 8 hops; a spinner only turns.
   - `StepResult` carries `fell`, `teleported` and per-member `damage`; `and()` merges results.
   - `applyEffect` opens, closes and toggles pits and teleporters (live `pitOpen`/`teleporterOpen`).
 - `Party` holds up to 4 `Champion`s. `recruit(mirror)` adds the champion and marks the `ChampionMirror` as taken, so it renders empty. `facingMirror()` is the untaken mirror on the adjacent wall straight ahead.
@@ -138,7 +139,7 @@ Code lives under `src/main/java/dm/`, in three layers.
 - **Doors and sensors in `DungeonMap`:**
   - Doors have live state (0 open … 4 closed, 5 broken), seeded from the square byte. `moveDoor`/`toggleDoor` set a target, and `tickDoors()` steps toward it once per game tick. As in DM, the door sound plays on every step except the last (`DoorTick.rattled`), so a full open or close rattles 3 times.
   - `isPassable` uses the live state, so use it (not `Square.isPassable`) for doors.
-  - Floor sensors have a live `pressed` state: pressed while the party (if `triggeredBy` it) or, for type 1 only (`acceptsItems`), any item is on the square. Becoming pressed fires the effect; being released undoes it if HOLD or revert (#17). DM's type 2 is party/creature and type 3 party only, so neither counts items.
+  - Floor sensors have a live `pressed` state: pressed while the party (if `triggeredBy` it) or, for type 1 only (`acceptsItems`), any item is on the square. Becoming pressed fires the effect; a released HOLD sensor clears. Revert swaps pressing and releasing: SET+revert fires on leaving, HOLD+revert clears while pressed (Level 2 (25,3) holds the pit at (24,5) shut). DM's type 2 is party/creature and type 3 party only, so neither counts items.
   - The map tracks the party while it's on it (`partyMoved`, `partyLeft`, `placeParty`). `updateSensors(x, y)` re-checks a square after the party moves, or after `dropItem`/`pickUpItem`. `initSensors` sets the starting state silently after loading.
   - Type-3 (party) sensors need ≥1 champion. In DM an empty party is the ghost Theron.
 - **Floor items:** `FloorItemFinder` puts every object thing on a non-wall square into `DungeonMap`'s piles (`itemsAt`/`addItem`/`takeItem`), one pile per cell (0 NW, 1 NE, 2 SE, 3 SW), with the top item last.
@@ -150,12 +151,12 @@ Code lives under `src/main/java/dm/`, in three layers.
   - The decoration shown is the *last* sensor's decoration that has one (`wallOrnament`), so rotation flips pictures: a switch's lever, or a torch holder going empty.
   - After the sensors, an alcove (global decoration 1-3) swaps items with the hand.
   - **Alcove clicks (#14):** if the side shows an alcove *before* the click, only item sensors (types 2-4) run; plain click and storage sensors don't, so a button that revealed an alcove doesn't hide it again.
-  - **Levers (#16):** a lever is a local rotating click sensor plus a remote click sensor whose data always says SET. On a side with a local rotating sensor, the remote one's pull sends TOGGLE, so every pull reverses its door, pit or gate input. Checked on Level 2: (6,8) → pit (7,8), (4,10) → door (5,9).
+  - **Levers (#16):** a lever is a local rotating click sensor plus a remote TOGGLE click sensor, so every pull reverses its door, pit or gate input. Item sensors (types 2-4) with revert want an empty hand / any other item instead. Checked on Level 2: (6,8) → pit (7,8), (4,10) → door (5,9).
   - `iconOf` comes from the UI (`Art.iconIndex`), because icon numbers live in GRAPHICS.DAT.
 - **`applyEffect`:**
   - doors: set = open, clear = close, toggle;
   - pits: live `isPitOpen` state, visual only;
-  - wall squares: each AND/OR gate there gets the effect as input bit = cell. When the value hits the target it fires; with revert it fires the opposite when it leaves the target.
+  - wall squares: each AND/OR gate there gets the effect as input bit = cell. A gate is "pressed" while its value equals the target, with the same HOLD/revert rules as plates.
   - Floor plates use it too. HOLD counts as SET.
 - `pressDoorButton` toggles a door.
 - **Throwing:** `DungeonMap.throwItem` adds a `Projectile`, and `tickProjectiles()` (run from `GameScreen.tick()`) moves it one square per tick.
@@ -168,6 +169,25 @@ Code lives under `src/main/java/dm/`, in three layers.
   - `Item.fits(slot)` holds DM's slot rules: hands and backpack take anything; body slots only take what `wornOn` names; pouches take potions, scrolls and `ItemCatalog.POUCH_JUNK`; quiver 1 takes any weapon; quivers 2-4 take only missiles.
   - `Champion.take`/`place` move items, and `place` returns the item it displaced.
   - The item on the pointer is `Party.held()` (DM's leader hand), so it survives switching champions and closing the sheet.
+- **Items are values** with `charges` (weapon bits 10-13: a torch's light power; junk bits 14-15: a waterskin's draughts; a potion's power, bits 0-7). A changed item is a new one (`withCharges`). A waterskin holding water is named WATER, as DM's icon list names it. `ItemCatalog` also holds DM's weights (tenths of a kg) and food values, taken from ScummVM's DM engine because the PC keeps item 559's tables in the program.
+- **Upkeep** (`Upkeep`, ported from ReDMCSB, DM 1.2+ rules):
+  - `Party.tick()` advances DM's game clock (one per `GameScreen.TICK_MS`); every 64 ticks F331 runs for each living champion: food and water drain, stamina comes back (faster when rested 80/250 ticks, lost when starving), mana comes back for stamina when a time pattern is below wisdom + priest + wizard levels, health when stamina is at least a quarter, and statistics drift to their maximum every 256 ticks.
+  - Every move attempt (blocked too) costs each living champion `load*3/maxLoad + 1` stamina (F366). `Party.load` counts the held item for the first member (DM's leader).
+  - Stamina spent below 0 hurts by half the shortfall.
+  - Food and water start at 1500 + random(256), cap at 2048 and bottom out at -1024.
+  - `Party.feed` / `Upkeep.consume` (F349): food is eaten, a waterskin gives 800 water per draught, a water flask 1600, other potions their DM effect (YA and antivenin do nothing yet), leaving an empty flask. Each plays the swallow (`SOUND_SWALLOW` 678, confirmed by ear), as does drinking at a fountain.
+  - Sleeping, wounds and poison aren't modelled.
+- **Death** (ReDMCSB F318/F319/F444):
+  - Health 0 is dead. `GameScreen.showDamage` (the one funnel for bumps, falls and starvation) calls `Party.bury()`. Everything the champion carried falls onto their cell of the party's square in DM's drop order, hands last. Their BONES go on top, with charges = member index, for a later altar resurrection. They leave the formation, and the scream plays.
+  - A killing blow shows no damage burst. The dead box is graphic 8 with the name. A dead champion's box opens no sheet, and their hands can't be clicked. Upkeep, step costs, falls, bumps and feeding skip the dead. `Party.leader()` is the first living member.
+  - When everyone is dead (`Party.allDead`, never for an empty party) the game is over. The screen is dark blue with graphic 6 (THE END) at (120,95) in white, as DM's palette does, and input is ignored. DM's RESTART option isn't offered.
+- **Light** (`Light`, ReDMCSB F337/F338/F301; tables from ScummVM):
+  - A map of difficulty 0 (bits 12-15 of the map definition's third word; only Level 1) is always fully lit.
+  - Elsewhere the light is the torches in the champions' hands (each worth its charges through DM's power-to-light table, the four brightest first, each half the one before, plus one more) and 12 for each Illumulet worn on a neck. It picks one of DM's six dungeon palettes (thresholds 99/75/50/25/1).
+  - Torches in hands lose a charge every 512 ticks (`Party.tick`). In a hand a torch is drawn lit, its flame shrinking with its charges (icons 4-7, `ItemCatalog.shownIn`); elsewhere it's unlit.
+  - `GameScreen.drawView` draws the view off-screen and `Darkness` remaps the viewport's palette colours to the chosen palette (ScummVM's G021 values; colours 9 and 10 from the ST rows). Colour 4 (cyan) stays bright, as in DM. Other colours are dimmed by that palette's white.
+  - Not yet: DM's extra colour changes for creatures and decorations at D2/D3, and light spells.
+- **Fountains** (wall decoration 35, `DungeonMap.FOUNTAIN`): clicking one with a waterskin refills it to 3 and turns an empty flask into a water flask (DM's F377, `Upkeep.fill`), before the side's sensors run. Clicking with an empty hand lets every living champion drink to the 2048 maximum (`Party.drinkFromFountain`, `WallClick.drank`). That is the user's addition: DM itself has no direct drinking.
 
 **`ui/`: draws everything at the original 320×200 resolution**
 - `GameScreen` holds all screen state and click routing, with no Swing. `GameWindow` is a thin wrapper that scales the 320×200 buffer with nearest-neighbour filtering and maps mouse positions back. Tests and scratch renders drive `GameScreen.press`/`render` directly.
@@ -182,6 +202,7 @@ Code lives under `src/main/java/dm/`, in three layers.
   6. the rest of the view (floor or throw);
   7. the arrows.
   The arrows and the dungeon are ignored while a sheet is open.
+- **Keyboard** (`KeyMap`, `GameScreen.key`): keys go through the same path as the arrow buttons, lighting the arrow while held. The PC numpad works (7/8/9 turn left, forward, turn right; 4/5/6 left, back, right), with Num Lock off too: keypad keys are told apart by `KEY_LOCATION_NUMPAD`, so the keypad's Left sidesteps while the arrow key's Left turns. The arrow keys work (up/down move, left/right turn), and so do W/A/S/D with Q/E to turn. Keys are ignored while a sheet is open or after the end.
 - Screen regions match the original layout:
   - the dungeon view is the `ViewRenderer.VIEWPORT` rectangle (the character sheet replaces it while open);
   - the arrows are `MovementPanel.AREA`;
@@ -189,6 +210,7 @@ Code lives under `src/main/java/dm/`, in three layers.
   - the spell and action areas are drawn as empty outlines for now.
 - `CharacterSheet` slot positions come from DM's inventory background (graphic 17).
   - On a party member's sheet, clicking a cell (`Action.SLOT`, `slotAt`) picks up, places or swaps through `GameScreen.clickSlot`. A candidate's items can't be touched.
+  - The mouth (`Action.MOUTH`, viewport (56,13)) feeds the held item. A member's panel shows DM's food/water panel (graphic 20 keyed on red, labels 30/31 keyed on dark grey, F344 bars); holding the eye (`Action.EYE`, (12,13)) shows skills and statistics instead, and draws the eye looking down to the right (icon 203 via `Art.icon(int)`; 202, the background's own, is the eye not looking). Candidates always show their statistics.
   - An item that doesn't fit stays in hand.
   - With no sheet open, a click in the bottom of the view (`GameScreen.FLOOR_CLICK_Y` and below) picks up from or drops onto the party square's left or right cell ahead. A click higher up with an item in hand throws it from that side.
   - While an item is held, `GameWindow` hides the OS cursor and `GameScreen` draws `Art.iconSprite` (the icon with background colour 12 transparent) centred on the pointer, on top of everything. Text uses `PixelFont`, a hand-made 5×5 font, because the PC GRAPHICS.DAT has no UI font image.

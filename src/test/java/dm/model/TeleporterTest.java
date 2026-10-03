@@ -15,7 +15,7 @@ class TeleporterTest {
     private static final Item SWORD = ItemCatalog.item(Item.Category.WEAPON, 10);
     private static final int OPEN = (5 << 5) | 8 | 4;
     private static final int CLOSED = (5 << 5) | 4;
-    private static final int BOTH = Teleporter.SCOPE_OBJECTS | Teleporter.SCOPE_CREATURES;
+    private static final int BOTH = Teleporter.SCOPE_EVERYTHING;
 
     /** A level with the given teleporter square bytes at (x, 1). */
     private static DungeonMap level(int level, int... squaresAt) {
@@ -91,9 +91,9 @@ class TeleporterTest {
     }
 
     @Test
-    void anObjectsOnlyTeleporterLetsThePartyThroughButMovesItems() {
+    void anItemsOnlyTeleporterLetsThePartyThroughButMovesItems() {
         DungeonMap m = level(0, 3, OPEN);
-        m.addTeleporter(to(3, 0, 6, 0, false, Teleporter.SCOPE_OBJECTS));
+        m.addTeleporter(to(3, 0, 6, 0, false, Teleporter.SCOPE_ITEMS));
         Party p = new Party(List.of(m), 0, 2, 1, Direction.EAST);
         assertFalse(p.step(Party.Move.FORWARD).teleported());
         assertEquals(3, p.x());
@@ -101,6 +101,27 @@ class TeleporterTest {
         m.dropItem(3, 1, 0, SWORD);
         assertFalse(m.hasItems(3, 1));
         assertEquals(List.of(SWORD), m.itemsAt(6, 1, 0));
+    }
+
+    @Test
+    void scopesFollowDm() {
+        boolean[][] moves = { // item, creature, party
+                {true, false, false}, {false, true, false}, {true, false, true}, {true, true, true}};
+        for (int scope = 0; scope < 4; scope++) {
+            Teleporter t = to(1, 0, 2, 0, false, scope);
+            assertEquals(moves[scope][0], t.moves(Teleporter.Kind.ITEM), "scope " + scope);
+            assertEquals(moves[scope][1], t.moves(Teleporter.Kind.CREATURE), "scope " + scope);
+            assertEquals(moves[scope][2], t.moves(Teleporter.Kind.PARTY), "scope " + scope);
+        }
+    }
+
+    @Test
+    void anItemsAndPartyTeleporterMovesTheParty() {
+        DungeonMap m = level(0, 2, OPEN);
+        m.addTeleporter(to(2, 0, 6, 0, false, Teleporter.SCOPE_ITEMS_AND_PARTY));
+        Party p = new Party(List.of(m), 0, 1, 1, Direction.EAST);
+        assertTrue(p.step(Party.Move.FORWARD).teleported());
+        assertEquals(6, p.x());
     }
 
     @Test

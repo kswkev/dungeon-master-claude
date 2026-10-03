@@ -12,8 +12,8 @@ import java.util.List;
  * the link, as in ReDMCSB's TELEPORTER:
  * <pre>
  *   word 1  bits 0-4 target X, bits 5-9 target Y, bits 10-11 rotation,
- *           bit 12 absolute rotation, bits 13-14 scope (1 objects,
- *           2 creatures and the party), bit 15 audible
+ *           bit 12 absolute rotation, bits 13-14 scope (0 items,
+ *           1 creatures, 2 items and the party, 3 everything), bit 15 audible
  *   word 2  bits 8-15 target map index
  * </pre>
  */

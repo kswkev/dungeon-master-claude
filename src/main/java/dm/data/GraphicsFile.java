@@ -58,6 +58,8 @@ public final class GraphicsFile {
      * DM also plays it when a champion dies. Confirmed by ear.
      */
     public static final int SOUND_SCREAM = 677;
+    /** A champion eating or drinking (DM's C08_SOUND_SWALLOW). Confirmed by ear. */
+    public static final int SOUND_SWALLOW = 678;
     /** Playback rate of the PC samples. */
     public static final int SOUND_SAMPLE_RATE = 5500;
 

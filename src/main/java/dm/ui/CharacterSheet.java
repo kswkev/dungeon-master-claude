@@ -4,6 +4,7 @@ import dm.data.GraphicsFile;
 import dm.model.Champion;
 import dm.model.ChampionMirror;
 import dm.model.Item;
+import dm.model.ItemCatalog;
 import dm.model.Slot;
 
 import java.awt.Color;
@@ -25,8 +26,12 @@ import java.util.Map;
  */
 public final class CharacterSheet {
 
-    /** What a click asks for; SLOT means an inventory cell of a party member ({@link #slotAt}). */
-    public enum Action { NONE, RESURRECT, CLOSE, SLOT }
+    /**
+     * What a click asks for; SLOT means an inventory cell of a party member
+     * ({@link #slotAt}), MOUTH feeding them the held item, and EYE showing
+     * their skills and statistics while the button is held.
+     */
+    public enum Action { NONE, RESURRECT, CLOSE, SLOT, MOUTH, EYE }
 
     private static final Rectangle VIEW = ViewRenderer.VIEWPORT;
 
@@ -65,6 +70,20 @@ public final class CharacterSheet {
     private static final Rectangle RESURRECT_BUTTON = new Rectangle(98, 123, 62, 11);
     private static final Rectangle CANCEL_BUTTON = new Rectangle(164, 123, 58, 11);
     private static final Rectangle CLOSE_ICON = new Rectangle(208, 1, 13, 12);
+    /** DM's click zones on the inventory background (ScummVM's G0447 mouse input table, less the viewport's 33 rows). */
+    private static final Rectangle MOUTH = new Rectangle(56, 13, 16, 16);
+    private static final Rectangle EYE = new Rectangle(12, 13, 16, 16);
+
+    /** DM's food/water panel (F345): its box, the labels' boxes, and the bars' rows. */
+    private static final Point PANEL = new Point(80, 52);
+    private static final Point FOOD_LABEL = new Point(112, 60);
+    private static final Point WATER_LABEL = new Point(112, 83);
+    private static final int BAR_X = 113;
+    private static final int FOOD_BAR_Y = 69;
+    private static final int WATER_BAR_Y = 92;
+    private static final int PANEL_EMPTY = 20;
+    private static final int FOOD_LABEL_GRAPHIC = 30;
+    private static final int WATER_LABEL_GRAPHIC = 31;
 
     private static final Color TEXT = Art.PALETTE[13];
     private static final Color HEADING = Art.PALETTE[15];
@@ -78,6 +97,7 @@ public final class CharacterSheet {
     private ChampionMirror candidate;
     private boolean canRecruit;
     private Point hover;
+    private boolean pressingEye;
 
     public CharacterSheet(Art art) {
         this.art = art;
@@ -98,6 +118,16 @@ public final class CharacterSheet {
         champion = null;
         candidate = null;
         hover = null;
+        pressingEye = false;
+    }
+
+    /** While the eye is held down a member's panel shows skills and statistics instead of food and water, as in DM. */
+    public void setPressingEye(boolean pressing) {
+        pressingEye = pressing;
+    }
+
+    public boolean pressingEye() {
+        return pressingEye;
     }
 
     public boolean isOpen() {
@@ -132,6 +162,12 @@ public final class CharacterSheet {
         if (candidate == null && slotAt(x, y) != null) {
             return Action.SLOT;
         }
+        if (candidate == null && MOUTH.contains(vx, vy)) {
+            return Action.MOUTH;
+        }
+        if (candidate == null && EYE.contains(vx, vy)) {
+            return Action.EYE;
+        }
         return Action.NONE;
     }
 
@@ -165,7 +201,14 @@ public final class CharacterSheet {
             PixelFont.draw(v, champion.fullName(), 3, 3, HEADING);
             drawItems(v);
             drawVitals(v);
-            drawSkillsAndStats(v);
+            if (candidate == null && !pressingEye) {
+                drawFoodAndWater(v);
+            } else {
+                drawSkillsAndStats(v);
+            }
+            if (pressingEye) {
+                drawLookingEye(v);
+            }
             drawButtons(v);
             if (!holding) {
                 drawTooltip(v);
@@ -193,7 +236,7 @@ public final class CharacterSheet {
     private void drawItems(Graphics2D g) {
         for (Map.Entry<Slot, Item> e : champion.items().entrySet()) {
             Point p = SLOT_ICONS.get(e.getKey());
-            BufferedImage icon = art.icon(e.getValue());
+            BufferedImage icon = art.icon(ItemCatalog.shownIn(e.getValue(), e.getKey()));
             if (icon != null) {
                 g.drawImage(icon, p.x, p.y, null);
             } else {
@@ -232,6 +275,49 @@ public final class CharacterSheet {
             PixelFont.draw(g, v, TEXT_RIGHT - PixelFont.width(v), y, TEXT);
             y += STAT_LINE;
         }
+    }
+
+    /**
+     * While the eye is held DM draws it looking down to the right (icon 203,
+     * F352) over the background's eye; letting go brings back icon 202,
+     * which is what the background already shows.
+     */
+    private void drawLookingEye(Graphics2D g) {
+        BufferedImage eye = art.icon(EYE_LOOKING);
+        if (eye != null) {
+            g.drawImage(eye, EYE.x, EYE.y, null);
+        }
+    }
+
+    private static final int EYE_LOOKING = 203;
+
+    /** DM's F345: the empty panel with FOOD and WATER labels and a bar for each. */
+    private void drawFoodAndWater(Graphics2D g) {
+        BufferedImage panel = art.keyed(PANEL_EMPTY, 8);
+        BufferedImage food = art.keyed(FOOD_LABEL_GRAPHIC, 12);
+        BufferedImage water = art.keyed(WATER_LABEL_GRAPHIC, 12);
+        if (panel != null) {
+            g.drawImage(panel, PANEL.x, PANEL.y, null);
+        }
+        if (food != null && water != null) {
+            g.drawImage(food, FOOD_LABEL.x, FOOD_LABEL.y, null);
+            g.drawImage(water, WATER_LABEL.x, WATER_LABEL.y, null);
+        } else {
+            PixelFont.draw(g, "FOOD", FOOD_LABEL.x, FOOD_LABEL.y + 2, TEXT);
+            PixelFont.draw(g, "WATER", WATER_LABEL.x, WATER_LABEL.y + 2, TEXT);
+        }
+        drawFoodOrWaterBar(g, champion.food(), FOOD_BAR_Y, Art.PALETTE[5]);
+        drawFoodOrWaterBar(g, champion.water(), WATER_BAR_Y, Art.PALETTE[14]);
+    }
+
+    /** DM's F344: a 7-row bar, (amount + 1024) / 32 + 1 pixels long, with a black shadow; yellow when hungry, red when starving. */
+    private static void drawFoodOrWaterBar(Graphics2D g, int amount, int y, Color color) {
+        Color c = amount < -512 ? Art.PALETTE[8] : amount < 0 ? Art.PALETTE[11] : color;
+        int width = Math.min(amount + 1024, 3071) >> 5;
+        g.setColor(Art.PALETTE[0]);
+        g.fillRect(BAR_X + 2, y + 2, width + 1, 7);
+        g.setColor(c);
+        g.fillRect(BAR_X, y, width + 1, 7);
     }
 
     private void drawButtons(Graphics2D g) {

@@ -3,6 +3,7 @@ package dm.ui;
 import dm.data.GraphicsFile;
 import dm.model.Champion;
 import dm.model.Item;
+import dm.model.ItemCatalog;
 import dm.model.Party;
 import dm.model.Slot;
 
@@ -107,6 +108,10 @@ public final class ChampionBars {
                 g.drawRect(x, 0, BOX_W - 1, BOX_H - 1);
                 continue;
             }
+            if (c.health() == 0 && c != candidate) {
+                drawDead(g, c, x);
+                continue;
+            }
             g.setColor(BOX_BG);
             g.fillRect(x, 0, BOX_W, BOX_H);
             if (c == shown) {
@@ -119,8 +124,8 @@ public final class ChampionBars {
                 }
             } else {
                 PixelFont.draw(g, c.name(), x + 2, 2, COLORS[i]);
-                drawHand(g, c.items().get(Slot.READY_HAND), x + READY_HAND_X, HAND_Y);
-                drawHand(g, c.items().get(Slot.ACTION_HAND), x + ACTION_HAND_X, HAND_Y);
+                drawHand(g, shown(c, Slot.READY_HAND), x + READY_HAND_X, HAND_Y);
+                drawHand(g, shown(c, Slot.ACTION_HAND), x + ACTION_HAND_X, HAND_Y);
             }
             drawBar(g, x + BAR_X[0], c.health(), c.maxHealth(), COLORS[i]);
             drawBar(g, x + BAR_X[1], c.stamina(), c.maxStamina(), COLORS[i]);
@@ -131,6 +136,20 @@ public final class ChampionBars {
             }
         }
     }
+
+    /** DM's dead-champion status box (graphic 8, F292): the skull and bones with the name, and no bars or hands. */
+    private void drawDead(Graphics2D g, Champion c, int x) {
+        BufferedImage box = art.image(DEAD_BOX);
+        if (box != null) {
+            g.drawImage(box, x, 0, null);
+        } else {
+            g.setColor(Art.PALETTE[1]);
+            g.fillRect(x, 0, BOX_W, BOX_H);
+        }
+        PixelFont.draw(g, c.name(), x + 2, 2, Art.PALETTE[13]);
+    }
+
+    private static final int DEAD_BOX = 8;
 
     /** The burst covers the name and hands; the number sits in its centre. */
     private void drawDamage(Graphics2D g, int x, int damage) {
@@ -149,6 +168,12 @@ public final class ChampionBars {
             PixelFont.draw(g, n, tx + o[0], ty + o[1], Art.PALETTE[0]);
         }
         PixelFont.draw(g, n, tx, ty, Art.PALETTE[15]);
+    }
+
+    /** The item in a hand as DM draws it (a torch there is lit). */
+    private static Item shown(Champion c, Slot hand) {
+        Item item = c.items().get(hand);
+        return item == null ? null : ItemCatalog.shownIn(item, hand);
     }
 
     private void drawHand(Graphics2D g, Item item, int x, int y) {

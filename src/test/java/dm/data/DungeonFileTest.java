@@ -159,7 +159,8 @@ class DungeonFileTest {
         assertEquals(5, s.targetX());
         assertEquals(9, s.targetY());
         assertEquals(1, s.ornament(), "ordinal 4 -> Level 1 list [2, 8, 6, 1] -> square pressure plate");
-        assertTrue(!s.onceOnly() && !s.revert() && !s.audible());
+        assertTrue(!s.onceOnly() && !s.revert());
+        assertTrue(s.audible(), "bit 6: the plate clicks");
     }
 
     /** Thing ids: bits 14-15 cell, 10-13 type, 0-9 index. */

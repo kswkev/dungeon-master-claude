@@ -186,12 +186,141 @@ public final class Champion {
 
     /**
      * Lowers health by up to {@code amount}, never below 0, and returns the
-     * damage actually taken. Death isn't modelled yet: health just stops at 0.
+     * damage actually taken. At 0 the champion is dead; {@link Party#bury}
+     * then drops their things.
      */
     public int takeDamage(int amount) {
         int taken = Math.max(0, Math.min(amount, health));
         health -= taken;
         return taken;
+    }
+
+    // ---- upkeep (see Upkeep) -----------------------------------------------
+
+    /** DM's food and water: 1500 + random(256) on joining, 2048 at most, -1024 at worst; below 0 is hungry. */
+    public static final int MAX_FOOD = 2048;
+    public static final int MIN_FOOD = -1024;
+
+    private int food;
+    private int water;
+
+    /** Hunger, as in DM's champion record (not shown as a number in the game). */
+    public int food() {
+        return food;
+    }
+
+    public int water() {
+        return water;
+    }
+
+    void setFood(int food) {
+        this.food = Math.max(MIN_FOOD, Math.min(food, MAX_FOOD));
+    }
+
+    void setWater(int water) {
+        this.water = Math.max(MIN_FOOD, Math.min(water, MAX_FOOD));
+    }
+
+    /** Stamina in DM's own units (10 per point shown). */
+    int rawStamina() {
+        return stamina;
+    }
+
+    int rawMaxStamina() {
+        return maxStamina;
+    }
+
+    /**
+     * DM's F325: lowers stamina by {@code amount} (raises it if negative,
+     * up to the maximum). Spending more than is left hurts: half the
+     * shortfall, returned as damage still to be applied.
+     */
+    int decrementStamina(int amount) {
+        stamina -= amount;
+        if (stamina <= 0) {
+            int damage = -stamina >> 1;
+            stamina = 0;
+            return damage;
+        }
+        stamina = Math.min(stamina, maxStamina);
+        return 0;
+    }
+
+    void setMana(int mana) {
+        this.mana = mana;
+    }
+
+    void addHealth(int amount) {
+        health = Math.min(health + amount, maxHealth);
+    }
+
+    void addStamina(int amount) {
+        stamina = Math.min(stamina + amount, maxStamina);
+    }
+
+    void setStat(Stat s, int value) {
+        stats[s.ordinal()] = value;
+    }
+
+    /** The base skill numbers, for {@link #skillLevel}. */
+    public static final int PRIEST = 2;
+    public static final int WIZARD = 3;
+
+    /**
+     * What the champion carries, in tenths of a kilogram: everything on the
+     * body, in hand and in the pack (DM's champion Load, without the leader's
+     * hand, which {@link Party#load} adds).
+     */
+    public int load() {
+        int load = 0;
+        for (Item item : items.values()) {
+            load += item.weight();
+        }
+        return load;
+    }
+
+    /**
+     * DM's F309: 8 per point of strength plus 10 kg, less when stamina is
+     * below half, a sixteenth more in elven boots, rounded up to a whole
+     * kilogram. Wounds aren't modelled yet.
+     */
+    public int maxLoad() {
+        int max = (stat(Stat.STRENGTH) << 3) + 100;
+        max = staminaAdjusted(max);
+        Item feet = items.get(Slot.FEET);
+        if (feet != null && feet.category() == Item.Category.ARMOUR && feet.type() == ELVEN_BOOTS) {
+            max += max >> 4;
+        }
+        max += 9;
+        return max - max % 10;
+    }
+
+    private static final int ELVEN_BOOTS = 15;
+
+    /** DM's F306: below half stamina a value shrinks toward half of itself. */
+    int staminaAdjusted(int value) {
+        int half = maxStamina >> 1;
+        if (stamina < half) {
+            value >>= 1;
+            return value + (int) ((long) value * stamina / half);
+        }
+        return value;
+    }
+
+    /**
+     * DM's F348 for a potion raising a statistic: the gain halves above 120
+     * and again above 150 (then plus 1), and the value stops at 170.
+     */
+    void raiseStat(Stat s, int delta) {
+        int current = stat(s);
+        if (current > 120) {
+            delta >>= 1;
+            if (current > 150) {
+                delta >>= 1;
+            }
+            delta++;
+        }
+        stats[s.ordinal()] = current + Math.min(delta, 170 - current);
     }
 
     public String name() {
@@ -253,5 +382,10 @@ public final class Champion {
 
     public Map<Slot, Item> items() {
         return Collections.unmodifiableMap(items);
+    }
+
+    /** Swaps an item in place (a torch burning down, a waterskin drunk from) without the slot rules. */
+    void replace(Slot slot, Item item) {
+        items.put(slot, item);
     }
 }

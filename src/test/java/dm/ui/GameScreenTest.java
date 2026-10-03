@@ -95,6 +95,62 @@ class GameScreenTest {
     }
 
     @Test
+    void keysMoveLikeTheArrows() {
+        screen.key(MovementPanel.Action.BACKWARD); // from (1,1) facing north to (1,2)
+        assertEquals(2, party.y());
+        screen.keyReleased();
+        screen.key(MovementPanel.Action.TURN_LEFT);
+        assertEquals(Direction.WEST, party.facing());
+        screen.key(MovementPanel.Action.FORWARD); // into the wall
+        assertEquals(1, bumps, "a bump, as with the arrow");
+        render();
+    }
+
+    @Test
+    void keysAreIgnoredWhileASheetIsOpen() {
+        recruitElija();
+        screen.press(NAME_X, NAME_Y);
+        screen.key(MovementPanel.Action.BACKWARD);
+        assertEquals(1, party.y());
+    }
+
+    @Test
+    void aFatalBumpKillsAndEndsTheGame() {
+        recruitElija();
+        Champion elija = party.members().get(0);
+        elija.takeDamage(elija.health() - 1);
+        pressForward();
+        assertEquals(0, elija.health());
+        assertEquals(2, soundsPlayed, "the thud, then the scream");
+        assertEquals(0, screen.bars().damageShown(0, now), "no burst for a killing blow");
+        assertTrue(screen.gameOver());
+        assertEquals("BONES", last(party.map().itemsAt(1, 1, 0)).name(), "front left facing north: the NW cell");
+        render(); // THE END
+        int y = party.y();
+        pressForward();
+        assertEquals(y, party.y());
+        assertEquals(2, soundsPlayed, "input is ignored after the end");
+    }
+
+    private static Item last(List<Item> pile) {
+        return pile.get(pile.size() - 1);
+    }
+
+    @Test
+    void aDeadChampionsBoxDoesNotOpenTheirSheet() {
+        recruitElija();
+        ChampionMirror second = new ChampionMirror(2, 0, Direction.SOUTH, Champion.parse(ELIJA, 1));
+        party.recruit(second);
+        Champion first = party.members().get(0);
+        first.takeDamage(first.health());
+        party.bury();
+        screen.press(NAME_X, NAME_Y);
+        assertFalse(screen.sheet().isOpen());
+        assertFalse(screen.gameOver());
+        render(); // the dead box
+    }
+
+    @Test
     void formationBoxPicksAndPlacesAChampion() {
         recruitElija();
         Champion elija = party.members().get(0);
@@ -314,6 +370,47 @@ class GameScreenTest {
         click(Slot.ACTION_HAND);
         assertNull(party.held());
         assertSame(SWORD, mirror.champion().items().get(Slot.ACTION_HAND));
+    }
+
+    // ---- eating, drinking and the eye ----
+
+    /** DM's mouth and eye on the inventory background, in screen coordinates. */
+    private static final Point MOUTH = new Point(VIEW.x + 63, VIEW.y + 20);
+    private static final Point EYE = new Point(VIEW.x + 19, VIEW.y + 20);
+
+    @Test
+    void clickingTheMouthWithFoodEatsIt() {
+        Champion elija = openElijaWithItems();
+        int food = elija.food();
+        party.setHeld(ItemCatalog.item(Item.Category.JUNK, 30)); // corn
+        int before = soundsPlayed;
+        screen.press(MOUTH.x, MOUTH.y);
+        screen.release();
+        assertNull(party.held());
+        assertEquals(before + 1, soundsPlayed, "the swallow");
+        assertEquals(Math.min(food + 600, Champion.MAX_FOOD), elija.food());
+        render(); // the food and water panel
+    }
+
+    @Test
+    void clickingTheMouthWithASwordDoesNothing() {
+        openElijaWithItems();
+        click(Slot.ACTION_HAND);
+        int before = soundsPlayed;
+        screen.press(MOUTH.x, MOUTH.y);
+        assertSame(SWORD, party.held());
+        assertEquals(before, soundsPlayed, "nothing swallowed");
+    }
+
+    @Test
+    void holdingTheEyeShowsSkillsAndStatistics() {
+        openElijaWithItems();
+        assertFalse(screen.sheet().pressingEye());
+        screen.press(EYE.x, EYE.y);
+        assertTrue(screen.sheet().pressingEye());
+        render();
+        screen.release();
+        assertFalse(screen.sheet().pressingEye());
     }
 
     // ---- items on the floor ----

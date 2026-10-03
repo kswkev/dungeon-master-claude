@@ -99,14 +99,27 @@ class FloorSensorTest {
     }
 
     @Test
-    void revertClosesTheDoorWhenThePartyStepsOff() {
+    void aRevertPlateFiresWhenThePartyStepsOff() {
         plate(FloorSensor.TYPE_ANY, FloorSensor.Effect.SET, false, true);
         party.move(Party.Move.FORWARD);
         ticks(4);
-        assertTrue(map.isPassable(1, 1));
+        assertFalse(map.isPassable(1, 1), "stepping on does nothing");
         party.move(Party.Move.BACKWARD);
         ticks(4);
-        assertEquals(DungeonMap.DOOR_CLOSED, map.doorState(1, 1));
+        assertTrue(map.isPassable(1, 1), "stepping off opens it");
+    }
+
+    /** As on Level 2 (25,3) -> pit (24,5): HOLD + revert keeps the pit shut while something is on the plate. */
+    @Test
+    void aHoldRevertPlateClosesAPitWhilePressed() {
+        DungeonMap m = DungeonMap.fromAscii(0, "######", "#..O.#", "######");
+        m.addSensor(new FloorSensor(1, 1, FloorSensor.TYPE_ANY, FloorSensor.Effect.HOLD, false, true, false,
+                3, 1, -1));
+        assertTrue(m.isPitOpen(3, 1));
+        m.dropItem(1, 1, 0, SWORD);
+        assertFalse(m.isPitOpen(3, 1), "the item holds it shut");
+        m.pickUpItem(1, 1, 0);
+        assertTrue(m.isPitOpen(3, 1));
     }
 
     @Test
@@ -144,10 +157,10 @@ class FloorSensorTest {
 
     private static final Item SWORD = ItemCatalog.item(Item.Category.WEAPON, 10);
 
-    /** Issue #17, as on Level 2 (25,1) -> door (27,0): an "anything" plate, SET with revert. */
+    /** Issue #17, as on Level 2 (25,1) -> door (27,0): an "anything" HOLD plate. */
     @Test
     void anItemOnThePlateHoldsTheDoorOpen() {
-        plate(FloorSensor.TYPE_ANY, FloorSensor.Effect.SET, false, true);
+        plate(FloorSensor.TYPE_ANY, FloorSensor.Effect.HOLD, false, false);
         DungeonMap.StepResult r = map.dropItem(2, 1, 0, SWORD);
         assertTrue(r.doorStarted());
         assertTrue(r.click());
@@ -163,7 +176,7 @@ class FloorSensorTest {
 
     @Test
     void theDoorStaysOpenWhileAnItemIsLeftBehind() {
-        plate(FloorSensor.TYPE_ANY, FloorSensor.Effect.SET, false, true);
+        plate(FloorSensor.TYPE_ANY, FloorSensor.Effect.HOLD, false, false);
         party.move(Party.Move.FORWARD); // onto the plate
         map.dropItem(2, 1, 0, SWORD);
         party.move(Party.Move.BACKWARD);
@@ -181,7 +194,7 @@ class FloorSensorTest {
 
     @Test
     void aThrownItemLandingOnThePlateOpensTheDoor() {
-        plate(FloorSensor.TYPE_ANY, FloorSensor.Effect.SET, false, true);
+        plate(FloorSensor.TYPE_ANY, FloorSensor.Effect.HOLD, false, false);
         map.throwItem(SWORD, 3, 1, Direction.WEST, false, 4);
         map.tickProjectiles();
         DungeonMap.ProjectileTick landed = map.tickProjectiles(); // the closed door stops it on the plate

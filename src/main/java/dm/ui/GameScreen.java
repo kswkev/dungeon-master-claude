@@ -15,6 +15,7 @@ import java.awt.Graphics2D;
 import java.awt.Point;
 import java.awt.Rectangle;
 import java.awt.image.BufferedImage;
+import java.util.List;
 import java.util.function.LongSupplier;
 
 /**
@@ -52,6 +53,7 @@ public final class GameScreen {
     private final Sound doorSound;
     private final Sound clickSound;
     private final Sound screamSound;
+    private final Sound swallowSound;
     private LongSupplier clock = System::currentTimeMillis;
     private Runnable onBump = () -> { };
     private Runnable onDamage = () -> { };
@@ -76,6 +78,7 @@ public final class GameScreen {
         this.doorSound = art.sound(GraphicsFile.SOUND_DOOR);
         this.clickSound = art.sound(GraphicsFile.SOUND_CLICK);
         this.screamSound = art.sound(GraphicsFile.SOUND_SCREAM);
+        this.swallowSound = art.sound(GraphicsFile.SOUND_SWALLOW);
     }
 
     public FormationBox formation() {
@@ -96,7 +99,11 @@ public final class GameScreen {
             sounds.play(clickSound);
         }
         boolean moved = arrived(party.settle()); // a landing item may have opened a pit under the party
-        return doors.moved() || flew.moved() || moved;
+        Party.Tick upkeep = party.tick();
+        if (upkeep.damage() != null) {
+            showDamage(upkeep.damage());
+        }
+        return doors.moved() || flew.moved() || moved || upkeep.changed();
     }
 
     /**
@@ -166,6 +173,9 @@ public final class GameScreen {
     /** Handles a left-button press at screen point (x, y). */
     public void press(int x, int y) {
         pointer = new Point(x, y);
+        if (gameOver) {
+            return;
+        }
         if (clickHand(x, y)) {
             return;
         }
@@ -175,7 +185,9 @@ public final class GameScreen {
         }
         int box = bars.hitTest(x, y);
         if (box >= 0 && box < party.members().size()) {
-            sheet.openMember(party.members().get(box));
+            if (party.members().get(box).health() > 0) { // a dead champion's box does nothing
+                sheet.openMember(party.members().get(box));
+            }
             return;
         }
         if (FormationBox.AREA.contains(x, y)) {
@@ -224,13 +236,16 @@ public final class GameScreen {
                     sheet.close();
                 }
                 case CLOSE -> sheet.close();
+                case MOUTH -> feed(sheet.champion());
+                case EYE -> sheet.setPressingEye(true);
                 case NONE -> { }
             }
             return;
         }
         // Clicking party boxes switches between members (DM toggles off the one shown).
         int box = bars.hitTest(x, y);
-        if (sheet.candidate() == null && box >= 0 && box < party.members().size()) {
+        if (sheet.candidate() == null && box >= 0 && box < party.members().size()
+                && party.members().get(box).health() > 0) {
             if (party.members().get(box) == sheet.champion()) {
                 sheet.close();
             } else {
@@ -250,11 +265,24 @@ public final class GameScreen {
             return false;
         }
         Champion champion = party.members().get(hand.box());
-        if (champion == sheet.champion()) {
+        if (champion == sheet.champion() || champion.health() == 0) {
             return false;
         }
         clickSlot(champion, hand.slot());
         return true;
+    }
+
+    /** Clicking the mouth with food, a waterskin or a potion in hand: the champion eats or drinks it. */
+    private void feed(Champion champion) {
+        Item item = party.held();
+        if (!party.feed(champion)) {
+            return;
+        }
+        sounds.play(swallowSound);
+        if (debug) {
+            System.out.printf("%s consumed %s: food %d, water %d%n",
+                    champion.name(), item.name(), champion.food(), champion.water());
+        }
     }
 
     /** The square straight ahead of the party. */
@@ -283,10 +311,14 @@ public final class GameScreen {
         if (result.sound()) {
             sounds.play(clickSound);
         }
+        if (result.drank()) {
+            sounds.play(swallowSound);
+        }
         if (debug) {
             System.out.println("Clicked wall (" + aheadX() + "," + aheadY() + ") " + party.facing().opposite()
                     + ": " + party.map().wallSensors(aheadX(), aheadY(), party.facing().opposite())
                     + (result.fired() ? " fired" : "") + (result.doorStarted() ? ", door moving" : "")
+                    + (result.drank() ? ", the party drank" : "")
                     + (result.handChanged() ? ", hand " + name(before) + " -> " + name(party.held()) : ""));
         }
         arrived(party.settle()); // a lever may have opened a pit under the party
@@ -358,8 +390,27 @@ public final class GameScreen {
         return party.held() != null;
     }
 
+    /**
+     * A movement key ({@link KeyMap}): the same as clicking that arrow, which
+     * lights up while the key is held. Ignored while a sheet is open or once
+     * the game is over, like the arrows.
+     */
+    public void key(MovementPanel.Action action) {
+        if (action == null || gameOver || sheet.isOpen()) {
+            return;
+        }
+        arrows.setPressed(action);
+        move(action);
+    }
+
+    /** A movement key was let go: its arrow stops being lit. */
+    public void keyReleased() {
+        arrows.setPressed(null);
+    }
+
     public void release() {
         arrows.setPressed(null);
+        sheet.setPressingEye(false);
     }
 
     /** The mouse moved to screen point (x, y). */
@@ -422,12 +473,17 @@ public final class GameScreen {
         onBump.run();
     }
 
-    /** DM's damage burst on each hurt champion's box; the caller's onDamage repaints once it has expired. */
+    /**
+     * DM's damage burst on each hurt champion's box; the caller's onDamage
+     * repaints once it has expired. A killing blow shows no burst, as in DM:
+     * the champion's things fall, the scream plays, and if nobody is left
+     * the game is over.
+     */
     private void showDamage(int[] damage) {
         onDamage.run();
         long until = clock.getAsLong() + DAMAGE_SHOWN_MS;
         for (int i = 0; i < damage.length; i++) {
-            if (damage[i] > 0) {
+            if (damage[i] > 0 && party.members().get(i).health() > 0) {
                 bars.showDamage(i, damage[i], until);
                 if (debug) {
                     System.out.printf("%s takes %d damage (health %d)%n",
@@ -435,9 +491,71 @@ public final class GameScreen {
                 }
             }
         }
+        buryTheDead();
     }
 
+    private boolean gameOver;
+
+    /** True once the whole party has died: the screen shows THE END and ignores input. */
+    public boolean gameOver() {
+        return gameOver;
+    }
+
+    /** DM's F319 for whoever just died: their things fall, the scream, their sheet closes; all dead ends the game. */
+    private void buryTheDead() {
+        List<Champion> dead = party.bury();
+        if (dead.isEmpty()) {
+            return;
+        }
+        sounds.play(screamSound);
+        if (dead.contains(sheet.champion())) {
+            sheet.close();
+        }
+        if (debug) {
+            dead.forEach(c -> System.out.println(c.name() + " has died"));
+        }
+        if (party.allDead()) {
+            gameOver = true;
+            sheet.close();
+            party.setHeld(null);
+            if (debug) {
+                System.out.println("The party is dead: THE END");
+            }
+        }
+    }
+
+    /**
+     * DM's endgame (F444): THE END on a cleared screen, shown through a
+     * palette that is dark blue everywhere but white (colour 15), so the
+     * whole screen is dark blue with white lettering.
+     */
+    private void drawTheEnd(Graphics2D g) {
+        g.setColor(new Color(END_BLUE));
+        g.fillRect(0, 0, WIDTH, HEIGHT);
+        BufferedImage end = art.image(THE_END);
+        if (end == null) {
+            PixelFont.draw(g, "THE END", 142, 98, Color.WHITE);
+            return;
+        }
+        int white = Art.PALETTE[15].getRGB();
+        BufferedImage tinted = new BufferedImage(end.getWidth(), end.getHeight(), BufferedImage.TYPE_INT_RGB);
+        for (int y = 0; y < end.getHeight(); y++) {
+            for (int x = 0; x < end.getWidth(); x++) {
+                tinted.setRGB(x, y, end.getRGB(x, y) == white ? white : END_BLUE);
+            }
+        }
+        g.drawImage(tinted, 120, 95, null);
+    }
+
+    private static final int THE_END = 6;
+    /** DM fades every colour but white to dark blue for the ending (ST 0x002). */
+    private static final int END_BLUE = 0x000044;
+
     public void render(Graphics2D g) {
+        if (gameOver) {
+            drawTheEnd(g);
+            return;
+        }
         g.setColor(Color.BLACK);
         g.fillRect(0, 0, WIDTH, HEIGHT);
         drawPlaceholders(g);
@@ -448,7 +566,7 @@ public final class GameScreen {
         if (sheet.isOpen()) {
             sheet.draw(g, holding());
         } else {
-            view.draw(g, party);
+            drawView(g);
         }
         if (bumped) {
             g.setColor(new Color(200, 0, 0));
@@ -461,6 +579,33 @@ public final class GameScreen {
             PixelFont.draw(g, party.x() + "," + party.y() + " " + party.facing(), 236, 190, Color.YELLOW);
         }
         drawHeldItem(g);
+    }
+
+    /** Screen-sized buffer the dungeon view is drawn into before {@link Darkness} dims it. */
+    private final BufferedImage viewBuffer = new BufferedImage(WIDTH, HEIGHT, BufferedImage.TYPE_INT_RGB);
+
+    /**
+     * The dungeon view in the palette the party's light calls for (DM's
+     * F337). Only the viewport darkens; the rest of the screen keeps the
+     * bright palette, as in DM.
+     */
+    private void drawView(Graphics2D g) {
+        int palette = party.paletteIndex();
+        if (palette == 0) {
+            view.draw(g, party);
+            return;
+        }
+        Graphics2D vg = viewBuffer.createGraphics();
+        try {
+            vg.setColor(Color.BLACK);
+            vg.fillRect(0, 0, WIDTH, HEIGHT);
+            view.draw(vg, party);
+        } finally {
+            vg.dispose();
+        }
+        Rectangle v = ViewRenderer.VIEWPORT;
+        Darkness.apply(viewBuffer, v, palette);
+        g.drawImage(viewBuffer.getSubimage(v.x, v.y, v.width, v.height), v.x, v.y, null);
     }
 
     /** The held item replaces the mouse pointer: its icon centred on the pointer, over everything else. */
