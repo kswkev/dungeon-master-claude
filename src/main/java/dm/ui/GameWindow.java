@@ -35,8 +35,13 @@ public final class GameWindow extends JFrame {
     public GameWindow(Party party, Art art, SoundPlayer sounds, boolean debug) {
         super(title(party));
         setDefaultCloseOperation(EXIT_ON_CLOSE);
-        add(new Screen(new GameScreen(party, art, sounds, debug), () -> {
-            String title = title(party);
+        GameScreen game = new GameScreen(party, art, sounds, debug);
+        game.setOnQuit(() -> {
+            dispose();
+            System.exit(0);
+        });
+        add(new Screen(game, () -> {
+            String title = title(game.party()); // a loaded game may be on another level
             if (!title.equals(getTitle())) {
                 setTitle(title); // the party took the stairs
             }
@@ -126,6 +131,11 @@ public final class GameWindow extends JFrame {
             addKeyListener(new KeyAdapter() {
                 @Override
                 public void keyPressed(KeyEvent e) {
+                    if (e.getKeyCode() == KeyEvent.VK_ESCAPE) {
+                        game.escape();
+                        repaint();
+                        return;
+                    }
                     MovementPanel.Action action = KeyMap.action(e.getKeyCode(), e.getKeyLocation());
                     if (action != null) {
                         game.key(action);

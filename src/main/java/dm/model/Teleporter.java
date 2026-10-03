@@ -1,5 +1,7 @@
 package dm.model;
 
+import java.io.Serializable;
+
 /**
  * The teleporter on square (x, y), decoded from a DUNGEON.DAT teleporter thing.
  * What steps onto it while it is open is moved to (targetX, targetY) on map
@@ -10,7 +12,7 @@ package dm.model;
  *                 {@link #SCOPE_ITEMS_AND_PARTY} or {@link #SCOPE_EVERYTHING}
  */
 public record Teleporter(int x, int y, int targetMap, int targetX, int targetY, int rotation, boolean absolute,
-                         int scope, boolean audible) {
+                         int scope, boolean audible) implements Serializable {
 
     /**
      * Items only. Checked in the original (#20): an item thrown into Level 2's

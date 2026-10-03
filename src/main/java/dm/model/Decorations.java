@@ -1,5 +1,6 @@
 package dm.model;
 
+import java.io.Serializable;
 import java.util.Arrays;
 
 /**
@@ -7,7 +8,9 @@ import java.util.Arrays;
  * per floor square, and one per door, each as a global ornament index into
  * GRAPHICS.DAT's decoration art, or -1 for none. Inscriptions also keep their text.
  */
-public final class Decorations {
+public final class Decorations implements Serializable {
+
+    private static final long serialVersionUID = 1L;
 
     private final int[][][] wall;      // [x][y][side]
     private final String[][][] text;   // [x][y][side], inscriptions only

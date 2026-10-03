@@ -1,6 +1,7 @@
 package dm.ui;
 
 import dm.data.GraphicsFile;
+import dm.data.SaveGames;
 import dm.data.Sound;
 import dm.model.Champion;
 import dm.model.ChampionMirror;
@@ -15,6 +16,7 @@ import java.awt.Graphics2D;
 import java.awt.Point;
 import java.awt.Rectangle;
 import java.awt.image.BufferedImage;
+import java.io.IOException;
 import java.util.List;
 import java.util.function.LongSupplier;
 
@@ -40,7 +42,8 @@ public final class GameScreen {
     /** Viewport rows from here down are the floor of the party's own square (pick up and drop); above is for throwing. */
     static final int FLOOR_CLICK_Y = 100;
 
-    private final Party party;
+    /** The game being played; loading a saved game replaces it ({@link #restore}). */
+    private Party party;
     private final Art art;
     private final boolean debug;
     private final ViewRenderer view;
@@ -60,6 +63,9 @@ public final class GameScreen {
     private boolean bumped;
     /** Last mouse position in screen coordinates, or null when the mouse is outside the window. */
     private Point pointer;
+    private final GameMenu menu;
+    private SaveGames saves = SaveGames.standard();
+    private Runnable onQuit = () -> { };
 
     public GameScreen(Party party, Art art, boolean debug) {
         this(party, art, SoundPlayer.silent(), debug);
@@ -73,6 +79,7 @@ public final class GameScreen {
         this.bars = new ChampionBars(art);
         this.sheet = new CharacterSheet(art);
         this.formation = new FormationBox(art);
+        this.menu = new GameMenu(art);
         this.sounds = sounds;
         this.bumpSound = art.sound(GraphicsFile.SOUND_BUMP);
         this.doorSound = art.sound(GraphicsFile.SOUND_DOOR);
@@ -85,11 +92,34 @@ public final class GameScreen {
         return formation;
     }
 
+    /** The game being played (a loaded game replaces the one the screen started with). */
+    public Party party() {
+        return party;
+    }
+
+    public GameMenu menu() {
+        return menu;
+    }
+
+    /** Where games are saved; {@link SaveGames#standard()} unless replaced (tests use a temporary folder). */
+    public void setSaveGames(SaveGames saves) {
+        this.saves = saves;
+    }
+
+    /** Called when the player quits from the game menu; the window closes the game. */
+    public void setOnQuit(Runnable onQuit) {
+        this.onQuit = onQuit;
+    }
+
     /**
      * Advances the game clock by one tick (the window calls this about every
-     * {@link #TICK_MS} ms). Returns true if anything visible changed.
+     * {@link #TICK_MS} ms). Returns true if anything visible changed. Nothing
+     * moves while the game menu is open: as in DM, a dialog pauses the game.
      */
     public boolean tick() {
+        if (menu.isOpen()) {
+            return false;
+        }
         DungeonMap.DoorTick doors = party.map().tickDoors();
         if (doors.rattled()) {
             sounds.play(doorSound);
@@ -173,6 +203,10 @@ public final class GameScreen {
     /** Handles a left-button press at screen point (x, y). */
     public void press(int x, int y) {
         pointer = new Point(x, y);
+        if (menu.isOpen()) {
+            clickMenu(menu.click(x, y));
+            return;
+        }
         if (gameOver) {
             return;
         }
@@ -238,6 +272,7 @@ public final class GameScreen {
                 case CLOSE -> sheet.close();
                 case MOUTH -> feed(sheet.champion());
                 case EYE -> sheet.setPressingEye(true);
+                case DISK -> menu.open();
                 case NONE -> { }
             }
             return;
@@ -270,6 +305,90 @@ public final class GameScreen {
         }
         clickSlot(champion, hand.slot());
         return true;
+    }
+
+    /**
+     * A click on the game menu. CANCEL goes back to the character sheet the
+     * menu was opened from; OPTIONS does nothing yet.
+     */
+    private void clickMenu(GameMenu.Click click) {
+        switch (click.choice()) {
+            case SAVE -> menu.showSlots(true);
+            case LOAD -> menu.showSlots(false);
+            case QUIT -> menu.showQuit();
+            case SAVE_AND_QUIT -> menu.saveThenQuit();
+            case QUIT_NOW -> quit();
+            case CANCEL, OK -> menu.close();
+            case SLOT -> {
+                if (menu.screen() == GameMenu.Screen.SAVE_SLOTS) {
+                    save(click.slot());
+                } else {
+                    load(click.slot());
+                }
+            }
+            case OPTIONS, NONE -> { } // OPTIONS comes in a later sprint
+        }
+    }
+
+    private void save(int slot) {
+        boolean thenQuit = menu.quitAfterSave();
+        try {
+            saves.save(slot, party);
+        } catch (IOException e) {
+            menu.showMessage("UNABLE TO SAVE GAME", e.getMessage());
+            return;
+        }
+        if (debug) {
+            System.out.println("Saved to slot " + slot + ": " + saves.file(slot).toAbsolutePath());
+        }
+        if (thenQuit) {
+            quit();
+        } else {
+            menu.showMessage("GAME SAVED", null);
+        }
+    }
+
+    /** Loading an empty slot does nothing. */
+    private void load(int slot) {
+        if (saves.header(slot) == null) {
+            return;
+        }
+        try {
+            restore(saves.load(slot));
+        } catch (IOException e) {
+            menu.showMessage("UNABLE TO LOAD GAME", e.getMessage());
+            return;
+        }
+        if (debug) {
+            System.out.printf("Loaded slot %d: Level %d (%d,%d)%n", slot, party.level() + 1, party.x(), party.y());
+        }
+        menu.showMessage("GAME LOADED, READY TO PLAY", null);
+    }
+
+    /** Swaps in a loaded game and clears what the screen remembered of the old one. */
+    void restore(Party loaded) {
+        party = loaded;
+        sheet.close();
+        gameOver = false;
+        bumped = false;
+        bars.clearDamage();
+        formation.clearPick();
+        arrows.setPressed(null);
+    }
+
+    private void quit() {
+        menu.close();
+        if (debug) {
+            System.out.println("Quit");
+        }
+        onQuit.run();
+    }
+
+    /** Esc: backs out of the game menu, as its CANCEL does. */
+    public void escape() {
+        if (menu.isOpen()) {
+            menu.close();
+        }
     }
 
     /** Clicking the mouth with food, a waterskin or a potion in hand: the champion eats or drinks it. */
@@ -396,7 +515,7 @@ public final class GameScreen {
      * the game is over, like the arrows.
      */
     public void key(MovementPanel.Action action) {
-        if (action == null || gameOver || sheet.isOpen()) {
+        if (action == null || gameOver || sheet.isOpen() || menu.isOpen()) {
             return;
         }
         arrows.setPressed(action);
@@ -563,7 +682,9 @@ public final class GameScreen {
         bars.draw(g, party.members(), sheet.champion(), viewed == null ? null : viewed.champion(),
                 clock.getAsLong());
         formation.draw(g, party);
-        if (sheet.isOpen()) {
+        if (menu.isOpen()) {
+            menu.draw(g, saves::header);
+        } else if (sheet.isOpen()) {
             sheet.draw(g, holding());
         } else {
             drawView(g);

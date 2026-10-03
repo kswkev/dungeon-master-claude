@@ -1,5 +1,7 @@
 package dm.model;
 
+import java.io.Serializable;
+
 /**
  * A thrown item in flight. It travels along {@code direction} one square per
  * game tick and keeps to its side of the corridor: {@code cell} is the
@@ -7,7 +9,7 @@ package dm.model;
  *
  * @param range squares it may still travel
  */
-public record Projectile(Item item, int x, int y, Direction direction, int cell, int range) {
+public record Projectile(Item item, int x, int y, Direction direction, int cell, int range) implements Serializable {
 
     Projectile advance() {
         return new Projectile(item, x + direction.dx, y + direction.dy, direction, cell, range - 1);

@@ -1,6 +1,7 @@
 package dm.ui;
 
 import dm.data.DungeonFile;
+import dm.data.SaveGames;
 import dm.model.Direction;
 import dm.model.DungeonMap;
 import dm.model.Item;
@@ -8,6 +9,7 @@ import dm.model.ItemCatalog;
 import dm.model.Party;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.io.TempDir;
 
 import java.awt.Graphics2D;
 import java.awt.Rectangle;
@@ -183,6 +185,29 @@ class RealDungeonTest {
         p.setHeld(ItemCatalog.item(Item.Category.JUNK, ItemCatalog.WATERSKIN));
         map.clickWall(4, 6, Direction.WEST, p, i -> 0);
         assertEquals(3, p.held().charges());
+    }
+
+    /** Sprint 13: a game saved on Level 2 after pulling the (6,8) lever comes back with the pit still closed. */
+    @Test
+    void aSavedGameKeepsTheDungeonAsItWas(@TempDir Path dir) throws Exception {
+        Party p = level2(6, 7, Direction.SOUTH);
+        p.recruit(dungeon.maps().get(0).mirrors().get(0));
+        p.map().clickWall(6, 8, Direction.NORTH, p, i -> 0);
+        assertFalse(p.map().isPitOpen(7, 8));
+        for (int i = 0; i < 200; i++) {
+            p.tick();
+        }
+        SaveGames saves = new SaveGames(dir);
+        saves.save(1, p);
+        Party loaded = saves.load(1);
+        assertEquals(1, loaded.level());
+        assertEquals(6, loaded.x());
+        assertEquals(7, loaded.y());
+        assertEquals(p.time(), loaded.time());
+        assertFalse(loaded.map().isPitOpen(7, 8), "the lever's work survives");
+        assertEquals(p.members().get(0).food(), loaded.members().get(0).food());
+        loaded.map().clickWall(6, 8, Direction.NORTH, loaded, i -> 0);
+        assertTrue(loaded.map().isPitOpen(7, 8), "and the lever still works");
     }
 
     /** #15: the gold keyhole at (0,3) north is centred at eye level, row 48 of the viewport. */

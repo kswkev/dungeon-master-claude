@@ -17,6 +17,7 @@ A Java/Swing remake of FTL's *Dungeon Master* (1988), built sprint by sprint.
 - Sprint 10: stairs between levels.
 - Sprint 11: bugs #14-#17 (alcove clicks, eye-level keyholes and levers, levers that toggle, plates pressed by items), pits that drop the party and items a level, and teleporters.
 - Sprint 12: sensor bits and teleporter scopes fixed (#20), champion upkeep (food, water, stamina, mana, health over time; eating and drinking), fountains, torches and darkness, death, and keyboard movement.
+- Sprint 13: save, load and quit from the disk icon on the character sheet (a game menu built from DM's dialog art, 4 save slots).
 
 Creatures, combat and spells are not implemented yet.
 
@@ -202,6 +203,16 @@ Code lives under `src/main/java/dm/`, in three layers.
   6. the rest of the view (floor or throw);
   7. the arrows.
   The arrows and the dungeon are ignored while a sheet is open.
+- **Game menu** (`GameMenu`, opened by the sheet's disk icon, `CharacterSheet.Action.DISK` at viewport (174,3,9,9)):
+  - Drawn over the viewport from DM's dialog box, graphic 0 (224×136). Its pieces: message panel (10,10)-(213,51), wide button (10,62)-(213,88), half buttons (10..107 / 117..213, y 99..125).
+  - The menu's own screens rearrange those pieces into a title strip and three rows: MAIN is SAVE | LOAD, QUIT | OPTIONS, CANCEL; the slot screens show 4 slot buttons and CANCEL. QUIT (SAVE AND QUIT / QUIT / CANCEL) and the OK messages use DM's own 3- and 1-choice layouts.
+  - Text is gold on brown (DM's F425), titles and messages yellow.
+  - While the menu is open, clicks go only to it, `tick()` does nothing (the game is paused, as in DM), and keys are ignored. CANCEL (or Esc, `GameScreen.escape`) returns to the sheet. OPTIONS does nothing yet. Quitting runs `GameScreen.setOnQuit`; the window exits.
+  - Loading swaps the party (`GameScreen.restore`, so `party` isn't final, and `GameScreen.party()` is the current one) and clears the sheet, the end, bursts and the formation pick.
+- **Saved games** (`dm.data.SaveGames`): 4 slots, `saves/slotN.dmsave` (`-Ddm.saves` changes the folder; git-ignored).
+  - A file is the text DMREMAKE-SAVE, a version int, a `Header` (level, game time, saved-at, champion names) for the slot buttons, then the whole `Party` by Java serialization. Every model class it reaches is `Serializable`, so new model state is saved automatically; keep new fields serializable, and bump `VERSION` when old saves can't be read.
+  - Saves go to a temp file that is then moved into place. Loading accepts only `dm.*` and `java.*` classes (an `ObjectInputFilter`).
+  - About 1 MB, as a save holds the whole parsed dungeon.
 - **Keyboard** (`KeyMap`, `GameScreen.key`): keys go through the same path as the arrow buttons, lighting the arrow while held. The PC numpad works (7/8/9 turn left, forward, turn right; 4/5/6 left, back, right), with Num Lock off too: keypad keys are told apart by `KEY_LOCATION_NUMPAD`, so the keypad's Left sidesteps while the arrow key's Left turns. The arrow keys work (up/down move, left/right turn), and so do W/A/S/D with Q/E to turn. Keys are ignored while a sheet is open or after the end.
 - Screen regions match the original layout:
   - the dungeon view is the `ViewRenderer.VIEWPORT` rectangle (the character sheet replaces it while open);

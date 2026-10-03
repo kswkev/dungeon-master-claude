@@ -1,5 +1,7 @@
 package dm.model;
 
+import java.io.Serializable;
+
 /**
  * A sensor on one side of a wall square: switches, buttons, keyholes, coin
  * slots, torch holders and the logic gates behind them, decoded from a
@@ -10,7 +12,9 @@ package dm.model;
  * up or down) or sends its effect to a target square: a door, a pit, or the
  * gates on another wall square. See {@link DungeonMap#clickWall}.
  */
-public final class WallSensor {
+public final class WallSensor implements Serializable {
+
+    private static final long serialVersionUID = 1L;
 
     /** DM's wall sensor types handled here. */
     public static final int TYPE_DISABLED = 0;

@@ -1,10 +1,14 @@
 package dm.model;
 
+import java.io.Serializable;
+
 /**
  * A Hall of Champions mirror: a portrait on one side of wall square (x, y).
  * {@code side} is the side of the wall it hangs on, i.e. the direction it faces.
  */
-public final class ChampionMirror {
+public final class ChampionMirror implements Serializable {
+
+    private static final long serialVersionUID = 1L;
 
     private final int x;
     private final int y;

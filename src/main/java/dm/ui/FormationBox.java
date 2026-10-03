@@ -55,6 +55,11 @@ public final class FormationBox {
         return picked;
     }
 
+    /** Forgets a half-made swap (a game was loaded). */
+    void clearPick() {
+        picked = -1;
+    }
+
     /** Handles a click inside {@link #AREA}; returns true if the formation changed. */
     public boolean click(Party party, int x, int y) {
         int position = hitTest(x, y);

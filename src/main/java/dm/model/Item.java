@@ -1,5 +1,7 @@
 package dm.model;
 
+import java.io.Serializable;
+
 /**
  * An object a champion can carry. Items are values: one that changes (a
  * waterskin drunk from, a flask emptied) is replaced by a new one.
@@ -12,7 +14,8 @@ package dm.model;
  * @param charges     DM's charge count: a weapon's charges (a torch's light power, 0-15),
  *                    a waterskin's draughts (0-3), or a potion's power (0-255)
  */
-public record Item(Category category, int type, String name, int nameVariant, Slot wornOn, int charges) {
+public record Item(Category category, int type, String name, int nameVariant, Slot wornOn, int charges)
+        implements Serializable {
 
     public enum Category { WEAPON, ARMOUR, SCROLL, POTION, CONTAINER, JUNK }
 

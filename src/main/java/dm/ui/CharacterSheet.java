@@ -28,10 +28,11 @@ public final class CharacterSheet {
 
     /**
      * What a click asks for; SLOT means an inventory cell of a party member
-     * ({@link #slotAt}), MOUTH feeding them the held item, and EYE showing
-     * their skills and statistics while the button is held.
+     * ({@link #slotAt}), MOUTH feeding them the held item, EYE showing
+     * their skills and statistics while the button is held, and DISK the
+     * game menu (save, load, quit).
      */
-    public enum Action { NONE, RESURRECT, CLOSE, SLOT, MOUTH, EYE }
+    public enum Action { NONE, RESURRECT, CLOSE, SLOT, MOUTH, EYE, DISK }
 
     private static final Rectangle VIEW = ViewRenderer.VIEWPORT;
 
@@ -73,6 +74,8 @@ public final class CharacterSheet {
     /** DM's click zones on the inventory background (ScummVM's G0447 mouse input table, less the viewport's 33 rows). */
     private static final Rectangle MOUTH = new Rectangle(56, 13, 16, 16);
     private static final Rectangle EYE = new Rectangle(12, 13, 16, 16);
+    /** The disk icon top right (DM's save command, screen 174-182 x 36-44): opens the {@link GameMenu}. */
+    private static final Rectangle DISK = new Rectangle(174, 3, 9, 9);
 
     /** DM's food/water panel (F345): its box, the labels' boxes, and the bars' rows. */
     private static final Point PANEL = new Point(80, 52);
@@ -152,6 +155,9 @@ public final class CharacterSheet {
     public Action click(int x, int y) {
         int vx = x - VIEW.x;
         int vy = y - VIEW.y;
+        if (DISK.contains(vx, vy)) {
+            return Action.DISK;
+        }
         if (CLOSE_ICON.contains(vx, vy) || CANCEL_BUTTON.contains(vx, vy)) {
             return Action.CLOSE;
         }
@@ -169,6 +175,11 @@ public final class CharacterSheet {
             return Action.EYE;
         }
         return Action.NONE;
+    }
+
+    /** Screen point at the centre of the disk icon, for tests. */
+    static Point diskCentre() {
+        return new Point(VIEW.x + DISK.x + DISK.width / 2, VIEW.y + DISK.y + DISK.height / 2);
     }
 
     /** Screen point at the centre of a slot's icon, for tests and scripted clicks. */
