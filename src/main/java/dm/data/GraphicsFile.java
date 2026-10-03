@@ -53,6 +53,11 @@ public final class GraphicsFile {
     public static final int SOUND_DOOR = 673;
     /** The click of an audible pressure plate (DM's switch sound); confirmed by ear. */
     public static final int SOUND_CLICK = 672;
+    /**
+     * The scream when the party falls into a pit, played as the fall starts;
+     * DM also plays it when a champion dies. Confirmed by ear.
+     */
+    public static final int SOUND_SCREAM = 677;
     /** Playback rate of the PC samples. */
     public static final int SOUND_SAMPLE_RATE = 5500;
 

@@ -74,7 +74,7 @@ Code lives under `src/main/java/dm/`, in three layers.
   - Each image is a nibble stream: a 6-colour local palette, then single-pixel or run commands, including "copy from the row above". The javadoc on `ImageDecoder` has the details.
   - Entries 671 and up are sounds and data, not images. Entry 694 is the object name list, indexed by icon number.
   - Sounds (671–693 and 701–712) are a big-endian sample count followed by unsigned 8-bit mono PCM, played at `SOUND_SAMPLE_RATE` (5500 Hz).
-  - `GraphicsFile.sound()` reads them. Which index is which effect has to be checked by ear with `-Ddm.soundtest`. The user confirmed 687 as the wall bump.
+  - `GraphicsFile.sound()` reads them. Which index is which effect has to be checked by ear with `-Ddm.soundtest`. The user confirmed 687 as the wall bump and 677 as the scream (`SOUND_SCREAM`), which plays as a pit fall starts and, in DM, when a champion dies.
   - The useful entry indexes are constants on `GraphicsFile` (inventory 17, portraits 26, icon sheets 42-48, mirror 346, floor objects 498-583).
   - Icon sheets use colour 12 as their background; `Art.iconSprite` makes it transparent for the pointer.
 - **Screen layout** (`Zones`, entry 696): DM's "zones", so some screen coordinates *are* in the PC data after all.

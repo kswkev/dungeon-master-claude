@@ -51,6 +51,7 @@ public final class GameScreen {
     private final Sound bumpSound;
     private final Sound doorSound;
     private final Sound clickSound;
+    private final Sound screamSound;
     private LongSupplier clock = System::currentTimeMillis;
     private Runnable onBump = () -> { };
     private Runnable onDamage = () -> { };
@@ -74,6 +75,7 @@ public final class GameScreen {
         this.bumpSound = art.sound(GraphicsFile.SOUND_BUMP);
         this.doorSound = art.sound(GraphicsFile.SOUND_DOOR);
         this.clickSound = art.sound(GraphicsFile.SOUND_CLICK);
+        this.screamSound = art.sound(GraphicsFile.SOUND_SCREAM);
     }
 
     public FormationBox formation() {
@@ -103,6 +105,9 @@ public final class GameScreen {
      * or was teleported.
      */
     private boolean arrived(DungeonMap.StepResult result) {
+        if (result.fell()) {
+            sounds.play(screamSound); // first: it starts as the party drops
+        }
         if (result.click()) {
             sounds.play(clickSound);
         }

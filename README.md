@@ -84,7 +84,7 @@ Run with `"-Ddm.debug=true"` to list every decoration on Level 1.
 - Stairs that don't lead anywhere block you like a wall.
 
 **Sprint 11: done.** Pits, teleporters and four Level 2 fixes:
-- **Pits:** walking into an open pit drops the party to the level below, and every champion takes the original's fall damage (10-19, shown on their boxes). A pit opened under you by a lever drops you too. Dropped and thrown items fall through as well. Imaginary pits look real but hold you up; invisible ones don't show.
+- **Pits:** walking into an open pit drops the party to the level below with the original scream, and every champion takes the original's fall damage (10-19, shown on their boxes). A pit opened under you by a lever drops you too. Dropped and thrown items fall through as well. Imaginary pits look real but hold you up; invisible ones don't show.
 - **Teleporters:** an active teleporter moves the party (and, depending on the teleporter, items and thrown objects) to its target, on the same level or another one, turning you as the original does. Some only spin you round on the spot. Sensors can switch teleporters on and off.
 - **Alcoves (#14):** an alcove revealed by a button stays open, and clicking it takes or gives items.
 - **Keyholes and levers (#15):** they now hang at the original's eye level, and a lever no longer jumps when pulled.
