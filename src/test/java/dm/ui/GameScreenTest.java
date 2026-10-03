@@ -316,6 +316,43 @@ class GameScreenTest {
         assertSame(SWORD, mirror.champion().items().get(Slot.ACTION_HAND));
     }
 
+    // ---- eating, drinking and the eye ----
+
+    /** DM's mouth and eye on the inventory background, in screen coordinates. */
+    private static final Point MOUTH = new Point(VIEW.x + 63, VIEW.y + 20);
+    private static final Point EYE = new Point(VIEW.x + 19, VIEW.y + 20);
+
+    @Test
+    void clickingTheMouthWithFoodEatsIt() {
+        Champion elija = openElijaWithItems();
+        int food = elija.food();
+        party.setHeld(ItemCatalog.item(Item.Category.JUNK, 30)); // corn
+        screen.press(MOUTH.x, MOUTH.y);
+        screen.release();
+        assertNull(party.held());
+        assertEquals(Math.min(food + 600, Champion.MAX_FOOD), elija.food());
+        render(); // the food and water panel
+    }
+
+    @Test
+    void clickingTheMouthWithASwordDoesNothing() {
+        openElijaWithItems();
+        click(Slot.ACTION_HAND);
+        screen.press(MOUTH.x, MOUTH.y);
+        assertSame(SWORD, party.held());
+    }
+
+    @Test
+    void holdingTheEyeShowsSkillsAndStatistics() {
+        openElijaWithItems();
+        assertFalse(screen.sheet().pressingEye());
+        screen.press(EYE.x, EYE.y);
+        assertTrue(screen.sheet().pressingEye());
+        render();
+        screen.release();
+        assertFalse(screen.sheet().pressingEye());
+    }
+
     // ---- items on the floor ----
 
     private static final Item APPLE = ItemCatalog.item(Item.Category.JUNK, 29);

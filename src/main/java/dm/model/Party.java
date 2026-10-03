@@ -61,6 +61,9 @@ public final class Party {
     private Direction facing;
     /** The item on the mouse pointer (DM's leader hand), shared by the whole party. */
     private Item held;
+    /** DM's game clock, one per game tick, and when the party last moved (rest speeds recovery). */
+    private long time;
+    private long lastMove;
 
     /** A party on a single map; its stairs lead nowhere and block like walls. */
     public Party(DungeonMap map, int x, int y, Direction facing) {
@@ -126,7 +129,10 @@ public final class Party {
         if (isFull() || mirror.taken()) {
             return false;
         }
-        members.add(mirror.champion());
+        Champion c = mirror.champion();
+        members.add(c);
+        c.setFood(1500 + random.nextInt(256)); // DM's F280
+        c.setWater(1500 + random.nextInt(256));
         for (int p = 0; p < MAX_MEMBERS; p++) {
             if (positions[p] == null) {
                 positions[p] = mirror.champion();
@@ -211,6 +217,7 @@ public final class Party {
      * ({@link #settle()}).
      */
     public DungeonMap.StepResult step(Move move) {
+        payForStep();
         Direction d = Direction.fromIndex(facing.ordinal() + move.turns);
         int nx = x + d.dx;
         int ny = y + d.dy;
@@ -225,6 +232,7 @@ public final class Party {
                 return null;
             }
         }
+        lastMove = time;
         DungeonMap.StepResult result = moveTo(map, nx, ny);
         if (stairs != null) {
             DungeonMap.StairsExit exit = stairs.map().stairsExit(stairs.x(), stairs.y());
@@ -285,6 +293,82 @@ public final class Party {
             }
         }
         return result;
+    }
+
+    // ---- upkeep -------------------------------------------------------------
+
+    /** What a game tick did to the champions. */
+    public record Tick(boolean changed, int[] damage) {
+        public static final Tick NOTHING = new Tick(false, null);
+    }
+
+    /** The game clock: game ticks since the start. */
+    public long time() {
+        return time;
+    }
+
+    /**
+     * Advances DM's game clock by one tick. Every {@link Upkeep#PERIOD} ticks
+     * each living champion gets hungrier and thirstier, and regains stamina,
+     * mana and health ({@link Upkeep#applyTimeEffects}). Returns whether
+     * anything changed, and the damage each member took (from stamina spent
+     * below zero), indexed like {@link #members()}.
+     */
+    public Tick tick() {
+        time++;
+        if (time % Upkeep.PERIOD != 0 || members.isEmpty()) {
+            return Tick.NOTHING;
+        }
+        int[] damage = new int[members.size()];
+        boolean hurt = false;
+        for (int i = 0; i < members.size(); i++) {
+            Champion c = members.get(i);
+            if (c.health() > 0) {
+                damage[i] = c.takeDamage(Upkeep.applyTimeEffects(c, time, lastMove));
+                hurt |= damage[i] > 0;
+            }
+        }
+        return new Tick(true, hurt ? damage : null);
+    }
+
+    /**
+     * DM's F366: every move attempt, blocked or not, tires each living
+     * champion by 1, or more when heavily laden. A champion with no stamina
+     * left is hurt instead.
+     */
+    private void payForStep() {
+        for (Champion c : members) {
+            if (c.health() > 0) {
+                c.takeDamage(c.decrementStamina(Upkeep.stepCost(load(c), c.maxLoad())));
+            }
+        }
+    }
+
+    /** A champion's load, counting the item on the pointer for the leader (the first member) as DM does. */
+    public int load(Champion c) {
+        int load = c.load();
+        if (held != null && !members.isEmpty() && members.get(0) == c) {
+            load += held.weight();
+        }
+        return load;
+    }
+
+    /**
+     * Puts the held item in {@code c}'s mouth (DM's F349): food is eaten, a
+     * waterskin loses a draught, a potion leaves an empty flask. Returns
+     * false, changing nothing, if the item can't be eaten or drunk.
+     */
+    public boolean feed(Champion c) {
+        if (held == null || c.health() == 0) {
+            return false;
+        }
+        Item before = held;
+        Item after = Upkeep.consume(c, before);
+        if (after == before) {
+            return false;
+        }
+        held = after;
+        return true;
     }
 
     /** Fall damage for each champion, indexed like {@link #members()}. */

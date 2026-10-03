@@ -96,7 +96,11 @@ public final class GameScreen {
             sounds.play(clickSound);
         }
         boolean moved = arrived(party.settle()); // a landing item may have opened a pit under the party
-        return doors.moved() || flew.moved() || moved;
+        Party.Tick upkeep = party.tick();
+        if (upkeep.damage() != null) {
+            showDamage(upkeep.damage());
+        }
+        return doors.moved() || flew.moved() || moved || upkeep.changed();
     }
 
     /**
@@ -224,6 +228,8 @@ public final class GameScreen {
                     sheet.close();
                 }
                 case CLOSE -> sheet.close();
+                case MOUTH -> feed(sheet.champion());
+                case EYE -> sheet.setPressingEye(true);
                 case NONE -> { }
             }
             return;
@@ -255,6 +261,15 @@ public final class GameScreen {
         }
         clickSlot(champion, hand.slot());
         return true;
+    }
+
+    /** Clicking the mouth with food, a waterskin or a potion in hand: the champion eats or drinks it. */
+    private void feed(Champion champion) {
+        Item item = party.held();
+        if (party.feed(champion) && debug) {
+            System.out.printf("%s consumed %s: food %d, water %d%n",
+                    champion.name(), item.name(), champion.food(), champion.water());
+        }
     }
 
     /** The square straight ahead of the party. */
@@ -360,6 +375,7 @@ public final class GameScreen {
 
     public void release() {
         arrows.setPressed(null);
+        sheet.setPressingEye(false);
     }
 
     /** The mouse moved to screen point (x, y). */

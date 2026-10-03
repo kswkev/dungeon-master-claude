@@ -111,6 +111,32 @@ public final class Art {
         return out;
     }
 
+    /**
+     * Entry {@code index} with palette colour {@code transparent} see-through
+     * instead of colour 10, as DM blits some panels (the inventory's empty
+     * panel keys out red, its labels dark grey). Null if missing.
+     */
+    public BufferedImage keyed(int index, int transparent) {
+        int key = Integer.MIN_VALUE / 4 + index * 16 + transparent;
+        if (cache.containsKey(key)) {
+            return cache.get(key);
+        }
+        BufferedImage src = image(index);
+        BufferedImage out = null;
+        if (src != null) {
+            out = new BufferedImage(src.getWidth(), src.getHeight(), BufferedImage.TYPE_INT_ARGB);
+            int clear = PALETTE[transparent].getRGB();
+            for (int y = 0; y < src.getHeight(); y++) {
+                for (int x = 0; x < src.getWidth(); x++) {
+                    int argb = src.getRGB(x, y);
+                    out.setRGB(x, y, argb == clear ? 0 : argb);
+                }
+            }
+        }
+        cache.put(key, out);
+        return out;
+    }
+
     /** Entry {@code index} as a transparent sprite, mirrored left-to-right, or null. */
     public BufferedImage spriteFlipped(int index) {
         int key = Integer.MIN_VALUE + index;

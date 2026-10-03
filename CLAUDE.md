@@ -16,6 +16,7 @@ A Java/Swing remake of FTL's *Dungeon Master* (1988), built sprint by sprint.
 - Sprint 9: wall interaction (switches, buttons, keyholes, coin slots, torch holders, alcoves, door buttons, AND/OR gates, pits as targets), front wall decorations at DM's positions, and hand clicks in the status boxes (#12).
 - Sprint 10: stairs between levels.
 - Sprint 11: bugs #14-#17 (alcove clicks, eye-level keyholes and levers, levers that toggle, plates pressed by items), pits that drop the party and items a level, and teleporters.
+- Sprint 12 (in progress): sensor bits and teleporter scopes fixed (#20), champion upkeep (food, water, stamina, mana, health over time; eating and drinking). Still to come: torches and darkness, death, keyboard movement.
 
 Creatures, combat and spells are not implemented yet.
 
@@ -168,6 +169,14 @@ Code lives under `src/main/java/dm/`, in three layers.
   - `Item.fits(slot)` holds DM's slot rules: hands and backpack take anything; body slots only take what `wornOn` names; pouches take potions, scrolls and `ItemCatalog.POUCH_JUNK`; quiver 1 takes any weapon; quivers 2-4 take only missiles.
   - `Champion.take`/`place` move items, and `place` returns the item it displaced.
   - The item on the pointer is `Party.held()` (DM's leader hand), so it survives switching champions and closing the sheet.
+- **Items are values** with `charges` (weapon bits 10-13: a torch's light power; junk bits 14-15: a waterskin's draughts; a potion's power, bits 0-7). A changed item is a new one (`withCharges`). A waterskin holding water is named WATER, as DM's icon list names it. `ItemCatalog` also holds DM's weights (tenths of a kg) and food values, taken from ScummVM's DM engine because the PC keeps item 559's tables in the program.
+- **Upkeep** (`Upkeep`, ported from ReDMCSB, DM 1.2+ rules):
+  - `Party.tick()` advances DM's game clock (one per `GameScreen.TICK_MS`); every 64 ticks F331 runs for each living champion: food and water drain, stamina comes back (faster when rested 80/250 ticks, lost when starving), mana comes back for stamina when a time pattern is below wisdom + priest + wizard levels, health when stamina is at least a quarter, and statistics drift to their maximum every 256 ticks.
+  - Every move attempt (blocked too) costs each living champion `load*3/maxLoad + 1` stamina (F366). `Party.load` counts the held item for the first member (DM's leader).
+  - Stamina spent below 0 hurts by half the shortfall.
+  - Food and water start at 1500 + random(256), cap at 2048 and bottom out at -1024.
+  - `Party.feed` / `Upkeep.consume` (F349): food is eaten, a waterskin gives 800 water per draught, a water flask 1600, other potions their DM effect (YA and antivenin do nothing yet), leaving an empty flask. The swallow sound isn't identified yet.
+  - Sleeping, wounds and poison aren't modelled.
 
 **`ui/`: draws everything at the original 320×200 resolution**
 - `GameScreen` holds all screen state and click routing, with no Swing. `GameWindow` is a thin wrapper that scales the 320×200 buffer with nearest-neighbour filtering and maps mouse positions back. Tests and scratch renders drive `GameScreen.press`/`render` directly.
@@ -189,6 +198,7 @@ Code lives under `src/main/java/dm/`, in three layers.
   - the spell and action areas are drawn as empty outlines for now.
 - `CharacterSheet` slot positions come from DM's inventory background (graphic 17).
   - On a party member's sheet, clicking a cell (`Action.SLOT`, `slotAt`) picks up, places or swaps through `GameScreen.clickSlot`. A candidate's items can't be touched.
+  - The mouth (`Action.MOUTH`, viewport (56,13)) feeds the held item. A member's panel shows DM's food/water panel (graphic 20 keyed on red, labels 30/31 keyed on dark grey, F344 bars); holding the eye (`Action.EYE`, (12,13)) shows skills and statistics instead. Candidates always show their statistics.
   - An item that doesn't fit stays in hand.
   - With no sheet open, a click in the bottom of the view (`GameScreen.FLOOR_CLICK_Y` and below) picks up from or drops onto the party square's left or right cell ahead. A click higher up with an item in hand throws it from that side.
   - While an item is held, `GameWindow` hides the OS cursor and `GameScreen` draws `Art.iconSprite` (the icon with background colour 12 transparent) centred on the pointer, on top of everything. Text uses `PixelFont`, a hand-made 5×5 font, because the PC GRAPHICS.DAT has no UI font image.

@@ -70,15 +70,21 @@ final class ChampionFinder {
         return null;
     }
 
+    /**
+     * The item an object thing stands for. Weapons keep their charges in
+     * bits 10-13 (a torch's light power), junk in bits 14-15 (a waterskin's
+     * draughts), as the DM Encyclopaedia documents. A potion's power (bits
+     * 0-7) is kept as its charges.
+     */
     static Item toItem(Thing t) {
         int w = t.words()[1];
         return switch (t.type()) {
-            case Thing.WEAPON -> ItemCatalog.item(Item.Category.WEAPON, w & 0x7F);
+            case Thing.WEAPON -> ItemCatalog.item(Item.Category.WEAPON, w & 0x7F, (w >>> 10) & 15);
             case Thing.ARMOUR -> ItemCatalog.item(Item.Category.ARMOUR, w & 0x7F);
             case Thing.SCROLL -> ItemCatalog.item(Item.Category.SCROLL, 0);
-            case Thing.POTION -> ItemCatalog.item(Item.Category.POTION, (w >>> 8) & 0x7F);
+            case Thing.POTION -> ItemCatalog.item(Item.Category.POTION, (w >>> 8) & 0x7F, w & 0xFF); // power
             case Thing.CONTAINER -> ItemCatalog.item(Item.Category.CONTAINER, 0);
-            case Thing.JUNK -> ItemCatalog.item(Item.Category.JUNK, w & 0x7F);
+            case Thing.JUNK -> ItemCatalog.item(Item.Category.JUNK, w & 0x7F, (w >>> 14) & 3);
             default -> null;
         };
     }

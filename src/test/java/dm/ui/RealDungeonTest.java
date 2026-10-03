@@ -154,6 +154,23 @@ class RealDungeonTest {
         assertTrue(map.isPitOpen(24, 5));
     }
 
+    /** Item charges: Level 1's waterskin at (4,15) is full (3 draughts), and Zed's torch has its full light power. */
+    @Test
+    void chargesAreDecoded() {
+        DungeonMap level1 = dungeon.maps().get(0);
+        Item skin = level1.itemsAt(4, 15, 0).isEmpty() ? null : level1.itemsAt(4, 15, 0).get(0);
+        for (int c = 0; skin == null && c < 4; c++) {
+            skin = level1.itemsAt(4, 15, c).isEmpty() ? null : level1.itemsAt(4, 15, c).get(0);
+        }
+        assertNotNull(skin);
+        assertEquals("WATER", skin.name());
+        assertEquals(3, skin.charges());
+        Item torch = level1.mirrors().stream().filter(m -> m.champion().name().equals("ZED")).findFirst()
+                .orElseThrow().champion().items().values().stream()
+                .filter(i -> i.name().equals("TORCH")).findFirst().orElseThrow();
+        assertEquals(15, torch.charges());
+    }
+
     /** #15: the gold keyhole at (0,3) north is centred at eye level, row 48 of the viewport. */
     @Test
     void theKeyholeHangsAtEyeLevel() {
