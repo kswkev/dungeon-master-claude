@@ -167,6 +167,40 @@ class GameScreenTest {
     }
 
     @Test
+    void escapeOpensTheMenuFromTheDungeonView() {
+        screen.setSaveGames(new SaveGames(saveDir));
+        assertFalse(screen.sheet().isOpen());
+        screen.escape();
+        assertTrue(screen.menu().isOpen());
+        assertEquals(GameMenu.Screen.MAIN, screen.menu().screen());
+        render();
+        clickMenu(GameMenu.Choice.CANCEL);
+        assertFalse(screen.menu().isOpen());
+        assertFalse(screen.sheet().isOpen(), "back to the dungeon, where it was opened");
+    }
+
+    @Test
+    void afterTheEndEscapeStillOffersALoad() {
+        screen.setSaveGames(new SaveGames(saveDir));
+        recruitElija();
+        screen.escape();
+        clickMenu(GameMenu.Choice.SAVE);
+        clickMenu(GameMenu.Choice.SLOT, 1);
+        clickMenu(GameMenu.Choice.OK);
+        Champion elija = party.members().get(0);
+        elija.takeDamage(elija.health() - 1);
+        pressForward(); // the fatal bump
+        assertTrue(screen.gameOver());
+        screen.escape();
+        render(); // the menu over the last scene
+        clickMenu(GameMenu.Choice.LOAD);
+        clickMenu(GameMenu.Choice.SLOT, 1);
+        clickMenu(GameMenu.Choice.OK);
+        assertFalse(screen.gameOver());
+        assertTrue(screen.party().members().get(0).health() > 0, "alive again, as saved");
+    }
+
+    @Test
     void aSavedGameCanBeLoadedBack() {
         openMenu();
         clickMenu(GameMenu.Choice.SAVE);

@@ -100,10 +100,10 @@ Run with `"-Ddm.debug=true"` to list every decoration on Level 1.
 - **Fixes:** the sensor data was being read two bits off, and teleporters that move only items were treated as moving nothing (#20). Plates, levers, keyholes and gates now follow the original's own data.
 
 **Sprint 13: done.** Save, load and quit:
-- Click the disk icon at the top of a champion's sheet to open the game menu, built from the original's dialog art: SAVE, LOAD, QUIT, OPTIONS (coming later) and CANCEL.
+- Press Esc, or click the disk icon at the top of a champion's sheet, to open the game menu, built from the original's dialog art: SAVE, LOAD, QUIT, OPTIONS (coming later) and CANCEL.
 - There are four save slots, each showing its level and when it was saved. Saves go in a `saves/` folder next to the game (`-Ddm.saves` to change it).
 - QUIT asks whether to save first: SAVE AND QUIT, QUIT or CANCEL.
-- The game is paused while the menu is open; CANCEL or Esc goes back.
+- The game is paused while the menu is open; CANCEL or Esc goes back. Esc works even after the party has died, to load a saved game.
 
 **Not yet:** creatures, combat and spells.
 

@@ -384,10 +384,18 @@ public final class GameScreen {
         onQuit.run();
     }
 
-    /** Esc: backs out of the game menu, as its CANCEL does. */
+    /**
+     * Esc: opens the game menu from anywhere, even THE END (so a saved game
+     * can be loaded after the party dies), and closes it again as its CANCEL
+     * does.
+     */
     public void escape() {
         if (menu.isOpen()) {
             menu.close();
+        } else {
+            arrows.setPressed(null);
+            sheet.setPressingEye(false);
+            menu.open();
         }
     }
 
@@ -671,7 +679,7 @@ public final class GameScreen {
     private static final int END_BLUE = 0x000044;
 
     public void render(Graphics2D g) {
-        if (gameOver) {
+        if (gameOver && !menu.isOpen()) {
             drawTheEnd(g);
             return;
         }
