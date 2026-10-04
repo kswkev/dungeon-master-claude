@@ -118,13 +118,29 @@ public final class GameScreen {
 
     /**
      * Advances the game clock by one tick (the window calls this about every
-     * {@link #TICK_MS} ms). Returns true if anything visible changed. Nothing
-     * moves while the game menu is open: as in DM, a dialog pauses the game.
+     * {@link #TICK_MS} ms), or {@link #SLEEP_TICKS} while the party sleeps.
+     * Returns true if anything visible changed. Nothing moves while the game
+     * menu is open: as in DM, a dialog pauses the game.
      */
     public boolean tick() {
         if (menu.isOpen()) {
             return false;
         }
+        boolean changed = step();
+        for (int i = 1; i < SLEEP_TICKS && party.sleeping() && !gameOver; i++) {
+            changed |= step();
+        }
+        return changed;
+    }
+
+    /**
+     * Game ticks per window tick while asleep. DM stops waiting for input
+     * while the party sleeps (G318 = 0), so time runs as fast as the machine
+     * allows; this is an estimate of that speed-up.
+     */
+    static final int SLEEP_TICKS = 5;
+
+    private boolean step() {
         DungeonMap.DoorTick doors = party.map().tickDoors();
         if (doors.rattled()) {
             sounds.play(doorSound);
@@ -152,7 +168,9 @@ public final class GameScreen {
         if (upkeep.damage() != null) {
             showDamage(upkeep.damage());
         }
-        return doors.moved() || moved || upkeep.changed() || printed || acted;
+        // A teleporter's field shimmers: DM redraws the view every tick.
+        boolean shimmer = view.animated() && !sheet.isOpen() && !party.sleeping();
+        return doors.moved() || moved || upkeep.changed() || printed || acted || shimmer;
     }
 
     /** DM's action area, under the spell area. */
@@ -280,6 +298,13 @@ public final class GameScreen {
         if (gameOver) {
             return;
         }
+        if (party.sleeping()) {
+            // DM's G450: asleep, only a click in the view (down to the message area) does anything.
+            if (x < 224 && y >= 33 && y <= 168) {
+                party.wakeUp();
+            }
+            return;
+        }
         if (clickHand(x, y)) {
             return;
         }
@@ -308,7 +333,10 @@ public final class GameScreen {
         Rectangle portrait = view.portraitHit();
         ChampionMirror mirror = party.facingMirror();
         if (portrait != null && mirror != null && portrait.contains(x, y)) {
-            sheet.openCandidate(mirror, party.isFull());
+            // DM's F280: only with room in the party and nothing in hand.
+            if (!party.isFull() && party.held() == null) {
+                sheet.openCandidate(mirror);
+            }
             return;
         }
         Rectangle button = view.doorButtonHit();
@@ -343,10 +371,28 @@ public final class GameScreen {
                     }
                     sheet.close();
                 }
+                case REINCARNATE -> sheet.startRenaming();
+                case RENAMED -> {
+                    // DM keeps the panel open while the name is a member's already.
+                    ChampionMirror mirror = sheet.candidate();
+                    if (party.reincarnate(mirror, sheet.newName(), sheet.newTitle())) {
+                        if (debug) {
+                            System.out.println("Reincarnated " + mirror.champion().fullName());
+                        }
+                        sheet.close();
+                    }
+                }
                 case CLOSE -> sheet.close();
                 case MOUTH -> feed(sheet.champion());
                 case EYE -> sheet.setPressingEye(true);
                 case DISK -> menu.open();
+                case SLEEP -> {
+                    // DM's C145: the sheet closes and the view goes dark until the party wakes.
+                    if (party.sleep()) {
+                        sheet.close();
+                        actions.close();
+                    }
+                }
                 case NONE -> { }
             }
             return;
@@ -596,11 +642,30 @@ public final class GameScreen {
      * the game is over, like the arrows.
      */
     public void key(MovementPanel.Action action) {
-        if (action == null || gameOver || sheet.isOpen() || menu.isOpen()) {
+        if (action == null || gameOver || sheet.isOpen() || menu.isOpen() || party.sleeping()) {
             return;
         }
         arrows.setPressed(action);
         move(action);
+    }
+
+    /** Whether keys are typing a reincarnated champion's name rather than moving. */
+    public boolean typing() {
+        return sheet.renaming() && !menu.isOpen();
+    }
+
+    /** A character typed on the rename panel: letters, , . ; : space, Enter and Backspace. */
+    public void type(char c) {
+        if (typing()) {
+            sheet.type(c);
+        }
+    }
+
+    /** Return: wakes a sleeping party (DM's G460). */
+    public void pressReturn() {
+        if (!menu.isOpen()) {
+            party.wakeUp();
+        }
     }
 
     /** A movement key was let go: its arrow stops being lit. */
@@ -775,6 +840,8 @@ public final class GameScreen {
             menu.draw(g, saves::header);
         } else if (sheet.isOpen()) {
             sheet.draw(g, holding());
+        } else if (party.sleeping()) {
+            drawSleep(g);
         } else {
             drawView(g);
         }
@@ -785,13 +852,25 @@ public final class GameScreen {
             g.drawRect(v.x + 1, v.y + 1, v.width - 2, v.height - 2);
         }
         arrows.draw(g);
-        actions.draw(g, party, sheet.candidate() != null);
+        if (party.sleeping()) {
+            Rectangle a = MovementPanel.AREA;
+            ActionArea.shade(g, a.x, a.y, a.width, a.height); // DM's F456 disabled menus
+        }
+        actions.draw(g, party, sheet.candidate() != null || party.sleeping());
         takeMessages();
         messages.draw(g);
         if (debug) {
             PixelFont.draw(g, party.x() + "," + party.y() + " " + party.facing(), 236, 190, Color.YELLOW);
         }
         drawHeldItem(g);
+    }
+
+    /** DM's F379 sleep screen: a black viewport with WAKE UP in cyan. */
+    private static void drawSleep(Graphics2D g) {
+        Rectangle v = ViewRenderer.VIEWPORT;
+        g.setColor(Color.BLACK);
+        g.fillRect(v.x, v.y, v.width, v.height);
+        PixelFont.draw(g, "WAKE UP", v.x + 93, v.y + 69, Art.PALETTE[4]);
     }
 
     /** Screen-sized buffer the dungeon view is drawn into before {@link Darkness} dims it. */

@@ -6,7 +6,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 A Java/Swing remake of FTL's *Dungeon Master* (1988), built sprint by sprint.
 - Sprint 1: walk Level 1 with DM's six-button arrow panel.
-- Sprint 2: the Hall of Champions. Mirror portraits, the character sheet, Resurrect (not Reincarnate), and champion bars along the top.
+- Sprint 2: the Hall of Champions. Mirror portraits, the character sheet, Resurrect, and champion bars along the top.
 - Sprint 3: wall bumps. The original thud, 1 damage to the front-row champions with DM's damage burst on their boxes, plus the red flash.
 - Sprint 4: the original dungeon textures. Walls, floor and ceiling are pixel-exact; doors, stairs and pits are fitted. Wall/floor decorations are deferred.
 - Sprint 5: floor sensors (pressure plates) that move doors, animated doors with sound, the party formation box, and bump damage by side.
@@ -22,6 +22,7 @@ A Java/Swing remake of FTL's *Dungeon Master* (1988), built sprint by sprint.
 
 - Sprint 15: creature AI and attacks, ported from ReDMCSB: DM's group timeline, sight, smell and scent trails, attacks with hit rolls, armour, wounds and poison, attack pictures and sounds, and creatures with doors, pits, teleporters, plates and generators.
 - Sprint 16: combat, ported from ReDMCSB: the action area and menus, melee, throwing and shooting with DM's projectiles, experience and levelling with DM's message area, creature deaths with their fixed drops and fear, and doors broken by blows.
+- Sprint 17: Reincarnate (DM's resurrect panel and rename keyboard), sleeping, DM's teleporter field, and DM's distance colours for wall decorations and objects at D2/D3.
 
 Spells, and the item magic in action menus (a staff's fireball and the like), are not implemented yet.
 
@@ -266,7 +267,12 @@ Code lives under `src/main/java/dm/`, in three layers.
   - Stamina spent below 0 hurts by half the shortfall.
   - Food and water start at 1500 + random(256), cap at 2048 and bottom out at -1024.
   - `Party.feed` / `Upkeep.consume` (F349): food is eaten, a waterskin gives 800 water per draught, a water flask 1600, other potions their DM effect, leaving an empty flask. BRO (antivenin) cures poison, VI also heals wounds, and YA does nothing yet. Each plays the swallow (`SOUND_SWALLOW` 678, confirmed by ear), as does drinking at a fountain.
-  - Sleeping isn't modelled.
+  - **Sleeping** (ScummVM's C145/F314, ReDMCSB F331): `Party.sleep()` from the sheet's ZZZ icon (`CharacterSheet.Action.SLEEP`, viewport (190,2,19,11), measured on graphic 17; not for a candidate). While `Party.sleeping()`:
+    - F331 runs every `Upkeep.SLEEPING_PERIOD` (16) ticks, with mana, stamina and health gains doubled and statistics recovering every 64 ticks; champions don't turn back;
+    - every skill level is 1 (F303), dexterity is halved (F310) and so is each body part's defense (F313). Each champion carries the flag (`Champion.setAsleep`) for these;
+    - creatures walk silently (F514 returns sound 35);
+    - the view is black with WAKE UP in cyan at viewport (93,69), and the arrows and action area are shaded. Only a click in the view (x < 224, y 33-168) or Return (`GameScreen.pressReturn`) wakes the party; so does any creature attack (`Party.creatureAttacked`, F230) and any blow that gets through armour (F321, non-normal attacks);
+    - `GameScreen.tick()` runs `SLEEP_TICKS` (5) game ticks per window tick, an estimate of DM not waiting for input while asleep.
   - `Party.Tick` carries the creatures' damage and DM sounds as well as upkeep's. `GameScreen.showDamage` stays the one damage funnel.
 - **Death** (ReDMCSB F318/F319/F444):
   - Health 0 is dead. `GameScreen.showDamage` (the one funnel for bumps, falls and starvation) calls `Party.bury()`. Everything the champion carried falls onto their cell of the party's square in DM's drop order, hands last. Their BONES go on top, with charges = member index, for a later altar resurrection. They leave the formation, and the scream plays.
@@ -277,7 +283,8 @@ Code lives under `src/main/java/dm/`, in three layers.
   - Elsewhere the light is the torches in the champions' hands (each worth its charges through DM's power-to-light table, the four brightest first, each half the one before, plus one more) and 12 for each Illumulet worn on a neck. It picks one of DM's six dungeon palettes (thresholds 99/75/50/25/1).
   - Torches in hands lose a charge every 512 ticks (`Party.tick`). In a hand a torch is drawn lit, its flame shrinking with its charges (icons 4-7, `ItemCatalog.shownIn`); elsewhere it's unlit.
   - `GameScreen.drawView` draws the view off-screen and `Darkness` remaps the viewport's palette colours to the chosen palette (ScummVM's G021 values; colours 9 and 10 from the ST rows). Colour 4 (cyan) stays bright, as in DM. Other colours are dimmed by that palette's white.
-  - Not yet: DM's extra colour changes for creatures and decorations at D2/D3, and light spells.
+  - Far things are also recoloured as DM shrinks them (F0129's palette changes, `TexturedViewRenderer.distant`): creatures (G0221/G0222), door decorations (G0200/G0201), door buttons and wall decorations, front and side (G0198/G0199), and objects and things in flight (G0213 for the D3 size, G0214 for D2; `objectChanges` maps our scales: 27+ none, 16-26 D2, below D3). Floor decorations have their own pre-drawn pieces per depth.
+  - Not yet: light spells.
 - **Fountains** (wall decoration 35, `DungeonMap.FOUNTAIN`): clicking one with a waterskin refills it to 3 and turns an empty flask into a water flask (DM's F377, `Upkeep.fill`), before the side's sensors run. Clicking with an empty hand lets every living champion drink to the 2048 maximum (`Party.drinkFromFountain`, `WallClick.drank`). That is the user's addition: DM itself has no direct drinking.
 
 **`ui/`: draws everything at the original 320×200 resolution**
@@ -318,7 +325,9 @@ Code lives under `src/main/java/dm/`, in three layers.
   - the spell area stays black for now (outlined only with placeholder art); the action area is `ActionArea.AREA`.
 - `CharacterSheet` slot positions come from DM's inventory background (graphic 17).
   - On a party member's sheet, clicking a cell (`Action.SLOT`, `slotAt`) picks up, places or swaps through `GameScreen.clickSlot`. A candidate's items can't be touched.
-  - The mouth (`Action.MOUTH`, viewport (56,13)) feeds the held item. A member's panel shows DM's food/water panel (graphic 20 keyed on red, labels 30/31 keyed on dark grey, F344 bars); holding the eye (`Action.EYE`, (12,13)) shows skills and statistics instead, and draws the eye looking down to the right (icon 203 via `Art.icon(int)`; 202, the background's own, is the eye not looking). Candidates always show their statistics.
+  - The mouth (`Action.MOUTH`, viewport (56,13)) feeds the held item. A member's panel shows DM's food/water panel (graphic 20 keyed on red, labels 30/31 keyed on dark grey, F344 bars); holding the eye (`Action.EYE`, (12,13)) shows skills and statistics instead, and draws the eye looking down to the right (icon 203 via `Art.icon(int)`; 202, the background's own, is the eye not looking). A candidate shows DM's resurrect panel (graphic 40 keyed on dark green at the panel box (80,52); clicks from G0457: RESURRECT (108,57)-(158,105), REINCARNATE (161,57)-(211,105), CANCEL (108,108)-(211,120)) and their statistics only while the eye is held.
+  - **Candidates** open only while the party has room and the hand is empty (F280). Resurrect and Reincarnate print "NAME RESURRECTED." / "NAME REINCARNATED." in the member's colour.
+  - **Reincarnate** shows the `RenamePanel` (F281): graphic 27 keyed on cyan, the name (7 letters) typed at viewport (177,58) and the title (19) at (105,76), by keys (`GameScreen.type`, while `typing()`) or by clicking DM's keyboard (screen x 107-215, y 116-144, 10 px keys, RETURN two keys tall at the right, BACKSPACE 107-175 × 147-155, OK 197-215 × 147-155). RETURN moves to the title; BACKSPACE at the start of the title returns to the name. OK needs a name, and one no member has (`Party.nameFree`). `Party.reincarnate` then zeroes every skill (`Champion.reincarnate`, as ScummVM's `resetSkillsToZero`) and adds 12 statistic points, each to a random statistic (luck included), current and maximum.
   - An item that doesn't fit stays in hand.
   - Wounds and poison, as DM's F292 draws them:
     - a wounded body part's cell gets the red slot box (graphic 34, keyed on colour 12) and, if empty, the wounded outline (icon 212 + 2×slot + 1);
@@ -344,7 +353,11 @@ Code lives under `src/main/java/dm/`, in three layers.
   - **Pits:** floor pits 50-57 (D3L/C, D2L/C, D1L/C, D0L/C; DM's numbers +1 on the PC), invisible-pit variants 58-63 (D3 uses the plain one), ceiling pits 64-69 where the square above is an open pit (`DungeonMap.ceilingPit`, `Dungeon.above`).
   - **Doors** (F0111): frames from the wall set (front 86, left pillars D1C 87, D2C 88, D3C 89, D3L/R 90, lintels 91/92); the panel 246 + style×3 + (D3 0, D2 1, D1 2), with its decoration painted on by DM's G0207 boxes (G0196 picks the box set; D2/D3 shrunk with DM's palette changes; colour 9 see-through, colour 10 cuts holes) and a broken door cut by mask 439. Part-open doors use zone + state. The button (453) is shrunk for D2/D3 by height.
   - **Mirrors:** at D1 the portrait goes in zone 737 (96,35) and the frame around it; D2/D3 frames are raised to match.
-  - **Teleporters** are drawn (as a translucent overlay) only when visible and open. Graphics 70-75 look like DM's field masks and 76/77 like 32×32 field patterns; using them is still to do.
+  - **Teleporter fields** (F0113, `drawTeleporter`), when visible and open, over everything else on the square, D0 included:
+    - Graphic 76 is the 32×32 teleporter pattern (77 the fluxcage's), transparent colour 10.
+    - The field fills the square's wall outline: the wall zone's box. Side squares are masked by graphics 70-75, which are exactly the PC's left wall pieces' silhouettes (75 D0L = 94, 74 D1L = 96, 73 D2L = 101, 72 D2L2 = 99, 71 D3L = 106, 70 D3L2, 36 of 104's 44 columns); right squares mirror them, right-aligned. D0C fills the viewport.
+    - The pattern isn't tiled: it is copied 16 pixels at a time, unit after unit (2 per pattern row) along the box's rows (units aligned to viewport x multiples of 16), from unit random(32), wrapping at G0188's count + random(2) (D0C 59, D1C 61, D2C 60, others 63). ScummVM's port of this is marked FIXME; this follows the ST unit layout.
+    - It changes every frame, so `ViewRenderer.animated()` makes `GameScreen.tick` repaint every tick.
   - **Creatures** (`drawCreatures`, `CreatureArt`, after ScummVM's F0115 creature block): view squares D3 C/L/R, D2, D1, D0 L/R; positions from DM's coordinate sets G0224 (x centre, bottom y) by cell: quarter-square creatures on their view cell (0-3), half-square ones on a column (0/1) facing you or a row (2 back, 4 front) side-on, full-square and centred ones at 4. Back cells first. Each creature's own facing difference picks its picture (`creaturePicture`): back (0), side (odd; mirrored at 1), otherwise the attack picture while its aspect says it is attacking, or the front, mirrored when its aspect says so. Its aspect's jitter moves it by DM's G223 shift sets (by depth). D2/D3 shrink to 20/32 and 16/32 with DM's creature palette changes, the transparent colour changed with them.
   - **Colours 9 and 10:** a map's creature types replace them with DM's replacement colour sets (G0220, six light levels each), across the whole viewport, as DM's palette does. `GameScreen.drawView` passes them to `Darkness.apply`, which remaps even at full light. In D2/D3 creature pictures, 9/10 become the set's D2/D3 colour.
   - **Objects** use the zone points, scaled by DM's object scales: 32/32 at D0, then 27/21 (D1 near/far), 18/14 (D2), 12 (D3). Far cells are drawn before a door and near cells after it; items in flight come last. **Floor ornaments** (pressure plates etc.) are 6 pieces each from graphic 385, centred on each depth's mid-square floor line. Graphics 415-420 are the black-flame-pit *ornament*, not pits.

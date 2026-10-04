@@ -75,7 +75,7 @@ class GameScreenTest {
 
     private void recruitElija() {
         clickPortrait();
-        screen.press(VIEW.x + 120, VIEW.y + 128); // RESURRECT
+        press(CharacterSheet.resurrectCentre());
         render();
     }
 
@@ -366,6 +366,7 @@ class GameScreenTest {
                 false, false, false, 1, 1, 1));
         Party p = new Party(map, 3, 1, Direction.WEST);
         p.recruit(hallMirror);
+        p.takeMessages(); // "ELIJA RESURRECTED." would keep the message area changing
         GameScreen s = new GameScreen(p, Art.none(), sound -> soundsPlayed++, false);
 
         s.press(MovementPanel.AREA.x + 40, MovementPanel.AREA.y + 10); // forward onto the plate
@@ -404,6 +405,95 @@ class GameScreenTest {
         render();
     }
 
+    private void press(Point p) {
+        screen.press(p.x, p.y);
+        screen.release();
+    }
+
+    private void typeText(String text) {
+        for (char c : text.toCharArray()) {
+            screen.type(c);
+        }
+    }
+
+    /** The rename panel's OK button (DM's screen box 197-215 x 147-155). */
+    private void pressRenameOk() {
+        screen.press(205, 150);
+        render();
+    }
+
+    @Test
+    void theZzzIconPutsThePartyToSleepUntilWoken() {
+        recruitElija();
+        press(new Point(NAME_X, NAME_Y)); // open Elija's sheet
+        assertTrue(screen.sheet().isOpen());
+        press(CharacterSheet.sleepCentre());
+        assertTrue(party.sleeping());
+        assertFalse(screen.sheet().isOpen(), "the sheet closes");
+        render();
+        long before = party.time();
+        screen.tick();
+        assertEquals(before + GameScreen.SLEEP_TICKS, party.time(), "time runs faster asleep");
+        pressForward();
+        assertEquals(1, party.y(), "no moving in your sleep");
+        assertTrue(party.sleeping(), "the arrows don't wake the party");
+        screen.press(VIEW.x + 100, VIEW.y + 60);
+        assertFalse(party.sleeping(), "a click in the view wakes it");
+        party.sleep();
+        screen.pressReturn();
+        assertFalse(party.sleeping(), "so does Return");
+    }
+
+    @Test
+    void reincarnateRenamesAndJoins() {
+        clickPortrait();
+        press(CharacterSheet.reincarnateCentre());
+        assertTrue(screen.sheet().renaming());
+        assertTrue(screen.typing());
+        render();
+        typeText("bob\nthe brave");
+        pressRenameOk();
+        assertFalse(screen.sheet().isOpen());
+        Champion bob = party.members().get(0);
+        assertSame(mirror.champion(), bob);
+        assertEquals("BOB", bob.name());
+        assertEquals("THE BRAVE", bob.title());
+        assertEquals(1, bob.skillLevel(Champion.FIGHTER));
+    }
+
+    @Test
+    void renamePanelKeysAreClickable() {
+        clickPortrait();
+        press(CharacterSheet.reincarnateCentre());
+        screen.press(111, 120); // A: the first key, at DM's (107,116)
+        screen.press(121, 130); // M: second row, second key
+        screen.press(111, 140); // V: third row starts after RETURN's half
+        screen.press(201, 140); // the space key, last of the specials
+        screen.press(116, 120); // a gap between keys: nothing
+        assertEquals("AMV ", screen.sheet().newName());
+        screen.press(140, 150); // BACKSPACE
+        assertEquals("AMV", screen.sheet().newName());
+        screen.press(211, 130); // RETURN, upper half
+        typeText("X");
+        assertEquals("X", screen.sheet().newTitle());
+    }
+
+    @Test
+    void okNeedsAName() {
+        clickPortrait();
+        press(CharacterSheet.reincarnateCentre());
+        pressRenameOk();
+        assertTrue(screen.sheet().renaming(), "no name yet: OK does nothing");
+        assertTrue(party.members().isEmpty());
+    }
+
+    @Test
+    void candidateNeedsAnEmptyHand() {
+        party.setHeld(ItemCatalog.item(Item.Category.JUNK, 0));
+        clickPortrait();
+        assertFalse(screen.sheet().isOpen());
+    }
+
     @Test
     void clickingPortraitOpensCandidateSheet() {
         clickPortrait();
@@ -414,7 +504,7 @@ class GameScreenTest {
     @Test
     void resurrectAddsChampionAndCloses() {
         clickPortrait();
-        screen.press(VIEW.x + 120, VIEW.y + 128); // RESURRECT
+        press(CharacterSheet.resurrectCentre());
         assertEquals(1, party.members().size());
         assertTrue(mirror.taken());
         assertFalse(screen.sheet().isOpen());
@@ -423,7 +513,7 @@ class GameScreenTest {
     @Test
     void cancelLeavesMirrorUntouched() {
         clickPortrait();
-        screen.press(VIEW.x + 190, VIEW.y + 128); // CANCEL
+        press(CharacterSheet.candidateCancelCentre());
         assertFalse(screen.sheet().isOpen());
         assertTrue(party.members().isEmpty());
         assertFalse(mirror.taken());
@@ -432,7 +522,7 @@ class GameScreenTest {
     @Test
     void championBarReopensMemberSheet() {
         clickPortrait();
-        screen.press(VIEW.x + 120, VIEW.y + 128);
+        press(CharacterSheet.resurrectCentre());
         render();
         screen.press(NAME_X, NAME_Y); // first champion box
         assertTrue(screen.sheet().isOpen());
@@ -445,7 +535,7 @@ class GameScreenTest {
     @Test
     void emptyMirrorCannotBeClicked() {
         clickPortrait();
-        screen.press(VIEW.x + 120, VIEW.y + 128);
+        press(CharacterSheet.resurrectCentre());
         render();
         clickPortrait();
         assertFalse(screen.sheet().isOpen());

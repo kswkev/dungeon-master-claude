@@ -19,8 +19,9 @@ import java.util.Map;
 /**
  * A champion's inventory screen, drawn over the dungeon view like DM's.
  *
- * Opened from a mirror it shows a candidate with RESURRECT and CANCEL; opened
- * from the champion bars it shows a party member with CLOSE. The X icon in
+ * Opened from a mirror it shows a candidate with DM's RESURRECT, REINCARNATE
+ * and CANCEL panel (graphic 40); REINCARNATE then shows the {@link RenamePanel}.
+ * Opened from the champion bars it shows a party member with CLOSE. The X icon in
  * the top-right corner of the background also closes it.
  * Coordinates below are relative to the viewport's top-left corner.
  */
@@ -30,9 +31,10 @@ public final class CharacterSheet {
      * What a click asks for; SLOT means an inventory cell of a party member
      * ({@link #slotAt}), MOUTH feeding them the held item, EYE showing
      * their skills and statistics while the button is held, and DISK the
-     * game menu (save, load, quit).
+     * game menu (save, load, quit). REINCARNATE starts renaming a candidate,
+     * and RENAMED is the rename panel's OK. SLEEP is the ZZZ icon.
      */
-    public enum Action { NONE, RESURRECT, CLOSE, SLOT, MOUTH, EYE, DISK }
+    public enum Action { NONE, RESURRECT, REINCARNATE, RENAMED, CLOSE, SLOT, MOUTH, EYE, DISK, SLEEP }
 
     private static final Rectangle VIEW = ViewRenderer.VIEWPORT;
 
@@ -68,7 +70,11 @@ public final class CharacterSheet {
     private static final int TEXT_RIGHT = 221;
     private static final int SKILL_LINE = 7;
     private static final int STAT_LINE = 6;
-    private static final Rectangle RESURRECT_BUTTON = new Rectangle(98, 123, 62, 11);
+    /** DM's resurrect panel (graphic 40, keyed on dark green) and its click boxes (G0457, less the viewport's 33 rows). */
+    private static final int RESURRECT_PANEL_KEY = 6;
+    private static final Rectangle RESURRECT_BUTTON = new Rectangle(108, 57, 51, 49);
+    private static final Rectangle REINCARNATE_BUTTON = new Rectangle(161, 57, 51, 49);
+    private static final Rectangle CANDIDATE_CANCEL = new Rectangle(108, 108, 104, 13);
     private static final Rectangle CANCEL_BUTTON = new Rectangle(164, 123, 58, 11);
     private static final Rectangle CLOSE_ICON = new Rectangle(208, 1, 13, 12);
     /** DM's click zones on the inventory background (ScummVM's G0447 mouse input table, less the viewport's 33 rows). */
@@ -81,6 +87,8 @@ public final class CharacterSheet {
      * the disk's edge.
      */
     private static final Rectangle DISK = new Rectangle(180, 3, 9, 9);
+    /** The ZZZ icon beside it (x 190-208, y 2-12 on the PC graphic; ScummVM's 188-204 is another version's). */
+    private static final Rectangle SLEEP = new Rectangle(190, 2, 19, 11);
 
     /** DM's food/water panel (F345): its box, the labels' boxes, and the bars' rows. */
     private static final Point PANEL = new Point(80, 52);
@@ -95,7 +103,6 @@ public final class CharacterSheet {
 
     private static final Color TEXT = Art.PALETTE[13];
     private static final Color HEADING = Art.PALETTE[15];
-    private static final Color DISABLED = Art.PALETTE[1];
     private static final List<Champion.Stat> SHOWN_STATS = List.of(
             Champion.Stat.STRENGTH, Champion.Stat.DEXTERITY, Champion.Stat.WISDOM,
             Champion.Stat.VITALITY, Champion.Stat.ANTI_MAGIC, Champion.Stat.ANTI_FIRE);
@@ -103,7 +110,7 @@ public final class CharacterSheet {
     private final Art art;
     private Champion champion;
     private ChampionMirror candidate;
-    private boolean canRecruit;
+    private RenamePanel renaming;
     private Point hover;
     private boolean pressingEye;
 
@@ -111,20 +118,23 @@ public final class CharacterSheet {
         this.art = art;
     }
 
-    public void openCandidate(ChampionMirror mirror, boolean partyFull) {
+    /** Shows a mirror's champion; DM only does this while the party has room and the hand is empty. */
+    public void openCandidate(ChampionMirror mirror) {
         champion = mirror.champion();
         candidate = mirror;
-        canRecruit = !partyFull;
+        renaming = null;
     }
 
     public void openMember(Champion member) {
         champion = member;
         candidate = null;
+        renaming = null;
     }
 
     public void close() {
         champion = null;
         candidate = null;
+        renaming = null;
         hover = null;
         pressingEye = false;
     }
@@ -151,6 +161,33 @@ public final class CharacterSheet {
         return candidate;
     }
 
+    /** REINCARNATE: the candidate's panel becomes DM's rename keyboard, with an empty name and title. */
+    public void startRenaming() {
+        if (candidate != null) {
+            renaming = new RenamePanel();
+        }
+    }
+
+    public boolean renaming() {
+        return renaming != null;
+    }
+
+    /** The name typed so far on the rename panel. */
+    public String newName() {
+        return renaming == null ? "" : renaming.name();
+    }
+
+    public String newTitle() {
+        return renaming == null ? "" : renaming.title();
+    }
+
+    /** A key typed while renaming (letters, , . ; : space, Enter, Backspace). */
+    public void type(char c) {
+        if (renaming != null) {
+            renaming.type(c);
+        }
+    }
+
     /** Mouse position in screen coordinates, for item name tooltips. */
     public void hover(int x, int y) {
         hover = VIEW.contains(x, y) ? new Point(x - VIEW.x, y - VIEW.y) : null;
@@ -160,26 +197,63 @@ public final class CharacterSheet {
     public Action click(int x, int y) {
         int vx = x - VIEW.x;
         int vy = y - VIEW.y;
+        if (renaming != null) {
+            // DM's rename panel takes every click until OK.
+            return renaming.click(vx, vy) ? Action.RENAMED : Action.NONE;
+        }
         if (DISK.contains(vx, vy)) {
             return Action.DISK;
+        }
+        if (candidate != null) {
+            // A candidate's belongings can't be touched until they join.
+            if (RESURRECT_BUTTON.contains(vx, vy)) {
+                return Action.RESURRECT;
+            }
+            if (REINCARNATE_BUTTON.contains(vx, vy)) {
+                return Action.REINCARNATE;
+            }
+            if (CANDIDATE_CANCEL.contains(vx, vy) || CLOSE_ICON.contains(vx, vy)) {
+                return Action.CLOSE;
+            }
+            return EYE.contains(vx, vy) ? Action.EYE : Action.NONE;
         }
         if (CLOSE_ICON.contains(vx, vy) || CANCEL_BUTTON.contains(vx, vy)) {
             return Action.CLOSE;
         }
-        if (candidate != null && canRecruit && RESURRECT_BUTTON.contains(vx, vy)) {
-            return Action.RESURRECT;
+        if (SLEEP.contains(vx, vy)) {
+            return Action.SLEEP; // not for a candidate, as in DM
         }
-        // A candidate's belongings can't be touched until they are resurrected.
-        if (candidate == null && slotAt(x, y) != null) {
+        if (slotAt(x, y) != null) {
             return Action.SLOT;
         }
-        if (candidate == null && MOUTH.contains(vx, vy)) {
+        if (MOUTH.contains(vx, vy)) {
             return Action.MOUTH;
         }
-        if (candidate == null && EYE.contains(vx, vy)) {
+        if (EYE.contains(vx, vy)) {
             return Action.EYE;
         }
         return Action.NONE;
+    }
+
+    /** Screen points at the centre of the candidate panel's buttons, for tests. */
+    static Point resurrectCentre() {
+        return centre(RESURRECT_BUTTON);
+    }
+
+    static Point reincarnateCentre() {
+        return centre(REINCARNATE_BUTTON);
+    }
+
+    static Point candidateCancelCentre() {
+        return centre(CANDIDATE_CANCEL);
+    }
+
+    private static Point centre(Rectangle r) {
+        return new Point(VIEW.x + r.x + r.width / 2, VIEW.y + r.y + r.height / 2);
+    }
+
+    static Point sleepCentre() {
+        return centre(SLEEP);
     }
 
     /** Screen point at the centre of the disk icon, for tests. */
@@ -218,13 +292,15 @@ public final class CharacterSheet {
             PixelFont.draw(v, champion.fullName(), 3, 3, HEADING);
             drawItems(v);
             drawVitals(v);
-            if (candidate == null && !pressingEye) {
-                drawFoodAndWater(v);
-            } else {
+            if (renaming != null) {
+                renaming.draw(v, art);
+            } else if (pressingEye) {
                 drawSkillsAndStats(v);
-            }
-            if (pressingEye) {
                 drawLookingEye(v);
+            } else if (candidate != null) {
+                drawResurrectPanel(v);
+            } else {
+                drawFoodAndWater(v);
             }
             drawButtons(v);
             if (!holding) {
@@ -393,12 +469,20 @@ public final class CharacterSheet {
         g.fillRect(BAR_X, y, width + 1, 7);
     }
 
+    /** DM's F0283: graphic 40 in the panel box, or its three buttons drawn by hand. */
+    private void drawResurrectPanel(Graphics2D g) {
+        BufferedImage panel = art.keyed(GraphicsFile.RESURRECT_PANEL, RESURRECT_PANEL_KEY);
+        if (panel != null) {
+            g.drawImage(panel, PANEL.x, PANEL.y, null);
+            return;
+        }
+        button(g, RESURRECT_BUTTON, "RESUR", Art.PALETTE[4], Art.PALETTE[14]);
+        button(g, REINCARNATE_BUTTON, "REINC", Art.PALETTE[4], Art.PALETTE[14]);
+        button(g, CANDIDATE_CANCEL, "CANCEL", Art.PALETTE[11], Art.PALETTE[8]);
+    }
+
     private void drawButtons(Graphics2D g) {
-        if (candidate != null) {
-            button(g, RESURRECT_BUTTON, "RESURRECT", canRecruit ? Art.PALETTE[4] : DISABLED,
-                    canRecruit ? Art.PALETTE[14] : DISABLED);
-            button(g, CANCEL_BUTTON, "CANCEL", Art.PALETTE[11], Art.PALETTE[8]);
-        } else {
+        if (candidate == null) {
             button(g, CANCEL_BUTTON, "CLOSE", Art.PALETTE[11], Art.PALETTE[8]);
         }
     }

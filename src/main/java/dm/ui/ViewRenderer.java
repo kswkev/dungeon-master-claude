@@ -30,6 +30,14 @@ public interface ViewRenderer {
     /** Screen rectangle of the button on the door straight ahead, from the last {@link #draw}, or null. */
     Rectangle doorButtonHit();
 
+    /**
+     * Whether the last {@link #draw} showed something that changes every
+     * frame (a teleporter's field), so the view should be redrawn every tick.
+     */
+    default boolean animated() {
+        return false;
+    }
+
     /** The original-art renderer when GRAPHICS.DAT is loaded, otherwise the flat fallback. */
     static ViewRenderer forArt(Art art) {
         return art.available() ? new TexturedViewRenderer(art) : new FlatViewRenderer(art);

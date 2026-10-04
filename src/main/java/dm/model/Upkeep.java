@@ -10,12 +10,13 @@ import java.util.Random;
  *   <li>{@link #stepCost}: F366, paid by every living champion on every move attempt;</li>
  *   <li>{@link #consume}: F349, putting the held item in a champion's mouth.</li>
  * </ul>
- * Sleeping isn't modelled yet, so that branch of DM's code is left out. (Poison runs on its own clock, in {@link Party#tick}.)
+ * Poison runs on its own clock, in {@link Party#tick}.
  */
 public final class Upkeep {
 
     /** F331 runs when the game time is a multiple of 64 (16 while sleeping). */
     public static final int PERIOD = 64;
+    public static final int SLEEPING_PERIOD = 16;
     /** The Ekkhard Cross worn on the neck speeds healing. */
     private static final int EKKHARD_CROSS = 38;
 
@@ -25,9 +26,10 @@ public final class Upkeep {
     /**
      * F331 for one living champion at game time {@code time}, the party
      * having last moved at {@code lastMove}. Returns the damage still to be
-     * applied (stamina spent below zero hurts).
+     * applied (stamina spent below zero hurts). A sleeping party regains
+     * mana, stamina and health twice as fast, and statistics every 64 ticks.
      */
-    static int applyTimeEffects(Champion c, long time, long lastMove) {
+    static int applyTimeEffects(Champion c, long time, long lastMove, boolean sleeping) {
         int t = (int) time;
         int criteria = (((t & 0x80) + ((t & 0x100) >> 2)) + ((t & 0x40) << 2)) >> 2;
         int damage = 0;
@@ -35,7 +37,11 @@ public final class Upkeep {
         // Mana: regained when a 0-63 time pattern falls below wisdom + priest and wizard levels, paid in stamina.
         int magic = c.skillLevel(Champion.WIZARD) + c.skillLevel(Champion.PRIEST);
         if (c.mana() < c.maxMana() && criteria < c.stat(Champion.Stat.WISDOM) + magic) {
-            int gain = c.maxMana() / 40 + 1;
+            int gain = c.maxMana() / 40;
+            if (sleeping) {
+                gain <<= 1;
+            }
+            gain++;
             damage += c.decrementStamina(gain * Math.max(7, 16 - magic));
             c.setMana(c.mana() + Math.min(gain, c.maxMana() - c.mana()));
         } else if (c.mana() > c.maxMana()) {
@@ -53,6 +59,9 @@ public final class Upkeep {
         }
         int loss = 0;
         int amount = Math.max(1, Math.min((max >> 8) - 1, 6));
+        if (sleeping) {
+            amount <<= 1;
+        }
         long rested = time - lastMove;
         if (rested > 80) {
             amount++;
@@ -96,6 +105,9 @@ public final class Upkeep {
         if (c.health() < c.maxHealth() && c.rawStamina() >= max >> 2
                 && criteria < c.stat(Champion.Stat.VITALITY) + 12) {
             int gain = (c.maxHealth() >> 7) + 1;
+            if (sleeping) {
+                gain <<= 1;
+            }
             Item neck = c.items().get(Slot.NECK);
             if (neck != null && neck.category() == Item.Category.JUNK && neck.type() == EKKHARD_CROSS) {
                 gain += (gain >> 1) + 1;
@@ -103,8 +115,8 @@ public final class Upkeep {
             c.addHealth(gain);
         }
 
-        // Statistics drift back toward their maximum every 256 ticks.
-        if ((t & 255) == 0) {
+        // Statistics drift back toward their maximum every 256 ticks (64 asleep).
+        if ((t & (sleeping ? 63 : 255)) == 0) {
             for (Champion.Stat s : Champion.Stat.values()) {
                 int current = c.stat(s);
                 int maximum = c.maxStat(s);

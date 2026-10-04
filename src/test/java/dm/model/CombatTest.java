@@ -40,6 +40,7 @@ class CombatTest {
         c.setStat(Champion.Stat.STRENGTH, 120);
         c.setStat(Champion.Stat.DEXTERITY, 120);
         party.recruit(new ChampionMirror(0, 0, Direction.SOUTH, c));
+        party.takeMessages(); // not "NAME RESURRECTED."
         return c;
     }
 

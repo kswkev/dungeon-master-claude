@@ -211,7 +211,7 @@ final class ActionArea {
     }
 
     /** DM's F136: every other pixel of the box goes black. */
-    private static void shade(Graphics2D g, int x, int y, int w, int h) {
+    static void shade(Graphics2D g, int x, int y, int w, int h) {
         g.setColor(Color.BLACK);
         for (int py = y; py < y + h; py++) {
             for (int px = x + ((py + x) & 1); px < x + w; px += 2) {
