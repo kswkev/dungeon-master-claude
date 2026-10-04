@@ -488,7 +488,7 @@ public final class Party implements Serializable {
             return false;
         }
         Item before = held;
-        Item after = Upkeep.consume(c, before);
+        Item after = Upkeep.consume(c, before, random);
         if (after == before) {
             return false;
         }

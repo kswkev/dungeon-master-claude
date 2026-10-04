@@ -1,10 +1,12 @@
 package dm.model;
 
 import java.io.Serializable;
+import java.util.ArrayList;
 import java.util.Collections;
 import java.util.EnumMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Random;
 
 /**
  * A champion, built from the text stored beside a Hall of Champions mirror:
@@ -390,5 +392,105 @@ public final class Champion implements Serializable {
     /** Swaps an item in place (a torch burning down, a waterskin drunk from) without the slot rules. */
     void replace(Slot slot, Item item) {
         items.put(slot, item);
+    }
+
+    // ---- wounds and poison (Sprint 15) ----------------------------------------
+
+    /** DM's wound bits, one per body part, in DM's slot order. */
+    public static final int WOUND_READY_HAND = 0x01;
+    public static final int WOUND_ACTION_HAND = 0x02;
+    public static final int WOUND_HEAD = 0x04;
+    public static final int WOUND_TORSO = 0x08;
+    public static final int WOUND_LEGS = 0x10;
+    public static final int WOUND_FEET = 0x20;
+
+    /** The body parts DM can wound, in the order of its wound bits (DM's slots 0-5). */
+    public static final List<Slot> WOUND_SLOTS = List.of(
+            Slot.READY_HAND, Slot.ACTION_HAND, Slot.HEAD, Slot.TORSO, Slot.LEGS, Slot.FEET);
+
+    private int wounds;
+
+    /** DM's wound bits ({@link #WOUND_HEAD} and so on). */
+    public int wounds() {
+        return wounds;
+    }
+
+    /** Whether the body part {@code slot} (hands, head, torso, legs or feet) is wounded. */
+    public boolean isWounded(Slot slot) {
+        int bit = WOUND_SLOTS.indexOf(slot);
+        return bit >= 0 && (wounds & (1 << bit)) != 0;
+    }
+
+    void addWounds(int bits) {
+        wounds |= bits & 0x3F;
+    }
+
+    void setWounds(int bits) {
+        wounds = bits & 0x3F;
+    }
+
+    /**
+     * One link of a poisoning (DM's poison event): at {@code due} the
+     * champion loses attack / 64 health (at least 1), and unless that was
+     * the last, the next link follows 36 ticks later with attack - 1.
+     */
+    record Poison(int attack, long due) implements Serializable {
+    }
+
+    private final ArrayList<Poison> poisons = new ArrayList<>();
+
+    /** Whether poison is still working on the champion (DM's poison event count). */
+    public boolean poisoned() {
+        return !poisons.isEmpty();
+    }
+
+    ArrayList<Poison> poisons() {
+        return poisons;
+    }
+
+    /** Antivenin (DM's F323): every poisoning stops. */
+    void unpoison() {
+        poisons.clear();
+    }
+
+    /** DM's minimum for each statistic: 10 for luck, 30 for the rest. */
+    static int minStat(Stat s) {
+        return s == Stat.LUCK ? 10 : 30;
+    }
+
+    /**
+     * DM's F311: luck decides. Half the time the champion is lucky outright
+     * when a roll of 100 beats {@code percentage}; otherwise a roll of their
+     * luck must beat it, and luck then drops 2 on success or rises 2 on failure.
+     */
+    boolean isLucky(int percentage, Random random) {
+        if (random.nextInt(2) != 0 && random.nextInt(100) > percentage) {
+            return true;
+        }
+        int luck = stat(Stat.LUCK);
+        boolean lucky = luck > 0 && random.nextInt(luck) > percentage;
+        stats[Stat.LUCK.ordinal()] = Math.max(minStat(Stat.LUCK), Math.min(luck + (lucky ? -2 : 2),
+                maxStat(Stat.LUCK)));
+        return lucky;
+    }
+
+    /** DM's F310 (party awake): dexterity plus a little luck, less when heavily laden, 1-100. */
+    int dexterity(int load, Random random) {
+        int dexterity = random.nextInt(8) + stat(Stat.DEXTERITY);
+        dexterity -= (int) ((long) (dexterity >> 1) * load / maxLoad());
+        int low = 1 + random.nextInt(8);
+        int high = 100 - random.nextInt(8);
+        return Math.max(low, Math.min(dexterity >> 1, high));
+    }
+
+    /**
+     * DM's F307: an attack lessened by statistic {@code s} (vitality against
+     * poison): scaled by (170 - s) / 128, or an eighth when s is above 154.
+     * (On the Atari ST a compiler bug, ReDMCSB's BUG0_41, read s as 0; this
+     * follows the code as written, like ScummVM's PC engine.)
+     */
+    int statisticAdjustedAttack(Stat s, int attack) {
+        int factor = 170 - stat(s);
+        return factor < 16 ? attack >> 3 : attack * factor >> 7;
     }
 }

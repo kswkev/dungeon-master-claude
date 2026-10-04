@@ -244,6 +244,28 @@ public final class ItemCatalog {
             1, 3, 2, 2, 4, 15, 1, 1, 1, 2, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 81, 2, 3, 2, 4,
             4, 3, 8, 5, 11, 4, 6, 2, 3, 2, 2, 2, 6, 9, 3, 10, 1, 0, 1, 1, 2, 0, 8};
 
+    /** Armour defense and attributes per armour type (G239, from ScummVM's DM engine): bits 0-2 sharp defense. */
+    private static final int[] ARMOUR_DEFENSE = {
+            5, 10, 4, 5, 25, 5, 5, 7, 7, 6, 4, 5, 7, 11, 13, 13, 17, 20, 20, 12, 9, 8, 9, 1, 5, 12, 17, 20,
+            22, 16, 20, 35, 35, 35, 70, 55, 25, 30, 40, 65, 56, 37, 56, 62, 125, 90, 50, 85, 76, 160, 101, 60,
+            100, 54, 60, 88, 16, 3};
+    private static final int[] ARMOUR_ATTRIBUTES = {
+            1, 1, 1, 2, 4, 0, 0, 1, 1, 1, 0, 1, 1, 2, 2, 2, 3, 3, 3, 2, 1, 1, 1, 4, 4, 5, 5, 5,
+            0x85, 0x82, 0x83, 0x84, 5, 5, 7, 7, 6, 6, 7, 4, 4, 5, 0x84, 5, 4, 4, 5, 0x84, 4, 4, 4, 5,
+            0x84, 6, 7, 4, 2, 3};
+
+    /**
+     * DM's F143: the defense {@code item} gives as armour, or 0 if it isn't
+     * armour. Against sharp attacks it is scaled by (sharp defense + 4) / 8.
+     */
+    public static int armourDefense(Item item, boolean sharp) {
+        if (item == null || item.category() != Item.Category.ARMOUR || item.type() >= ARMOUR_DEFENSE.length) {
+            return 0;
+        }
+        int defense = ARMOUR_DEFENSE[item.type()];
+        return sharp ? defense * ((ARMOUR_ATTRIBUTES[item.type()] & 7) + 4) >> 3 : defense;
+    }
+
     /** DM's F140: a full waterskin weighs 2 more per draught; a chest's contents aren't modelled yet. */
     static int weight(Item item) {
         int t = item.type();
