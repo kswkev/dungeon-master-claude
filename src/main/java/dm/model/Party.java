@@ -498,12 +498,14 @@ public final class Party implements Serializable {
     public Tick tick() {
         time++;
         boolean burnt = time % Light.BURN_PERIOD == 0 && burnTorches();
+        boolean smoked = false;
         for (DungeonMap m : dungeon.maps()) {
             m.reenableGenerators(time);
+            smoked |= m.tickSmoke() && m == map;
         }
         CreatureAI.Outcome creatures = dungeon.creatures().tick(this);
         int[] damage = add(creatures.damage(), tickPoison());
-        boolean changed = burnt || creatures.changed() || damage != null;
+        boolean changed = burnt || smoked || creatures.changed() || damage != null;
         if (time % Upkeep.PERIOD == 0 && !members.isEmpty()) {
             fadeScents();
             int[] upkeep = new int[members.size()];

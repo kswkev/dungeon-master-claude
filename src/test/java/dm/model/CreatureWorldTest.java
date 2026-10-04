@@ -47,6 +47,15 @@ class CreatureWorldTest {
         assertNull(map.groupAt(3, 1), "crushed to death (5 a blow against 12 health)");
         assertTrue(map.hasItems(3, 1), "its sword is left behind");
         assertEquals(0, p.dungeon().creatures().pendingEvents());
+        List<DungeonMap.Smoke> smoke = map.smokeAt(3, 1);
+        assertEquals(1, smoke.size(), "and a puff of smoke where it died");
+        assertTrue(smoke.get(0).centred());
+        assertEquals(110, smoke.get(0).attack(), "a quarter-square creature's smoke");
+        p.tick();
+        assertEquals(70, map.smokeAt(3, 1).get(0).attack(), "fading by 40 a tick");
+        p.tick();
+        p.tick();
+        assertTrue(map.smokeAt(3, 1).isEmpty(), "gone after 3 ticks");
     }
 
     @Test

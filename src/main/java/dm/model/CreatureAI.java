@@ -1525,7 +1525,7 @@ public final class CreatureAI implements Serializable {
                 to = below.map();
                 x = below.x();
                 y = below.y();
-                if (damageAll(g, 20) == 2) {
+                if (damageAll(g, 20, to, x, y) == 2) {
                     killed = true;
                     break;
                 }
@@ -1601,10 +1601,10 @@ public final class CreatureAI implements Serializable {
 
     /**
      * DM's F191: an attack of about {@code attack} on every creature in the
-     * group. Returns 0 if none died, 1 if some did, 2 if all did. A group
-     * that dies here is removed by the caller.
+     * group on (x, y) of {@code m}. Returns 0 if none died, 1 if some did,
+     * 2 if all did. A group that dies here is removed by the caller.
      */
-    int damageAll(Group g, int attack) {
+    int damageAll(Group g, int attack, DungeonMap m, int x, int y) {
         if (attack <= 0) {
             return 0;
         }
@@ -1614,15 +1614,19 @@ public final class CreatureAI implements Serializable {
         boolean all = true;
         boolean some = false;
         for (int i = g.count() - 1; i >= 0; i--) {
-            boolean died = damageCreature(g, i, attack + rnd(seed));
+            boolean died = damageCreature(g, i, attack + rnd(seed), m, x, y);
             all &= died;
             some |= died;
         }
         return all ? 2 : some ? 1 : 0;
     }
 
-    /** DM's F190: hurts creature {@code i}; true if it died. The last one dying leaves the group empty. */
-    private boolean damageCreature(Group g, int i, int damage) {
+    /**
+     * DM's F190: hurts creature {@code i}; true if it died, leaving a puff of
+     * smoke on its cell (DM's smoke explosion, bigger for bigger creatures).
+     * The last one dying leaves the group empty.
+     */
+    private boolean damageCreature(Group g, int i, int damage, DungeonMap m, int x, int y) {
         CreatureType info = g.type();
         if (info.archenemy()) {
             return false;
@@ -1643,7 +1647,16 @@ public final class CreatureAI implements Serializable {
                 }
             }
         }
+        int size = switch (info.size()) {
+            case QUARTER -> 110;
+            case HALF -> 190;
+            case FULL -> 255;
+        };
+        m.addSmoke(x, y, g.centred() ? Group.CENTRED : g.cellOf(i), size);
         g.remove(i);
+        if (m == party.map()) {
+            out.changed = true;
+        }
         return true;
     }
 
@@ -1668,7 +1681,7 @@ public final class CreatureAI implements Serializable {
         begin(party);
         map = m;
         boolean alive = true;
-        if (damageAll(g, 5) == 2) {
+        if (damageAll(g, 5, m, x, y) == 2) {
             m.removeGroup(g);
             deleteEvents(m, x, y);
             m.groupLeft(x, y);

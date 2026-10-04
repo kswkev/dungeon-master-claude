@@ -187,6 +187,11 @@ Code lives under `src/main/java/dm/`, in three layers.
     - Fluxcages, invisibility, freeze life, sleep and parry experience.
     - Fixed possessions dropped on death, and the party attacking.
   - Groups on other maps (after the party has been there) take a random step now and then, as in DM.
+  - **Smoke:** a creature that dies (falls, doors) leaves a puff of smoke, DM's smoke explosion (C040, F0190), on its cell or the square's centre (`DungeonMap.Smoke`).
+    - It starts at 110, 190 or 255 by creature size and shrinks by 40 a tick while above 55 (`tickSmoke`, every map, in `Party.tick`), so it lasts 3 to 6 ticks.
+    - `TexturedViewRenderer.drawSmoke` draws it after everything else on the square, at DM's explosion points (G225 centred, G226 left/right column).
+    - The picture is the poison cloud, PC graphic 488 (the explosions are 486 fire, 487 spell and 488 poison; DM's 348-350), in G212's smoke colours.
+    - It's scaled by max(48, size+1) × G216 base scale (16/23/32/32 for D3/D2/D1/D0) / 256, and flipped at random each frame.
   - Between ticks, `react`, `crushedByDoor`, `settle` and `generate` add to an `Outcome`. The next tick hands it over: damage per member, DM sounds, clicks and whether anything changed.
 - **Scents** (`Party`, DM F267/F315/F316): the last 24 squares walked on, each with a strength.
   - The square left gains the ticks spent on it, up to 80. A new square starts at 24.

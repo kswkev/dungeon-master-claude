@@ -411,6 +411,86 @@ public final class TexturedViewRenderer implements ViewRenderer {
         if (doorFront) {
             drawCreatures(g, map, d, l, fwd, mx, my);
         }
+        drawSmoke(g, map, d, l, fwd, mx, my);
+    }
+
+    // ---- smoke (DM's smoke explosion where a creature died) -------------------
+
+    /**
+     * Smoke shares the poison cloud's picture. The PC's explosion pictures
+     * are 486 fire, 487 spell and 488 poison (DM's C348-C350, found by size
+     * and look), followed by the explosion patterns from 489.
+     */
+    private static final int SMOKE_GRAPHIC = 488;
+    /** DM's G212 palette changes for smoke (new colour x 10). */
+    private static final int[] SMOKE_CHANGES = {0, 10, 20, 30, 40, 50, 120, 10, 80, 90, 100, 110, 120, 130, 140, 150};
+    /** DM's G216 explosion base scales for D3, D2, D1, D0 (in 32nds, times the explosion's size / 256). */
+    private static final int[] EXPLOSION_SCALE = {16, 23, 32, 32};
+    /**
+     * DM's G226: an explosion's centre on the left or right column of a
+     * square, by explosion view square: D3 C/L/R, D2 C/L/R, D1 C/L/R, D0 C/L/R.
+     */
+    private static final int[][][] EXPLOSION_XY = {
+            {{95, 50}, {127, 50}}, {{31, 50}, {63, 50}}, {{159, 50}, {191, 50}},
+            {{92, 53}, {131, 53}}, {{-3, 53}, {46, 53}}, {{177, 53}, {226, 53}},
+            {{83, 57}, {141, 57}}, {{-54, 57}, {18, 57}}, {{207, 57}, {277, 57}},
+            {{0, 0}, {0, 0}}, {{-73, 60}, {-33, 60}}, {{256, 60}, {296, 60}}};
+    /** DM's G225: a centred explosion's centre, in the same order. */
+    private static final int[][] CENTRED_EXPLOSION_XY = {
+            {111, 50}, {45, 50}, {179, 50}, {111, 53}, {20, 53}, {205, 53},
+            {111, 57}, {-30, 57}, {253, 57}, {111, 60}, {-53, 60}, {276, 60}};
+
+    private final java.util.Map<Integer, BufferedImage> smokeImages = new java.util.HashMap<>();
+    private final java.util.Random smokeFlips = new java.util.Random();
+
+    /**
+     * The puffs of smoke on a square, as DM's F0115 draws explosions: on the
+     * left or right column of the square (or its centre), the poison-cloud
+     * picture in smoke colours, scaled by the puff's size and the distance
+     * (F0114), and flipped at random each time it is drawn, so it churns.
+     */
+    private void drawSmoke(Graphics2D g, DungeonMap map, int d, int l, Direction fwd, int mx, int my) {
+        if (Math.abs(l) > 1 || d > MAX_DEPTH || (d == 0 && l == 0)) {
+            return;
+        }
+        List<DungeonMap.Smoke> puffs = map.smokeAt(mx, my);
+        if (puffs.isEmpty()) {
+            return;
+        }
+        int index = (MAX_DEPTH - d) * 3 + (l == 0 ? 0 : l < 0 ? 1 : 2);
+        for (DungeonMap.Smoke s : puffs) {
+            int[] at;
+            if (s.centred()) {
+                at = CENTRED_EXPLOSION_XY[index];
+            } else {
+                boolean left = s.cell() == fwd.ordinal() || s.cell() == fwd.turnLeft().ordinal();
+                at = EXPLOSION_XY[index][left ? 0 : 1];
+            }
+            int scale = Math.min(32, Math.max(4, (Math.max(48, s.attack() + 1) * EXPLOSION_SCALE[MAX_DEPTH - d]) >> 8) & ~1);
+            BufferedImage img = smokeImage(scale);
+            if (img == null) {
+                return;
+            }
+            int w = img.getWidth();
+            int h = img.getHeight();
+            int x = at[0] - w / 2 + 1;
+            int y = at[1] - (h >> 1) + ((h & 1) == 0 ? 1 : 0);
+            boolean flipX = smokeFlips.nextBoolean();
+            boolean flipY = smokeFlips.nextBoolean();
+            g.drawImage(img, flipX ? x + w : x, flipY ? y + h : y, flipX ? -w : w, flipY ? -h : h, null);
+        }
+    }
+
+    private BufferedImage smokeImage(int scale) {
+        return smokeImages.computeIfAbsent(scale, sc -> {
+            IndexedImage src = art.indexed(SMOKE_GRAPHIC);
+            if (src == null) {
+                return null;
+            }
+            IndexedImage small = Bitmaps.shrink(src, Bitmaps.scaled(src.width(), sc), Bitmaps.scaled(src.height(), sc),
+                    SMOKE_CHANGES);
+            return Bitmaps.toImage(small, 10, Bitmaps.palette());
+        });
     }
 
     // ---- creatures -----------------------------------------------------------
