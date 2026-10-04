@@ -65,7 +65,7 @@ Run with `"-Ddm.debug=true"` to list every decoration on Level 1.
 **Sprint 8: done.** Items lie on the floor:
 - **Drawing:** items on the floor are drawn where DM draws them, on each square's four cells and scaled with distance. These positions come from DM's own screen-layout table, which turned out to be in GRAPHICS.DAT (entry 696).
 - **Picking up and dropping:** click the bottom of the view to pick up the top item from the left or right cell just ahead of you on the party's square, or to drop the item in your hand there.
-- **Throwing:** with an item in hand, click higher up in the view to throw it from that side. It flies one square per tick for up to 4 squares and lands in front of a wall or closed door. Thrown items don't do damage yet.
+- **Throwing:** with an item in hand, click higher up in the view to throw it from that side. (Since Sprint 16 it flies and hits as in the original.)
 
 **Sprint 9: done.** Walls can be used (#12):
 - **Switches and buttons:** click them to work doors and other mechanisms. Levers flip as you click them.
@@ -117,7 +117,16 @@ Run with `"-Ddm.debug=true"` to list every decoration on Level 1.
 - **The dungeon acts on them:** they can't pass closed doors (ghosts can), stay out of open pits (unless they fly), fall through pits that open under them, are carried by creature teleporters, and press pressure plates. A door shut on a creature hurts it and bounces back. The original's 50 creature generators make new creatures.
 - Creatures that cast spells (Vexirks, Wizard Eyes, Demons and others) only fight hand to hand for now.
 
-**Not yet:** fighting back (combat) and spells.
+**Sprint 16: done.** The party fights back, with the original's rules (ported from ReDMCSB):
+- **The action area:** below the spell area, each champion's action-hand item shows as a black icon on cyan (a fist for an empty hand). Click one to open that champion's menu of actions, drawn on the original's panel, and click an action (or PASS). The icon is shaded while the champion recovers. After a blow, the original's starburst shows the damage for a moment, or CAN'T REACH / NEED AMMO.
+- **Melee:** swing, chop, stab, thrust, punch, kick and the rest hit the creature in front of the champion, with the original's hit roll, damage from strength, weapon and skill, critical hits, and the creature's defense. Champions in the back row can't reach past the one in front. Hit creatures turn on the party.
+- **Throwing and shooting:** THROW (and clicking the view with an item in hand) throws with the champion's strength and skill, so the item flies further and hits harder; bows and slings SHOOT the arrows or rocks in the other hand, and the next one comes from the quiver. Things in flight hit creatures, champions, doors and walls as in the original, and land where they stop.
+- **Frightening:** WAR CRY, CALM, BRANDISH and BLOW HORN can send creatures fleeing.
+- **Deaths:** a dying creature leaves smoke and drops what the original's creatures always carry (a skeleton's falchion and shield, a rat's drumsticks...) plus anything it picked up; the rest of its group may lose heart and flee.
+- **Doors:** a strong enough blow breaks a breakable door (wooden ones most easily), and so can thrown things.
+- **Experience:** every action trains its skill, faster in a fight and on deeper levels, and a new level raises the champion's statistics, health, stamina and mana, announced in the message area at the bottom of the screen ("... JUST GAINED A FIGHTER LEVEL!"). Champions turn to face whoever hits them.
+
+**Not yet:** spells, including the magic in items' action menus (a staff's fireball and the like); exploding bombs.
 
 ## Requirements
 
@@ -178,6 +187,7 @@ The tests cover:
 - stairs between levels;
 - pits, teleporters, levers, alcove clicks and plates pressed by items;
 - creature behaviour, attacks, wounds, poison, and creatures with doors, pits, teleporters, plates and generators;
+- combat: action menus, blows, throwing and shooting, projectiles, creature deaths and drops, fear, breaking doors, experience and levels, the action and message areas;
 - the Sprint 11 bug reports replayed on your own Level 2, and the creatures there. These run only when `data/` holds the game files, so CI skips them.
 
 GitHub Actions builds the project and runs the tests on every push and pull request to `develop` and `main`.

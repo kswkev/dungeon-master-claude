@@ -21,8 +21,9 @@ A Java/Swing remake of FTL's *Dungeon Master* (1988), built sprint by sprint.
 - Sprint 14: creatures you can see (groups from DUNGEON.DAT drawn with DM's art, blocking the party, facing it, saved), and the whole view on DM's own layout zones (doors, stairs, pits, ceiling pits, mirrors).
 
 - Sprint 15: creature AI and attacks, ported from ReDMCSB: DM's group timeline, sight, smell and scent trails, attacks with hit rolls, armour, wounds and poison, attack pictures and sounds, and creatures with doors, pits, teleporters, plates and generators.
+- Sprint 16: combat, ported from ReDMCSB: the action area and menus, melee, throwing and shooting with DM's projectiles, experience and levelling with DM's message area, creature deaths with their fixed drops and fear, and doors broken by blows.
 
-Combat (Sprint 16) and spells are not implemented yet.
+Spells, and the item magic in action menus (a staff's fireball and the like), are not implemented yet.
 
 ## Commands
 
@@ -70,7 +71,7 @@ Code lives under `src/main/java/dm/`, in three layers.
   - `CreatureType` holds DM's G0243/G0219 data (from ScummVM): size (quarter/half/full), which pictures exist (front, side, back, attack, in that order from 584 + firstGraphic), coordinate set (0 ground, 1 large, 2 flying), transparent colour, and the replacement colour sets (1-based) for colours 9 and 10.
   - Since Sprint 15 it also has the rest of G0243 (`INFO`): movement and attack ticks, defense, base health, attack, poison attack, dexterity, sight/smell/attack ranges, properties (fear, wariness), resistances, animation ticks, wound probabilities (feet, torso, legs, head nibbles from the bottom) and attack type; and the attribute flags (side attack, prefer back row, attack any champion, levitation, non-material, height bits 7-8, night vision, archenemy). `attackSound()` maps the attack sound ordinal through DM's G0244; `movementSound()` is DM's F0514.
   - The group's attribute word also holds the behaviour in bits 0-3.
-- **Doors:** the door thing's bit 0 picks the map's door set (style 0-3) and bit 5 means it opens upward; `doorStyles` keeps both (`DungeonMap.DOOR_VERTICAL`).
+- **Doors:** the door thing's bit 0 picks the map's door set (style 0-3), bit 5 means it opens upward, bit 7 that magic can break it and bit 8 that blows can; `doorStyles` keeps them all (`DungeonMap.DOOR_VERTICAL`, `DOOR_MAGIC_DESTRUCTIBLE`, `DOOR_MELEE_DESTRUCTIBLE`; tests set them with `setDoorStyle`).
 - **Creature generators** (floor sensor type 6, `FloorSensor.TYPE_GENERATOR`): word 1's data is the creature type, word 2 bits 7-10 the count (bit 3 set: random up to bits 0-2; otherwise the value is the count), word 3 bits 4-7 the health multiplier (0 = the map's difficulty) and bits 8-15 the ticks it rests (over 127: (n - 126) × 64). All 50 in the PC file are on corridors. ReDMCSB DEFS.H (M45/M46) confirms the layout.
 - **Things** (`Thing`, `Thing.Store`):
   - A thing id packs the cell (bits 14-15), type (10-13) and index (0-9). Each record's first word links to the next thing, and 0xFFFE ends the list.
@@ -127,6 +128,8 @@ Code lives under `src/main/java/dm/`, in three layers.
 - **Items** (`ItemCatalog`): maps the type numbers stored in DUNGEON.DAT to names and wear slots.
   - This is reference data from the game itself, not from either file.
   - Icons are found by matching names against GRAPHICS.DAT's name list. `Item.nameVariant` picks between icons that share a name (e.g. ROBE for the body vs. the legs).
+  - Combat data (from ScummVM's tables): G238 weapon info (`weaponClass`, `weaponStrength`, `weaponKineticEnergy`, `shootAttack`; classes 0 swing, 2 daggers and axes, 10 bow ammo, 11 sling ammo, 12 poison dart, 16-31 bows, 32-47 slings, 112+ magic), G237's action set per object info index (`objectInfoIndex`: scroll 0, container 1, potions 2+, weapons 23+, armour 69+, junk 127+; `actionSet`), and G237's "passes through doors" flag (`passesThroughDoors`, never for keys).
+  - `Actions` holds DM's 44 actions: names (G490), skill (G496), disabled ticks, stamina, experience (G497), defense (G495), hit probability and damage factor, and the 44 action sets (three actions each; the second and third with a minimum skill level, bit 7 = needs a charge). `isMagic` marks the spells and item magic, which menus leave out for now.
 
 **`model/`: map and party, no UI**
 - `Square` keeps the raw byte and decodes attribute bits through accessors (door state, pit open, stairs up). `isPassable` holds the movement rules.
@@ -149,9 +152,9 @@ Code lives under `src/main/java/dm/`, in three layers.
 - **Formation:** `members()` is the recruit order, which is also the colour and status-box order. `at(position)` is the formation, using DM's cells: `FRONT_LEFT` 0, `FRONT_RIGHT` 1, `BACK_RIGHT` 2, `BACK_LEFT` 3. `bump(move)` damages the two positions on the side that hit the wall.
 - **Creatures:** `DungeonMap.groups`/`groupAt`/`hasCreatures`/`removeGroup`/`allowsCreature` (a map built without a creature list allows any).
   - The party can't step onto a creature square. That's a plain block without a bump (`Party.blockedByCreatures`), and the group reacts (DM's "party adjacent": it attacks).
-  - Thrown items stop in front and land.
+  - Thrown and shot things hit them (`Flight`).
   - A party landing on a group (by teleporter) deletes it, as DM does.
-  - Groups are saved with the whole AI state (`SaveGames.VERSION` 3). The ASCII map shows them as M.
+  - Groups are saved with the whole AI state (`SaveGames.VERSION` 4). The ASCII map shows them as M.
   - `Group` keeps what DM keeps in ACTIVE_GROUP: a direction and an aspect per creature (attacking, flipped, jitter), the behaviour (WANDER 0, FLEE 5, ATTACK 6, APPROACH 7), the target, prior and home squares, the last move time and the fleeing delay. `remove(i)` drops a dead creature and closes the gap.
 - **Creature AI** (`CreatureAI`, owned by `Dungeon`): a port of ReDMCSB GROUP1.C F175-F209 and GROUP2.C F230. ReDMCSB wins where ScummVM differs (e.g. F182 clears all four attack flags).
   - **Timeline:** it runs on DM's timeline of `Event`s (map, square, type, time, ticks, priority), sorted as F234 does: by time, then higher type, then priority.
@@ -179,15 +182,20 @@ Code lives under `src/main/java/dm/`, in three layers.
     - The hit roll: the champion's dexterity (F310) against the creature's dexterity + 2×difficulty, or 1 in 4, then F311 luck at 60.
     - The wound is chosen from the creature's probabilities.
     - For attack types other than normal, the attack is scaled by the body part's defense (F313): worn armour, shields in hands with F312 strength, vitality, and minus 8-11 if already wounded.
-    - Wounds are rolled against vitality, and the parry skill (`Champion.PARRY`) lowers the attack.
+    - Wounds are rolled against vitality, and the parry skill (`Champion.PARRY`) lowers the attack. Every attack teaches parry (the creature's experience value, F304), hit or not. The body part's defense includes the champion's action defense.
     - A hit plays the champion's "ouch" (C09 + index) and may poison (F322).
+    - The champion turns to face the hardest blow since the last tick (`Champion.receivedBlow`; `Party.faceAttackers` is F390, skipping the leader), and turns back to the party's facing once no creature has attacked for 60 ticks (F331).
     - Gigglers steal from the ready hand instead (DM's slot table is all zeros) and may flee.
+  - **Deaths** (F186-F190): `damageCreature` returns `KILLED_NONE`/`KILLED_SOME`/`KILLED_ALL`.
+    - One of several dying drops its type's fixed possessions (`CreatureType.fixedPossessions`, for types with attribute 0x200) on its cell, or a random one a quarter of the time; "maybe" items half the time; a metallic thud for a weapon, a wooden one otherwise. If the group was attacking, the rest may flee (fear resistance + count - 2 against random 16).
+    - The last one dying deletes the group (F189) and drops every creature's fixed possessions plus the group's own things on random cells (F188).
+    - A group falling down a pit is "moving": the drops of those that die wait for where it lands (F187).
+  - **The champions' side** (Sprint 16): `hitCreature` (F190 for a blow or a projectile), `frighten` (F401's fear test; a frightened group stops attacking and flees for ((16 - fear) << 2) / movement ticks), `meleeTarget` (F177 with F229's attack order), `hurtChampion` (F321 for projectiles), `soundAt` and `changed` (to report between ticks).
   - **Not done yet:**
-    - Spells and projectiles: `attackRange` is 1 for everyone, so casters approach and fight hand to hand.
-    - Fluxcages, invisibility, freeze life, sleep and parry experience.
-    - Fixed possessions dropped on death, and the party attacking.
+    - Creature spells and projectiles: `attackRange` is 1 for everyone, so casters approach and fight hand to hand.
+    - Fluxcages, invisibility, freeze life and sleep.
   - Groups on other maps (after the party has been there) take a random step now and then, as in DM.
-  - **Smoke:** a creature that dies (falls, doors) leaves a puff of smoke, DM's smoke explosion (C040, F0190), on its cell or the square's centre (`DungeonMap.Smoke`).
+  - **Smoke:** a creature that dies (falls, doors, blows, projectiles) leaves a puff of smoke, DM's smoke explosion (C040, F0190), on its cell or the square's centre (`DungeonMap.Smoke`).
     - It starts at 110, 190 or 255 by creature size and shrinks by 40 a tick while above 55 (`tickSmoke`, every map, in `Party.tick`), so it lasts 3 to 6 ticks.
     - `TexturedViewRenderer.drawSmoke` draws it after everything else on the square, at DM's explosion points (G225 centred, G226 left/right column).
     - The picture is the poison cloud, PC graphic 488 (the explosions are 486 fire, 487 spell and 488 poison; DM's 348-350), in G212's smoke colours.
@@ -223,11 +231,29 @@ Code lives under `src/main/java/dm/`, in three layers.
   - wall squares: each AND/OR gate there gets the effect as input bit = cell. A gate is "pressed" while its value equals the target, with the same HOLD/revert rules as plates.
   - Floor plates use it too. HOLD counts as SET.
 - `pressDoorButton` toggles a door.
-- **Throwing:** `DungeonMap.throwItem` adds a `Projectile`, and `tickProjectiles()` (run from `GameScreen.tick()`) moves it one square per tick.
-  - It stops before a wall or closed door, or after `Party.THROW_RANGE` squares, and lands on the far cell of its side, through `dropItem`.
-  - It flies over open pits. An object teleporter moves it to the target, turned, and it flies on from there (on that map's list, which only ticks while the party is on that map).
-  - `tickProjectiles` returns a `ProjectileTick` (moved, click).
-  - There's no damage or strength-based range yet.
+- **Actions** (`Combat`, ReDMCSB MENUS.C F383/F391/F401-F407, GROUP2.C F231/F232, CHAMPION.C F326/F328/F330, TIMELINE.C F253/F259; the UI calls `Party.actions(member)` and `Party.act(member, action)`):
+  - **Menu** (F383): the action hand's set (an empty hand is set 2: punch, kick, war cry); the first action always, the others if the champion's skill level reaches their minimum and, when bit 7 says so, the item has a charge. Magic is left out. Empty while the champion is dead or recovering, or for an item with no actions.
+  - **Performing** (F391, F407): the action's defense is added (`Champion.actionDefense`, read by F313), the action runs against the square ahead **in the champion's own direction** (`Champion.facing`), then F330 disables the champion for the action's ticks, it costs its stamina + random(2) (`Party.spendStamina`, F325: half the shortfall below 0 hurts), and it earns its experience in its skill. `act` returns what the action area shows: damage, `Party.CANT_REACH` or `Party.NEED_AMMO`.
+  - **Melee** (F402, F231): punch, kick, swing, chop, stab, thrust, jab, parry, hack, berzerk, bash, stun, disrupt, melee, slash, cleave.
+    - The target creature is F177's; a back-row champion with someone in front can't reach.
+    - The hit roll is dexterity (F310) against random(32) + the creature's dexterity + 2×difficulty - 16, or 1 in 4, or luck against 75 - the action's hit probability. Non-material creatures only take disrupt and the Vorpal Blade.
+    - Damage starts from F312 strength (`Champion.strength`: strength, the item's weight against what the champion can carry, the weapon's strength and twice its skill; stamina and a wounded hand lessen it), × the action's factor / 32, less random(32) + defense + 2×difficulty (the Diamond Edge ignores a quarter, Hardcleave an eighth); a weak blow may still do a little. A skill roll (random(64) < level) doubles it + 10.
+    - A hit earns (damage × the creature's experience / 16) + 3 and costs 4-7 stamina; a miss 2-3. A surviving group turns on the party.
+    - A blow that lands nowhere (no creature) halves its experience and disabled ticks. An action that ends up not disabling the champion takes its defense back at once (DM's BUG0_54 kept it).
+  - **Doors:** bash, hack, berzerk, kick, swing and chop at a closed door (6 ticks) break it if it is melee-destructible and F312 strength reaches its design's defense (portcullis 110, wood 42, iron 230, ra 255); it breaks 2 ticks later (`DungeonMap.breakDoor`, F232; `tickDoors` counts down).
+  - **Fright** (F401): war cry (3, 12 experience, sound 28), calm (7, 35), brandish (6, 30), blow horn (6, 20, sound 25), plus the influence level, against the group ahead. A failed fright halves the experience, in influence.
+  - **Shoot** (F326): a bow with bow ammunition, or a sling with sling ammunition, in the ready hand (otherwise NEED AMMO): kinetic energy = both weapons' energy, attack = (shoot attack + shoot level) × 2, step energy = the class's position in its range. It leaves from the front cell on the champion's side.
+  - **Throw** (F328; also F329 for the item on the pointer, `Party.throwHeld`, which the view's upper half uses): energy from F312 strength + the weapon's kinetic energy + random(16) + half of that + the throw level; attack = 8×level + random(32), 40-200; step energy = 11 - level, at least 5; F305 stamina for the weight; 4 ticks; 8 experience, +4 for a weapon, + a quarter of its energy for throwing weapons. It leaves from the party's front left or right, the way the party faces.
+  - **Flip** prints heads or tails. **Climb down** (the rope) steps the party into the pit ahead and down unhurt, for some stamina (`Party.climbDown`).
+  - **Recovering** (F330): a champion already recovering waits half of what is left longer (or, for a shorter action, half its own ticks). When the time is up (`Party.enableActions`, F253) the defense goes; after a shot an empty ready hand takes the next compatible ammunition from the quiver, and after a throw an empty action hand the next weapon (F259; DM's quiver slots 12, 7, 8, 9 = our `QUIVER_1`, `QUIVER_3`, `QUIVER_2`, `QUIVER_4`).
+- **Things in flight** (`Flight` and `Projectile`, ReDMCSB PROJEXPL.C F212-F219):
+  - A projectile has kinetic energy, attack and step energy, an absolute cell and a direction. It moves half a square per tick on the party's map (every 3 ticks elsewhere, as DM 1.x): from a back cell to the front cell of its side, then into the next square. `Party.tick` moves them before the creatures.
+  - Its first move ignores impacts. After that, each move may first hit a champion on its cell of the party's square (F321, head and torso, blunt) or a creature on its cell; if its energy is no more than its step energy it drops; otherwise both energy and attack lose a step.
+  - Leaving a square, a wall, a closed fake wall or stairs met from stairs stops it: it drops in front. Crossing into the middle of a door square, a closed door (state 2 or more, not broken) stops it, unless a portcullis lets it through (attack > random(128) and `passesThroughDoors`); the impact may break the door (F232, attack + random(attack)).
+  - F216's impact: the weapon's kinetic energy (random(4) for other things) + half the weight, with the projectile's energy, worn down as its attack fades. A creature takes (impact × 64) / its defense (F190); non-material creatures let it through. A surviving group reacts (CM2), and creatures with attribute 0x400 keep a dagger, arrow, slayer, poison dart or throwing star that didn't kill.
+  - It ends on the floor where it stopped (through `dropItem`, so pits, teleporters and plates act), with a metallic thud for a weapon or a wooden one otherwise. It flies over pits; teleporters that take things send it on, turned (F263).
+  - Not yet: explosions (spells, and thrown bombs and venom), walking into projectiles (F266), and poison darts' poison.
+- **Experience** (`Party.addSkillExperience`, F304): fighting skills (swing to shoot) learn half as fast with no creature attack in the last 150 ticks (`Party.creatureAttacked`) and twice as fast within 25; a deeper map multiplies by its difficulty. Hidden skills also feed their base skill. An eighth (1-100) goes to temporary experience, which counts in `skillLevel` (F303) and fades by 1 every 64 ticks. A new base level raises statistics, health, stamina and mana as DM does and prints "NAME JUST GAINED A ... LEVEL!" (`Party.message`, `takeMessages`, in the member's colour). `Champion.skillLevel` adds DM's item bonuses (Firestaff, Pendant Feral, Ekkhard Cross, Gem of Ages, Sceptre of Lyf, Moonstone).
 - `Champion.addStartingItem` chooses slots the way DM does: worn items on the body, weapons in the action hand then the quiver or ready hand, potions in the pouches, everything else in the backpack.
 - **Moving items:**
   - `Item.fits(slot)` holds DM's slot rules: hands and backpack take anything; body slots only take what `wornOn` names; pouches take potions, scrolls and `ItemCatalog.POUCH_JUNK`; quiver 1 takes any weapon; quivers 2-4 take only missiles.
@@ -260,13 +286,20 @@ Code lives under `src/main/java/dm/`, in three layers.
 - `FormationBox` (top-right, x 276-319) draws champion colours with graphic 28's icons. Click a champion, then a cell, to swap positions. Empty cells, like empty status boxes, stay black as in DM (#27); only the placeholder art (`!art.available()`) outlines them.
 - Click order:
   1. a hand box in `ChampionBars` (`handAt`), except on the box of the champion whose sheet is open;
-  2. an open `CharacterSheet`;
-  3. the `ChampionBars` boxes;
-  4. `FormationBox`;
-  5. in the view, the rectangles the renderer recorded during the last draw, all only for the square straight ahead: `portraitHit`, `doorButtonHit`, `wallHit`;
-  6. the rest of the view (floor or throw);
-  7. the arrows.
+  2. the `ActionArea` (even with a sheet open, as in DM);
+  3. an open `CharacterSheet`;
+  4. the `ChampionBars` boxes;
+  5. `FormationBox`;
+  6. in the view, the rectangles the renderer recorded during the last draw, all only for the square straight ahead: `portraitHit`, `doorButtonHit`, `wallHit`;
+  7. the rest of the view (floor or throw);
+  8. the arrows.
   The arrows and the dungeon are ignored while a sheet is open.
+- **Action area** (`ActionArea`, MENUS.C F385-F391), at (233,77)-(319,121):
+  - Icons: one box per member, x = 233 + 22×index, 20×35 from y 86, cyan, with the action hand's icon at (x+2, 95) in DM's G498 colours (the icon background cyan, everything else black). An empty hand is icon 201; an item with no actions leaves the box blank; a dead champion's box is black. Shaded (every other pixel black, F136) while the champion recovers or a mirror candidate is shown. Clicking one opens that champion's menu (DM's boxes 233-252, 255-274, 277-296, 299-318, y 86-120).
+  - Menu: graphic 10 (with PASS printed on it) cut to 97/109/121 for 1-3 actions; the name at (235,83) black on cyan, the actions at (241, 93 + 12i) cyan. Clicks: PASS at 285-318 × 77-83, actions at 234-318 × 86-96 / 98-108 / 110-120.
+  - Result: after an action the next tick shows what it did, for that tick only (F390): damage over 40 on graphic 14 at full size, 16-40 shrunk to 64×37 at (242,81), up to 15 to 42×37 at (251,81), the number at x = 274 - 3×digits, y 100; or CAN'T REACH at x 242 / NEED AMMO at 248. A miss shows nothing.
+  - Without GRAPHICS.DAT the panel and burst are drawn by hand.
+- **Message area** (`MessageArea`, TEXT.C F047-F052): 4 rows of 7 px from y 172, 53 columns of 6 px. Each message starts a new row, scrolling up at the bottom; words that don't fit wrap, indented by 2. A row clears 200 ticks after its last text. `GameScreen` moves `Party.takeMessages()` in (member colour from `ChampionBars.COLORS`, otherwise cyan).
 - **Game menu** (`GameMenu`, opened by the sheet's disk icon, `CharacterSheet.Action.DISK` at viewport (180,3,9,9), measured on graphic 17; ScummVM's 174-182 box is another version's layout):
   - Drawn over the viewport from DM's dialog box, graphic 0 (224×136). Its pieces: message panel (10,10)-(213,51), wide button (10,62)-(213,88), half buttons (10..107 / 117..213, y 99..125).
   - The menu's own screens rearrange those pieces into a title strip and three rows: MAIN is SAVE | LOAD, QUIT | OPTIONS, CANCEL; the slot screens show 4 slot buttons and CANCEL. QUIT (SAVE AND QUIT / QUIT / CANCEL) and the OK messages use DM's own 3- and 1-choice layouts.
@@ -280,9 +313,9 @@ Code lives under `src/main/java/dm/`, in three layers.
 - **Keyboard** (`KeyMap`, `GameScreen.key`): keys go through the same path as the arrow buttons, lighting the arrow while held. The PC numpad works (7/8/9 turn left, forward, turn right; 4/5/6 left, back, right), with Num Lock off too: keypad keys are told apart by `KEY_LOCATION_NUMPAD`, so the keypad's Left sidesteps while the arrow key's Left turns. The arrow keys work (up/down move, left/right turn), and so do W/A/S/D with Q/E to turn. Keys are ignored while a sheet is open or after the end.
 - Screen regions match the original layout:
   - the dungeon view is the `ViewRenderer.VIEWPORT` rectangle (the character sheet replaces it while open);
-  - the arrows are `MovementPanel.AREA`, drawn from GRAPHICS.DAT entry 13 (DM's cyan arrows, #28). The click boxes are DM's own (turns from F0365, moves from G0463), and a pressed arrow is highlighted as DM's F0006 does: colour index 4 is XOR-ed over its box, so cyan and black swap. Entry 9 is the spell panel and entry 10 the action panel (PASS), for later sprints;
+  - the arrows are `MovementPanel.AREA`, drawn from GRAPHICS.DAT entry 13 (DM's cyan arrows, #28). The click boxes are DM's own (turns from F0365, moves from G0463), and a pressed arrow is highlighted as DM's F0006 does: colour index 4 is XOR-ed over its box, so cyan and black swap. Entry 9 is the spell panel, for the spells sprint;
   - the champion boxes run across the top;
-  - the spell and action areas stay black for now (outlined only with placeholder art).
+  - the spell area stays black for now (outlined only with placeholder art); the action area is `ActionArea.AREA`.
 - `CharacterSheet` slot positions come from DM's inventory background (graphic 17).
   - On a party member's sheet, clicking a cell (`Action.SLOT`, `slotAt`) picks up, places or swaps through `GameScreen.clickSlot`. A candidate's items can't be touched.
   - The mouth (`Action.MOUTH`, viewport (56,13)) feeds the held item. A member's panel shows DM's food/water panel (graphic 20 keyed on red, labels 30/31 keyed on dark grey, F344 bars); holding the eye (`Action.EYE`, (12,13)) shows skills and statistics instead, and draws the eye looking down to the right (icon 203 via `Art.icon(int)`; 202, the background's own, is the eye not looking). Candidates always show their statistics.
@@ -292,7 +325,7 @@ Code lives under `src/main/java/dm/`, in three layers.
     - the mouth box is red while the champion is hungry, thirsty or poisoned, and the eye box while any statistic is below its maximum;
     - a poisoned champion's food/water panel shows the POISONED label (graphic 32 at (112,105));
     - in the status boxes a wounded hand gets box 34, and the wounded hand outline (213/215) when it is empty.
-  - With no sheet open, a click in the bottom of the view (`GameScreen.FLOOR_CLICK_Y` and below) picks up from or drops onto the party square's left or right cell ahead. A click higher up with an item in hand throws it from that side.
+  - With no sheet open, a click in the bottom of the view (`GameScreen.FLOOR_CLICK_Y` and below) picks up from or drops onto the party square's left or right cell ahead. A click higher up with an item in hand throws it from that side (`Party.throwHeld`, F329: the leader throws, so an empty party can't).
   - While an item is held, `GameWindow` hides the OS cursor and `GameScreen` draws `Art.iconSprite` (the icon with background colour 12 transparent) centred on the pointer, on top of everything. Text uses `PixelFont`, a hand-made 5×5 font, because the PC GRAPHICS.DAT has no UI font image.
 - Blocked moves go through `GameScreen.bump()`:
   - it plays the thud through the injected `SoundPlayer` (`javaSound()` in the game, `silent()` or a lambda in tests);
