@@ -49,7 +49,7 @@ public final class GameScreen {
     private final Art art;
     private final boolean debug;
     private final ViewRenderer view;
-    private final MovementPanel arrows = new MovementPanel();
+    private final MovementPanel arrows;
     private final ChampionBars bars;
     private final CharacterSheet sheet;
     private final FormationBox formation;
@@ -82,6 +82,7 @@ public final class GameScreen {
         this.sheet = new CharacterSheet(art);
         this.formation = new FormationBox(art);
         this.menu = new GameMenu(art);
+        this.arrows = new MovementPanel(art);
         this.sounds = sounds;
         this.bumpSound = art.sound(GraphicsFile.SOUND_BUMP);
         this.doorSound = art.sound(GraphicsFile.SOUND_DOOR);
@@ -712,7 +713,9 @@ public final class GameScreen {
         }
         g.setColor(Color.BLACK);
         g.fillRect(0, 0, WIDTH, HEIGHT);
-        drawPlaceholders(g);
+        if (!art.available()) {
+            drawPlaceholders(g);
+        }
         ChampionMirror viewed = sheet.candidate();
         bars.draw(g, party.members(), sheet.champion(), viewed == null ? null : viewed.champion(),
                 clock.getAsLong());
@@ -783,7 +786,11 @@ public final class GameScreen {
         }
     }
 
-    /** Outlines the screen regions later sprints will fill: spells and actions. */
+    /**
+     * Without GRAPHICS.DAT, outlines the screen regions later sprints will
+     * fill: spells and actions. With it they stay black, as in DM until a
+     * champion can cast or act (#27).
+     */
     private static void drawPlaceholders(Graphics2D g) {
         g.setColor(new Color(40, 40, 40));
         g.drawRect(233, 42, 86, 34);  // spell casting area

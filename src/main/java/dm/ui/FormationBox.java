@@ -89,8 +89,10 @@ public final class FormationBox {
             Rectangle r = cell(p);
             Champion c = party.at(p);
             if (c == null) {
-                g.setColor(new Color(40, 40, 40));
-                g.drawRect(r.x, r.y, r.width - 1, r.height - 1);
+                if (!art.available()) { // DM leaves an empty cell black (#27); placeholders outline it
+                    g.setColor(new Color(40, 40, 40));
+                    g.drawRect(r.x, r.y, r.width - 1, r.height - 1);
+                }
                 continue;
             }
             g.setColor(ChampionBars.COLORS[party.members().indexOf(c)]);

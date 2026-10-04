@@ -110,8 +110,10 @@ public final class ChampionBars {
             Champion c = i < members.size() ? members.get(i)
                     : i == members.size() ? candidate : null;
             if (c == null) {
-                g.setColor(new Color(40, 40, 40));
-                g.drawRect(x, 0, BOX_W - 1, BOX_H - 1);
+                if (!art.available()) { // DM leaves an empty status box black (#27); placeholders outline it
+                    g.setColor(new Color(40, 40, 40));
+                    g.drawRect(x, 0, BOX_W - 1, BOX_H - 1);
+                }
                 continue;
             }
             if (c.health() == 0 && c != candidate) {

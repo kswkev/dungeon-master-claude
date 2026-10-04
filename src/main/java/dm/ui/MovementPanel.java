@@ -1,5 +1,7 @@
 package dm.ui;
 
+import dm.data.IndexedImage;
+
 import java.awt.BasicStroke;
 import java.awt.Color;
 import java.awt.Graphics2D;
@@ -7,6 +9,9 @@ import java.awt.Polygon;
 import java.awt.Rectangle;
 import java.awt.Stroke;
 import java.awt.geom.Arc2D;
+import java.awt.image.BufferedImage;
+import java.util.EnumMap;
+import java.util.Map;
 
 /**
  * DM's six-button movement arrow panel, in screen-space (320x200) coordinates.
@@ -14,6 +19,10 @@ import java.awt.geom.Arc2D;
  *   [turn left] [forward ] [turn right]
  *   [left     ] [backward] [right     ]
  * </pre>
+ * Drawn from GRAPHICS.DAT entry 13 (DM's C013 movement arrows, cyan on
+ * black). A pressed arrow is highlighted as DM's F0006 does it: colour
+ * index 4 is XOR-ed over the arrow's box, swapping cyan and black. Without
+ * GRAPHICS.DAT the panel is drawn by hand.
  */
 public final class MovementPanel {
 
@@ -22,9 +31,17 @@ public final class MovementPanel {
     /** Panel area on screen, matching the original's arrow block. */
     public static final Rectangle AREA = new Rectangle(233, 124, 87, 45);
 
-    private static final int BUTTON_W = 28;
-    private static final int BUTTON_H = 21;
-    private static final int GAP = 1;
+    /** DM's movement arrows picture. */
+    static final int ARROWS_GRAPHIC = 13;
+
+    /**
+     * Each arrow's box, inclusive, as {x1, x2, y1, y2} in Action order: the
+     * turn boxes from DM's F0365 and the moves from its G0463. They are both
+     * where a click lands and what lights up.
+     */
+    private static final int[][] BOXES = {
+            {234, 261, 125, 145}, {263, 289, 125, 145}, {291, 318, 125, 145},
+            {234, 261, 147, 167}, {263, 289, 147, 167}, {291, 318, 147, 167}};
 
     private static final Color PANEL_BG = new Color(0, 0, 0);
     private static final Color BUTTON = new Color(96, 96, 96);
@@ -34,7 +51,14 @@ public final class MovementPanel {
     private static final Color ARROW = new Color(230, 230, 230);
     private static final Color ARROW_PRESSED = new Color(30, 30, 30);
 
+    private final Art art;
+    private final Map<Action, BufferedImage> highlighted = new EnumMap<>(Action.class);
+    private BufferedImage plain;
     private Action pressed;
+
+    public MovementPanel(Art art) {
+        this.art = art;
+    }
 
     public Action hitTest(int x, int y) {
         for (Action a : Action.values()) {
@@ -50,6 +74,11 @@ public final class MovementPanel {
     }
 
     public void draw(Graphics2D g) {
+        BufferedImage panel = picture(pressed);
+        if (panel != null) {
+            g.drawImage(panel, AREA.x, AREA.y, null);
+            return;
+        }
         g.setColor(PANEL_BG);
         g.fill(AREA);
         for (Action a : Action.values()) {
@@ -57,15 +86,47 @@ public final class MovementPanel {
         }
     }
 
-    private static Rectangle bounds(Action a) {
-        int col = a.ordinal() % 3;
-        int row = a.ordinal() / 3;
-        return new Rectangle(
-                AREA.x + col * (BUTTON_W + GAP),
-                AREA.y + row * (BUTTON_H + GAP),
-                BUTTON_W, BUTTON_H);
+    /** Entry 13, with {@code lit}'s box XOR-ed with colour 4 (or none), or null without GRAPHICS.DAT. */
+    private BufferedImage picture(Action lit) {
+        if (lit == null && plain != null) {
+            return plain;
+        }
+        if (lit != null && highlighted.containsKey(lit)) {
+            return highlighted.get(lit);
+        }
+        IndexedImage src = art.indexed(ARROWS_GRAPHIC);
+        if (src == null) {
+            return null;
+        }
+        byte[] pixels = src.pixels().clone();
+        if (lit != null) {
+            int[] b = BOXES[lit.ordinal()];
+            for (int y = b[2]; y <= b[3]; y++) {
+                for (int x = b[0]; x <= b[1]; x++) {
+                    int px = x - AREA.x;
+                    int py = y - AREA.y;
+                    if (px >= 0 && py >= 0 && px < src.width() && py < src.height()) {
+                        pixels[py * src.width() + px] ^= 4;
+                    }
+                }
+            }
+        }
+        BufferedImage img = Bitmaps.toImage(new IndexedImage(src.width(), src.height(), pixels), -1,
+                Bitmaps.palette());
+        if (lit == null) {
+            plain = img;
+        } else {
+            highlighted.put(lit, img);
+        }
+        return img;
     }
 
+    private static Rectangle bounds(Action a) {
+        int[] b = BOXES[a.ordinal()];
+        return new Rectangle(b[0], b[2], b[1] - b[0] + 1, b[3] - b[2] + 1);
+    }
+
+    /** The hand-drawn fallback button, for when GRAPHICS.DAT is missing. */
     private void drawButton(Graphics2D g, Action a) {
         Rectangle r = bounds(a);
         boolean down = a == pressed;

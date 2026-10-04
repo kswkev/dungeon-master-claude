@@ -254,8 +254,8 @@ public final class TexturedViewRenderer implements ViewRenderer {
         }
         if (standsOnFloor(ornament, img)) {
             y = face.y + face.height - h;
-        } else if (EYE_LEVEL_ORNAMENTS.contains(ornament)) {
-            y = (int) Math.round(face.y + EYE_LEVEL * face.height - h / 2.0);
+        } else if (level(ornament) > 0) {
+            y = (int) Math.round(face.y + level(ornament) * face.height - h / 2.0);
         }
         g.drawImage(img, x, y, w, h, null);
         return new Rectangle(x, y, w, h);
@@ -272,6 +272,26 @@ public final class TexturedViewRenderer implements ViewRenderer {
     static final Set<Integer> EYE_LEVEL_ORNAMENTS = Set.of(
             4, 5, 6, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30, 31, 32, 44, 45, 51, 52, 53);
     static final double EYE_LEVEL = 40 / 111.0;
+
+    /** The champion mirror's frame, as a wall decoration (side views and other front faces). */
+    static final int MIRROR_ORNAMENT = 43;
+    /**
+     * Where the mirror's frame is centred on every wall face, as a fraction
+     * of the face's height (#30): the same as the straight-on D1 mirror,
+     * which the user confirmed against the original (frame top at the
+     * portrait zone's y 35 less the glass offset, so its centre is 41.5 of
+     * the D1 face's 111 rows down). The straight-on D2/D3 mirrors already
+     * sit there.
+     */
+    static final double MIRROR_LEVEL = (35 - GLASS_Y + MIRROR_H / 2.0 - FRONT[1].y) / FRONT[1].height;
+
+    /** The fraction of a face's height a decoration is centred on, or 0 for the default placement. */
+    static double level(int ornament) {
+        if (ornament == MIRROR_ORNAMENT) {
+            return MIRROR_LEVEL;
+        }
+        return EYE_LEVEL_ORNAMENTS.contains(ornament) ? EYE_LEVEL : 0;
+    }
 
     /**
      * Decorations that sit at the foot of the wall rather than around its
@@ -304,9 +324,9 @@ public final class TexturedViewRenderer implements ViewRenderer {
         BufferedImage front = art.sprite(index + 1);
         if (front != null && standsOnFloor(ornament, front)) {
             y = SIDE_FACE_CENTRE[d][1] + SIDE_FACE_HEIGHT[d] / 2 - h;
-        } else if (EYE_LEVEL_ORNAMENTS.contains(ornament)) {
+        } else if (level(ornament) > 0) {
             int top = SIDE_FACE_CENTRE[d][1] - SIDE_FACE_HEIGHT[d] / 2;
-            y = (int) Math.round(top + EYE_LEVEL * SIDE_FACE_HEIGHT[d] - h / 2.0);
+            y = (int) Math.round(top + level(ornament) * SIDE_FACE_HEIGHT[d] - h / 2.0);
         }
         g.drawImage(img, cx - w / 2, y, w, h, null);
     }
