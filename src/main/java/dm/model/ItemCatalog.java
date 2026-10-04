@@ -244,6 +244,108 @@ public final class ItemCatalog {
             1, 3, 2, 2, 4, 15, 1, 1, 1, 2, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 81, 2, 3, 2, 4,
             4, 3, 8, 5, 11, 4, 6, 2, 3, 2, 2, 2, 6, 9, 3, 10, 1, 0, 1, 1, 2, 0, 8};
 
+    // ---- combat data (Sprint 16) --------------------------------------------------
+
+    /**
+     * G238 weapon info per weapon type: class, strength, kinetic energy and
+     * attributes (bits 0-7 the shoot attack). Classes: 0 swing weapons, 2
+     * daggers and axes, 10 bow ammunition, 11 sling ammunition, 12 poison
+     * darts, 16-31 bows, 32-47 slings, 112+ magic weapons.
+     */
+    private static final int[][] WEAPON_INFO = {
+            {130, 2, 0, 0x2000}, {131, 2, 0, 0x2000}, {0, 8, 2, 0x2000}, {112, 10, 80, 0x2028},
+            {129, 16, 7, 0x2000}, {113, 49, 110, 0x0942}, {0, 55, 20, 0x0900}, {255, 25, 10, 0x20FF},
+            {2, 10, 19, 0x0200}, {0, 30, 8, 0x0900}, {0, 34, 10, 0x0900}, {0, 38, 10, 0x0900},
+            {0, 42, 11, 0x0900}, {0, 46, 12, 0x0900}, {0, 50, 14, 0x0900}, {0, 62, 14, 0x0900},
+            {0, 48, 13, 0x0000}, {0, 58, 15, 0x0900}, {2, 49, 33, 0x0300}, {2, 70, 44, 0x0300},
+            {0, 32, 10, 0x2000}, {0, 42, 13, 0x2000}, {0, 60, 15, 0x2000}, {0, 19, 10, 0x2700},
+            {0, 44, 22, 0x2600}, {20, 1, 50, 0x2032}, {30, 1, 180, 0x2078}, {10, 2, 10, 0x0100},
+            {10, 2, 28, 0x0500}, {39, 5, 20, 0x2032}, {11, 6, 18, 0x2000}, {12, 7, 23, 0x0800},
+            {1, 3, 19, 0x0A00}, {0, 4, 4, 0x2000}, {129, 12, 4, 0x2000}, {130, 0, 0, 0x2000},
+            {140, 1, 20, 0x2000}, {128, 18, 6, 0x2000}, {159, 0, 4, 0x2000}, {131, 0, 3, 0x2000},
+            {136, 0, 7, 0x2000}, {132, 3, 1, 0x2000}, {131, 9, 4, 0x2000}, {192, 1, 1, 0x2000},
+            {26, 1, 220, 0x207D}, {255, 100, 50, 0x20FF}};
+
+    public static final int CLASS_SWING_WEAPON = 0;
+    public static final int CLASS_DAGGER_AND_AXES = 2;
+    public static final int CLASS_BOW_AMMUNITION = 10;
+    public static final int CLASS_SLING_AMMUNITION = 11;
+    public static final int CLASS_POISON_DART = 12;
+    public static final int CLASS_FIRST_BOW = 16;
+    public static final int CLASS_LAST_BOW = 31;
+    public static final int CLASS_FIRST_SLING = 32;
+    public static final int CLASS_LAST_SLING = 47;
+    public static final int CLASS_FIRST_MAGIC_WEAPON = 112;
+
+    /** The weapon types DM's damage code singles out. */
+    public static final int DIAMOND_EDGE = 15;
+    public static final int VORPAL_BLADE = 16;
+    public static final int HARDCLEAVE = 19;
+
+    private static int[] weaponInfo(Item item) {
+        return item != null && item.category() == Item.Category.WEAPON && item.type() < WEAPON_INFO.length
+                ? WEAPON_INFO[item.type()] : null;
+    }
+
+    /** The weapon's class, or -1 if {@code item} isn't a weapon. */
+    public static int weaponClass(Item item) {
+        int[] info = weaponInfo(item);
+        return info == null ? -1 : info[0];
+    }
+
+    /** The weapon's strength (added to the wielder's), or 0. */
+    public static int weaponStrength(Item item) {
+        int[] info = weaponInfo(item);
+        return info == null ? 0 : info[1];
+    }
+
+    /** The weapon's kinetic energy (thrown or shot), or 0. */
+    public static int weaponKineticEnergy(Item item) {
+        int[] info = weaponInfo(item);
+        return info == null ? 0 : info[2];
+    }
+
+    /** A bow's or sling's shoot attack (attribute bits 0-7), or 0. */
+    public static int shootAttack(Item item) {
+        int[] info = weaponInfo(item);
+        return info == null ? 0 : info[3] & 0xFF;
+    }
+
+    /**
+     * G237's action set index for each object info index (scroll 0,
+     * container 1, potions 2-22, weapons 23-68, armour 69-126, junk 127-179).
+     * 0 means the item has no actions.
+     */
+    private static final int[] ACTION_SETS = {
+            0, 0, 0, 0, 0, 42, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+            0, 42, 0, 43, 7, 5, 6, 8, 9, 10, 11, 12, 13, 13, 14, 15, 15, 16, 17, 18,
+            19, 20, 21, 22, 22, 23, 24, 24, 27, 27, 26, 26, 27, 42, 40, 42, 5, 5, 28, 29,
+            30, 31, 32, 33, 5, 35, 36, 27, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+            0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 41, 41, 41,
+            41, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 41, 0, 0, 0, 0, 41, 0, 0, 0,
+            0, 41, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 37, 37, 37, 0, 0, 0, 0,
+            0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+            0, 0, 0, 0, 0, 0, 0, 0, 0, 38, 38, 0, 39, 0, 0, 0, 0, 0, 0, 0,
+    };
+
+    /** DM's object info index (F141): where an item's row sits in G237. */
+    static int objectInfoIndex(Item item) {
+        return switch (item.category()) {
+            case SCROLL -> 0;
+            case CONTAINER -> 1;
+            case POTION -> 2 + item.type();
+            case WEAPON -> 23 + item.type();
+            case ARMOUR -> 69 + item.type();
+            case JUNK -> 127 + item.type();
+        };
+    }
+
+    /** The action set of {@code item} in the action hand (G237), or 0 if it has none. */
+    public static int actionSet(Item item) {
+        int i = objectInfoIndex(item);
+        return i >= 0 && i < ACTION_SETS.length ? ACTION_SETS[i] : 0;
+    }
+
     /** Armour defense and attributes per armour type (G239, from ScummVM's DM engine): bits 0-2 sharp defense. */
     private static final int[] ARMOUR_DEFENSE = {
             5, 10, 4, 5, 25, 5, 5, 7, 7, 6, 4, 5, 7, 11, 13, 13, 17, 20, 20, 12, 9, 8, 9, 1, 5, 12, 17, 20,

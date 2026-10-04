@@ -335,6 +335,36 @@ public enum CreatureType {
         };
     }
 
+    /**
+     * DM's G245-G253: what one creature of this type always drops when it
+     * dies, as {category, type, maybe}; a "maybe" item drops half the time.
+     * Animated armour's are cursed in DM (not modelled).
+     */
+    public int[][] fixedPossessions() {
+        final int w = Item.Category.WEAPON.ordinal();
+        final int a = Item.Category.ARMOUR.ordinal();
+        final int j = Item.Category.JUNK.ordinal();
+        return switch (this) {
+            case PAIN_RAT -> new int[][] {{j, 35, 0}, {j, 35, 1}};                   // drumsticks
+            case SCREAMER -> new int[][] {{j, 33, 0}, {j, 33, 1}};                   // screamer slices
+            case ROCKPILE -> new int[][] {{j, 25, 0}, {j, 25, 1}, {w, 30, 1}, {w, 30, 1}}; // boulders, rocks
+            case STONE_GOLEM -> new int[][] {{w, 24, 0}};                            // stone club
+            case SKELETON -> new int[][] {{w, 9, 0}, {a, 30, 0}};                    // falchion, wooden shield
+            case TROLIN -> new int[][] {{w, 23, 0}};                                 // club
+            case MAGENTA_WORM -> new int[][] {{j, 34, 0}, {j, 34, 1}, {j, 34, 1}};   // worm rounds
+            case ANIMATED_ARMOUR -> new int[][] {{a, 41, 0}, {a, 40, 0}, {a, 39, 0}, {w, 10, 0}, {a, 38, 0},
+                    {w, 10, 0}};                                                     // plate armour, armet, swords
+            case RED_DRAGON -> new int[][] {{j, 36, 0}, {j, 36, 0}, {j, 36, 0}, {j, 36, 0}, {j, 36, 0},
+                    {j, 36, 0}, {j, 36, 0}, {j, 36, 0}, {j, 36, 1}, {j, 36, 1}};     // dragon steaks
+            default -> new int[0][];
+        };
+    }
+
+    /** Whether DM drops fixed possessions for this type (attribute bit 9). */
+    public boolean dropsFixedPossessions() {
+        return (attributes & 0x0200) != 0;
+    }
+
     /** Can attack (and see) in every direction, not just the way it faces. */
     public boolean sideAttack() {
         return (attributes & SIDE_ATTACK) != 0;

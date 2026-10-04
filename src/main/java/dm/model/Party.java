@@ -144,6 +144,7 @@ public final class Party implements Serializable {
         }
         Champion c = mirror.champion();
         members.add(c);
+        c.face(facing);
         c.setFood(1500 + random.nextInt(256)); // DM's F280
         c.setWater(1500 + random.nextInt(256));
         for (int p = 0; p < MAX_MEMBERS; p++) {
@@ -206,12 +207,25 @@ public final class Party implements Serializable {
         return damage;
     }
 
+    /**
+     * DM's F284: the party turns to {@code d}, and every champion turns by
+     * the same amount (a champion who had turned to an attacker stays turned
+     * relative to the party).
+     */
+    private void turnTo(Direction d) {
+        int delta = (d.ordinal() - facing.ordinal()) & 3;
+        for (Champion c : members) {
+            c.face(Direction.fromIndex(c.facing().ordinal() + delta));
+        }
+        facing = d;
+    }
+
     public void turnLeft() {
-        facing = facing.turnLeft();
+        turnTo(facing.turnLeft());
     }
 
     public void turnRight() {
-        facing = facing.turnRight();
+        turnTo(facing.turnRight());
     }
 
     /** Whether the last blocked step was stopped by creatures rather than a wall (no bump then, as in DM). */
@@ -261,7 +275,7 @@ public final class Party implements Serializable {
         DungeonMap.StepResult result = moveTo(map, nx, ny);
         if (stairs != null) {
             DungeonMap.StairsExit exit = stairs.map().stairsExit(stairs.x(), stairs.y());
-            facing = exit.facing();
+            turnTo(exit.facing());
             result = result.and(moveTo(stairs.map(), exit.x(), exit.y()));
         }
         return result.and(settle());
@@ -457,7 +471,7 @@ public final class Party implements Serializable {
             if (to == null) {
                 break;
             }
-            facing = t.turn(facing);
+            turnTo(t.turn(facing));
             boolean spinner = to.map() == map && to.x() == x && to.y() == y;
             result = result.and(spinner ? DungeonMap.StepResult.NOTHING : moveTo(to.map(), to.x(), to.y()))
                     .and(new DungeonMap.StepResult(false, t.audible(), false, false, true, null));

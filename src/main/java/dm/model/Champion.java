@@ -44,11 +44,11 @@ public final class Champion implements Serializable {
     private final char gender;
     private final int portrait;
     private int health;
-    private final int maxHealth;
+    private int maxHealth;
     private int stamina;
-    private final int maxStamina;
+    private int maxStamina;
     private int mana;
-    private final int maxMana;
+    private int maxMana;
     private final int[] stats = new int[Stat.values().length];
     private final int[] maxStats = new int[Stat.values().length];
     /** Experience for the 4 base skills followed by the 16 hidden skills. */
@@ -111,11 +111,42 @@ public final class Champion implements Serializable {
         return v;
     }
 
-    /** DM's skill level: 1 when unskilled, +1 for each doubling of experience from 500. */
+    /**
+     * DM's F303: the skill level, 1 when unskilled and +1 for each doubling
+     * of experience from 500. A hidden skill averages its own and its base
+     * skill's experience; temporary experience counts too. Some items held
+     * or worn raise it: the Firestaff (+1, +2 complete) for every skill, and
+     * on the neck the Pendant Feral (wizard), the Ekkhard Cross (defend), the
+     * Gem of Ages or, in the action hand, the Sceptre of Lyf (heal), and the
+     * Moonstone (influence).
+     */
     public int skillLevel(int skill) {
-        long exp = experience[skill];
+        int level = baseLevel(skill, true);
+        Item hand = items.get(Slot.ACTION_HAND);
+        boolean weapon = hand != null && hand.category() == Item.Category.WEAPON;
+        if (weapon && hand.type() == FIRESTAFF) {
+            level++;
+        } else if (weapon && hand.type() == FIRESTAFF_COMPLETE) {
+            level += 2;
+        }
+        Item neck = items.get(Slot.NECK);
+        int neckJunk = neck != null && neck.category() == Item.Category.JUNK ? neck.type() : -1;
+        switch (skill) {
+            case WIZARD -> level += neckJunk == PENDANT_FERAL ? 1 : 0;
+            case DEFEND -> level += neckJunk == EKKHARD_CROSS ? 1 : 0;
+            case HEAL -> level += neckJunk == GEM_OF_AGES || weapon && hand.type() == SCEPTRE_OF_LYF ? 1 : 0;
+            case INFLUENCE -> level += neckJunk == MOONSTONE ? 1 : 0;
+            default -> { }
+        }
+        return level;
+    }
+
+    /** F303 without the item modifiers, and with or without temporary experience. */
+    int baseLevel(int skill, boolean temporary) {
+        long exp = experience[skill] + (temporary ? temporaryExperience[skill] : 0);
         if (skill >= BASE_SKILLS.size()) {
-            exp = (exp + experience[(skill - BASE_SKILLS.size()) / 4]) / 2;
+            int base = (skill - BASE_SKILLS.size()) / 4;
+            exp = (exp + experience[base] + (temporary ? temporaryExperience[base] : 0)) / 2;
         }
         int level = 1;
         while (exp >= 500) {
@@ -124,6 +155,14 @@ public final class Champion implements Serializable {
         }
         return level;
     }
+
+    private static final int FIRESTAFF = 7;
+    private static final int FIRESTAFF_COMPLETE = 45;
+    private static final int SCEPTRE_OF_LYF = 42;
+    private static final int GEM_OF_AGES = 37;
+    private static final int EKKHARD_CROSS = 38;
+    private static final int MOONSTONE = 39;
+    private static final int PENDANT_FERAL = 41;
 
     /** Title such as "JOURNEYMAN" for a base skill, or null if unskilled. */
     public String skillTitle(int baseSkill) {
@@ -267,9 +306,20 @@ public final class Champion implements Serializable {
         stats[s.ordinal()] = value;
     }
 
-    /** The base skill numbers, for {@link #skillLevel}. */
+    /** The skill numbers, for {@link #skillLevel}: 4 base skills, then 4 hidden ones under each. */
+    public static final int FIGHTER = 0;
+    public static final int NINJA = 1;
     public static final int PRIEST = 2;
     public static final int WIZARD = 3;
+    public static final int SWING = 4;
+    public static final int THRUST = 5;
+    public static final int CLUB = 6;
+    public static final int FIGHT = 9;
+    public static final int THROW = 10;
+    public static final int SHOOT = 11;
+    public static final int HEAL = 13;
+    public static final int INFLUENCE = 14;
+    public static final int DEFEND = 15;
     /** DM's hidden parry skill (a fighter skill): parrying lessens creatures' blows. */
     public static final int PARRY = 7;
 
@@ -394,6 +444,100 @@ public final class Champion implements Serializable {
     /** Swaps an item in place (a torch burning down, a waterskin drunk from) without the slot rules. */
     void replace(Slot slot, Item item) {
         items.put(slot, item);
+    }
+
+    // ---- combat (Sprint 16) ------------------------------------------------------
+
+    /** DM's temporary experience per skill: earned with experience, fading by 1 every 64 ticks. */
+    private final int[] temporaryExperience = new int[BASE_SKILLS.size() + HIDDEN_SKILL_COUNT];
+
+    long experience(int skill) {
+        return experience[skill];
+    }
+
+    void addExperience(int skill, long amount) {
+        experience[skill] += amount;
+    }
+
+    int temporaryExperience(int skill) {
+        return temporaryExperience[skill];
+    }
+
+    void addTemporaryExperience(int skill, int amount) {
+        temporaryExperience[skill] += amount;
+    }
+
+    /** F331: temporary experience fades by 1 in every skill. */
+    void fadeTemporaryExperience() {
+        for (int s = 0; s < temporaryExperience.length; s++) {
+            if (temporaryExperience[s] > 0) {
+                temporaryExperience[s]--;
+            }
+        }
+    }
+
+    void raiseMaxStat(Stat s, int amount) {
+        maxStats[s.ordinal()] += amount;
+    }
+
+    void raiseMaxHealth(int amount) {
+        maxHealth = Math.min(999, maxHealth + amount);
+    }
+
+    /** In DM's units (10 per point shown). */
+    void raiseMaxStamina(int amount) {
+        maxStamina = Math.min(9999, maxStamina + amount);
+    }
+
+    void raiseMaxMana(int amount) {
+        maxMana = Math.min(900, maxMana + amount);
+    }
+
+    /** The way the champion faces (DM's champion direction): the party's, unless they turned to an attacker. */
+    private Direction facing = Direction.NORTH;
+
+    public Direction facing() {
+        return facing;
+    }
+
+    void face(Direction d) {
+        facing = d;
+    }
+
+    /** Defense from the action the champion is recovering from (DM's action defense). */
+    private int actionDefense;
+    /** The action last performed, until the champion can act again (DM's action index), or {@link Actions#NONE}. */
+    private int actionIndex = Actions.NONE;
+    /** The game tick the champion can act again, or -1 if they can act now. */
+    private long enabledAt = -1;
+
+    public int actionDefense() {
+        return actionDefense;
+    }
+
+    void addActionDefense(int amount) {
+        actionDefense += amount;
+    }
+
+    int actionIndex() {
+        return actionIndex;
+    }
+
+    void setActionIndex(int action) {
+        actionIndex = action;
+    }
+
+    /** Whether the champion is still recovering from an action (DM's "disable action"). */
+    public boolean actionDisabled() {
+        return enabledAt >= 0;
+    }
+
+    long enabledAt() {
+        return enabledAt;
+    }
+
+    void setEnabledAt(long tick) {
+        enabledAt = tick;
     }
 
     // ---- wounds and poison (Sprint 15) ----------------------------------------
