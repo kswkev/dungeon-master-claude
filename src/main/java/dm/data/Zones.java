@@ -86,6 +86,262 @@ public final class Zones {
         return new Point(r[2], r[3]);
     }
 
+    /**
+     * Where a {@code width} x {@code height} picture goes in zone {@code id}:
+     * DM's layout engine (F0635 GET_COORD, as ported for the PC version by
+     * ScummVM's DisplayMan::getCoord). It walks up the zone's parents,
+     * anchoring the picture by the zone's type (0 centre, 1 top-left,
+     * 2 top-right, 3 bottom-right, 4 bottom-left, 5 top-centre, 6 right-middle,
+     * 7 bottom-centre, 8 left-middle; 10-18 the same, relative to a
+     * grandparent's size) and clipping it to the size zones (type 9) above it.
+     *
+     * Returns {x, y, w, h, srcX, srcY} in viewport coordinates for the zones
+     * under the viewport: the visible part of the picture and where in the
+     * picture it starts. Null if the zone doesn't exist or nothing is visible.
+     */
+    public int[] coord(int id, int width, int height) {
+        int[] rec = record(id);
+        if (rec == null) {
+            return null;
+        }
+        int[] parentXYZ = {0, 0, 20000, 20000};
+        int recType = rec[0];
+        int xOffset;
+        int yOffset;
+        if (recType <= 8) {
+            xOffset = rec[2];
+            yOffset = rec[3];
+        } else {
+            if (recType == 9) {
+                return null;
+            }
+            recType -= 10;
+            xOffset = 0;
+            yOffset = 0;
+        }
+        boolean flag = false;
+        int[] current = rec;
+        while (current[1] != 0) {
+            int[] parent = record(current[1]);
+            if (parent == null) {
+                break;
+            }
+            if (current[0] >= 10 && current[0] <= 18) {
+                int data1 = parent[2];
+                int data2 = parent[3];
+                int[] grand = record(parent[1]);
+                if (grand == null) {
+                    break;
+                }
+                switch (parent[0]) { // C fall-throughs written out
+                    case 0 -> {
+                        data2 -= (grand[3] + 1) >> 1;
+                        data1 -= (grand[2] + 1) >> 1;
+                    }
+                    case 5 -> data1 -= (grand[2] + 1) >> 1;
+                    case 3 -> {
+                        data2 -= grand[3] - 1;
+                        data1 -= grand[2] - 1;
+                    }
+                    case 2 -> data1 -= grand[2] - 1;
+                    case 6 -> {
+                        data1 -= grand[2] - 1;
+                        data2 -= (grand[3] + 1) >> 1;
+                    }
+                    case 8 -> data2 -= (grand[3] + 1) >> 1;
+                    case 7 -> {
+                        data1 -= (grand[2] + 1) >> 1;
+                        data2 -= grand[3] - 1;
+                    }
+                    case 4 -> data2 -= grand[3] - 1;
+                    case 1 -> { }
+                    default -> {
+                        return null;
+                    }
+                }
+                if ((parentXYZ[0] += data1) < data1) {
+                    parentXYZ[0] = data1;
+                }
+                if (parentXYZ[0] + parentXYZ[2] > grand[2] + data1) {
+                    parentXYZ[2] = grand[2] - parentXYZ[0] + data1;
+                }
+                if ((parentXYZ[1] += data2) < data2) {
+                    parentXYZ[1] = data2;
+                }
+                if (parentXYZ[1] + parentXYZ[3] > grand[3] + data2) {
+                    parentXYZ[3] = grand[3] - parentXYZ[1] + data2;
+                }
+                switch (current[0]) {
+                    case 10 -> {
+                        data2 += (grand[3] + 1) >> 1;
+                        data1 += (grand[2] + 1) >> 1;
+                    }
+                    case 15 -> data1 += (grand[2] + 1) >> 1;
+                    case 13 -> {
+                        data2 += grand[3] - 1;
+                        data1 += grand[2] - 1;
+                    }
+                    case 12 -> data1 += grand[2] - 1;
+                    case 16 -> {
+                        data1 += grand[2] - 1;
+                        data2 += (grand[3] + 1) >> 1;
+                    }
+                    case 18 -> data2 += (grand[3] + 1) >> 1;
+                    case 17 -> {
+                        data1 += (grand[2] + 1) >> 1;
+                        data2 += grand[3] - 1;
+                    }
+                    case 14 -> data2 += grand[3] - 1;
+                    case 11 -> { }
+                    default -> {
+                        return null;
+                    }
+                }
+                xOffset += data1 + current[2];
+                yOffset += data2 + current[3];
+                current = grand;
+            } else {
+                int data1 = parent[2];
+                int data2 = parent[3];
+                if (parent[0] == 1) {
+                    xOffset += data1;
+                    yOffset += data2;
+                    parentXYZ[0] += data1;
+                    parentXYZ[1] += data2;
+                } else if (parent[0] == 9) {
+                    switch (current[0]) {
+                        case 0 -> {
+                            data1 = current[2] - ((data1 + 1) >> 1);
+                            data2 = current[3] - ((data2 + 1) >> 1);
+                        }
+                        case 1 -> {
+                            data1 = current[2];
+                            data2 = current[3];
+                        }
+                        case 2 -> {
+                            data1 = current[2] - (data1 - 1);
+                            data2 = current[3];
+                        }
+                        case 3 -> {
+                            data1 = current[2] - (data1 - 1);
+                            data2 = current[3] - (data2 - 1);
+                        }
+                        case 4 -> {
+                            data1 = current[2];
+                            data2 = current[3] - (data2 - 1);
+                        }
+                        case 5 -> {
+                            data1 = current[2] - ((data1 + 1) >> 1);
+                            data2 = current[3];
+                        }
+                        case 6 -> {
+                            data1 = current[2] - (data1 - 1);
+                            data2 = current[3] - ((data2 + 1) >> 1);
+                        }
+                        case 7 -> {
+                            data1 = current[2] - ((data1 + 1) >> 1);
+                            data2 = current[3] - (data2 - 1);
+                        }
+                        case 8 -> {
+                            data1 = current[2];
+                            data2 = current[3] - ((data2 + 1) >> 1);
+                        }
+                        default -> { }
+                    }
+                    if (flag) {
+                        flag = false;
+                        xOffset += data1;
+                        yOffset += data2;
+                        parentXYZ[0] += data1;
+                        parentXYZ[1] += data2;
+                    }
+                    if (parentXYZ[0] < data1) {
+                        parentXYZ[0] = data1;
+                    }
+                    if (parentXYZ[0] + parentXYZ[2] > parent[2] + data1) {
+                        parentXYZ[2] = parent[2] - parentXYZ[0] + data1;
+                    }
+                    if (parentXYZ[1] < data2) {
+                        parentXYZ[1] = data2;
+                    }
+                    if (parentXYZ[1] + parentXYZ[3] > parent[3] + data2) {
+                        parentXYZ[3] = parent[3] - parentXYZ[1] + data2;
+                    }
+                } else if (parent[0] <= 8) {
+                    flag = true;
+                }
+                current = parent;
+            }
+        }
+        int x;
+        int y;
+        switch (recType) {
+            case 0 -> {
+                x = xOffset - ((width + 1) >> 1);
+                y = yOffset - ((height + 1) >> 1);
+            }
+            case 1 -> {
+                x = xOffset;
+                y = yOffset;
+            }
+            case 2 -> {
+                x = xOffset - (width - 1);
+                y = yOffset;
+            }
+            case 3 -> {
+                x = xOffset - (width - 1);
+                y = yOffset - (height - 1);
+            }
+            case 4 -> {
+                x = xOffset;
+                y = yOffset - (height - 1);
+            }
+            case 5 -> {
+                x = xOffset - ((width + 1) >> 1);
+                y = yOffset;
+            }
+            case 6 -> {
+                x = xOffset - (width - 1);
+                y = yOffset - ((height + 1) >> 1);
+            }
+            case 7 -> {
+                x = xOffset - ((width + 1) >> 1);
+                y = yOffset - (height - 1);
+            }
+            case 8 -> {
+                x = xOffset;
+                y = yOffset - ((height + 1) >> 1);
+            }
+            default -> {
+                return null;
+            }
+        }
+        int w;
+        int h;
+        int srcX = 0;
+        int srcY = 0;
+        int clipX = parentXYZ[0] - x;
+        int clipY = parentXYZ[1] - y;
+        if (clipX <= 0) {
+            w = Math.min(width, parentXYZ[2] + clipX);
+        } else {
+            srcX = clipX;
+            x = parentXYZ[0];
+            w = Math.min(width - clipX, parentXYZ[2]);
+        }
+        if (clipY <= 0) {
+            h = Math.min(height, parentXYZ[3] + clipY);
+        } else {
+            srcY = clipY;
+            y = parentXYZ[1];
+            h = Math.min(height - clipY, parentXYZ[3]);
+        }
+        if (w <= 0 || h <= 0) {
+            return null;
+        }
+        return new int[] {x, y, w, h, srcX, srcY};
+    }
+
     private static int u16(byte[] d, int p) {
         return (d[p] & 0xFF) | ((d[p + 1] & 0xFF) << 8);
     }

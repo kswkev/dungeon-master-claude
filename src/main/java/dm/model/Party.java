@@ -204,6 +204,13 @@ public final class Party implements Serializable {
         facing = facing.turnRight();
     }
 
+    /** Whether the last blocked step was stopped by creatures rather than a wall (no bump then, as in DM). */
+    private boolean blockedByCreatures;
+
+    public boolean blockedByCreatures() {
+        return blockedByCreatures;
+    }
+
     /** Attempts a step; returns false (and stays put) if the target square blocks. */
     public boolean move(Move move) {
         return step(move) != null;
@@ -224,7 +231,8 @@ public final class Party implements Serializable {
         Direction d = Direction.fromIndex(facing.ordinal() + move.turns);
         int nx = x + d.dx;
         int ny = y + d.dy;
-        if (!map.isPassable(nx, ny)) {
+        blockedByCreatures = map.hasCreatures(nx, ny);
+        if (!map.isPassable(nx, ny) || blockedByCreatures) {
             return null;
         }
         Square target = map.get(nx, ny);
@@ -320,8 +328,9 @@ public final class Party implements Serializable {
     public Tick tick() {
         time++;
         boolean burnt = time % Light.BURN_PERIOD == 0 && burnTorches();
+        boolean turned = map.faceParty(x, y);
         if (time % Upkeep.PERIOD != 0 || members.isEmpty()) {
-            return burnt ? new Tick(true, null) : Tick.NOTHING;
+            return burnt || turned ? new Tick(true, null) : Tick.NOTHING;
         }
         int[] damage = new int[members.size()];
         boolean hurt = false;

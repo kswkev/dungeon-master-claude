@@ -496,6 +496,85 @@ public final class DungeonMap implements Serializable {
         return dungeon == null ? null : dungeon.below(this, x, y);
     }
 
+    /** Whether the square above (x, y) is an open pit: DM shows a hole in the ceiling there. */
+    public boolean ceilingPit(int x, int y) {
+        Dungeon.Location up = dungeon == null ? null : dungeon.above(this, x, y);
+        return up != null && up.map().get(up.x(), up.y()).type() == SquareType.PIT && up.map().isPitOpen(up.x(), up.y());
+    }
+
+    // ---- creatures ----------------------------------------------------------
+
+    private final List<Group> groups = new ArrayList<>();
+    /** The creature types this map allows (its creature list), which decide DM's palette colours 9 and 10. */
+    private List<CreatureType> creatureTypes = List.of();
+
+    public void addGroup(Group g) {
+        if (inBounds(g.x(), g.y())) {
+            groups.add(g);
+        }
+    }
+
+    public List<Group> groups() {
+        return Collections.unmodifiableList(groups);
+    }
+
+    /** The creature group on (x, y), or null. */
+    public Group groupAt(int x, int y) {
+        for (Group g : groups) {
+            if (g.x() == x && g.y() == y) {
+                return g;
+            }
+        }
+        return null;
+    }
+
+    /** Whether creatures stand on (x, y): the party can't step there and thrown items stop short. */
+    public boolean hasCreatures(int x, int y) {
+        return groupAt(x, y) != null;
+    }
+
+    /** How far a group can see the party along a row or column, until creature AI comes. */
+    public static final int CREATURE_SIGHT = 3;
+
+    /**
+     * A stand-in for DM's creature AI: every group that can see the party
+     * along a clear row or column, within {@link #CREATURE_SIGHT} squares,
+     * turns to face it. Returns whether any turned.
+     */
+    public boolean faceParty(int px, int py) {
+        boolean turned = false;
+        for (Group g : groups) {
+            int dx = px - g.x();
+            int dy = py - g.y();
+            if ((dx != 0) == (dy != 0) || Math.abs(dx) + Math.abs(dy) > CREATURE_SIGHT) {
+                continue;
+            }
+            Direction toward = dx > 0 ? Direction.EAST : dx < 0 ? Direction.WEST : dy > 0 ? Direction.SOUTH : Direction.NORTH;
+            boolean clear = true;
+            for (int i = 1; i < Math.abs(dx) + Math.abs(dy); i++) {
+                int x = g.x() + toward.dx * i;
+                int y = g.y() + toward.dy * i;
+                if (!isPassable(x, y)) {
+                    clear = false;
+                    break;
+                }
+            }
+            if (clear && g.facing() != toward) {
+                g.face(toward);
+                turned = true;
+            }
+        }
+        return turned;
+    }
+
+    public List<CreatureType> creatureTypes() {
+        return creatureTypes;
+    }
+
+    public void setCreatureTypes(List<CreatureType> types) {
+        creatureTypes = List.copyOf(types);
+    }
+
     // ---- teleporters -------------------------------------------------------
 
     public void addTeleporter(Teleporter t) {
@@ -858,7 +937,7 @@ public final class DungeonMap implements Serializable {
         boolean click = false;
         for (Projectile p : current) {
             Projectile next = p.advance();
-            if (p.range() > 0 && isPassable(next.x(), next.y())) {
+            if (p.range() > 0 && isPassable(next.x(), next.y()) && !hasCreatures(next.x(), next.y())) {
                 Teleporter t = activeTeleporter(next.x(), next.y(), Teleporter.Kind.ITEM);
                 Dungeon.Location to = t == null ? null : destination(t);
                 if (to != null) {
@@ -899,6 +978,8 @@ public final class DungeonMap implements Serializable {
             for (int x = 0; x < width; x++) {
                 if (party != null && party.x() == x && party.y() == y) {
                     sb.append("^>v<".charAt(party.facing().ordinal()));
+                } else if (hasCreatures(x, y)) {
+                    sb.append('M');
                 } else if (isDoor(x, y)) {
                     sb.append(isPassable(x, y) ? 'd' : 'D');
                 } else if (floorOrnament(x, y) >= 0) {
