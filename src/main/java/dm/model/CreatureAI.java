@@ -146,6 +146,11 @@ public final class CreatureAI implements Serializable {
         }
     }
 
+    /**
+     * Hands over what the creatures did since the last tick. Only
+     * {@link #tick} calls it: what reactions, doors and generators do
+     * between ticks is kept and reported with the next tick.
+     */
     private Outcome finish() {
         Outcome done = out;
         out = null;
@@ -226,7 +231,7 @@ public final class CreatureAI implements Serializable {
     Outcome react(Party party, DungeonMap m, int x, int y, int reaction) {
         begin(party);
         processEvent(m, x, y, reaction, 0);
-        return finish();
+        return out;
     }
 
     /**
@@ -240,7 +245,6 @@ public final class CreatureAI implements Serializable {
             activate(g);
             startWandering(m, g);
         }
-        finish();
     }
 
     /** DM's F194: the party has left {@code m}; its groups calm down. */
@@ -1389,7 +1393,7 @@ public final class CreatureAI implements Serializable {
     int hurtForTest(Party party, int member, int attack, int allowedWounds, int attackType) {
         begin(party);
         int damage = hurt(member, attack, allowedWounds, attackType);
-        finish();
+        out = null;
         return damage;
     }
 
@@ -1674,7 +1678,93 @@ public final class CreatureAI implements Serializable {
             processEvent(m, x, y, DANGER_ON_SQUARE, 0);
         }
         out.changed = true;
-        finish();
         return alive;
+    }
+
+    /**
+     * An open pit or teleporter has just appeared under the group on (x, y)
+     * of {@code m} (DM's pit and teleporter events): a walking group falls,
+     * and a teleporter that takes creatures sends it on.
+     */
+    void settle(Party party, DungeonMap m, int x, int y) {
+        Group g = m.groupAt(x, y);
+        if (g == null) {
+            return;
+        }
+        boolean falls = m.dropsThrough(x, y) && !g.type().levitates();
+        if (falls || m.activeTeleporter(x, y, Teleporter.Kind.CREATURE) != null) {
+            begin(party);
+            map = m;
+            moveGroup(m, g, x, y, x, y);
+        }
+    }
+
+    /**
+     * DM's event 5 reaching a generator (sensor type 6) on (x, y), then
+     * F185: a new group of its creature type appears there, 1-4 strong
+     * (or a random number), with DM's health (base x multiplier, or x the
+     * map's difficulty, plus a little), facing a random way, and starts
+     * wandering. The generator then rests for its delay, or for good if
+     * once-only. Returns whether a group appeared.
+     */
+    boolean generate(Party party, DungeonMap m, FloorSensor s) {
+        CreatureType type = CreatureType.of(s.data());
+        int x = s.x();
+        int y = s.y();
+        if (type == null || m.groupAt(x, y) != null || party.map() == m && party.x() == x && party.y() == y) {
+            return false; // DM would retry the placement later; this generator just waits for its next trigger
+        }
+        begin(party);
+        map = m;
+        int last = s.value();
+        last = (last & 8) != 0 ? rnd(last & 7) : last - 1;
+        last = Math.max(0, Math.min(last, 3));
+        int multiplier = (s.action() >> 4) & 15;
+        if (multiplier == 0) {
+            multiplier = m.difficulty();
+        }
+        Direction facing = Direction.fromIndex(rnd(4));
+        int[] health = new int[4];
+        int cells = last > 0 ? 0 : Group.CENTRED;
+        int cell = last > 0 ? rnd(4) : 0;
+        int base = type.baseHealth();
+        for (int i = last; i >= 0; i--) {
+            health[i] = base * multiplier + rnd((base >> 2) + 1);
+            if (last > 0) {
+                cells = (cells & ~(3 << (i * 2))) | ((cell++ & 3) << (i * 2));
+                if (type.size() == CreatureType.Size.HALF) {
+                    cell++;
+                }
+                cell &= 3;
+            }
+        }
+        Group g = new Group(type, x, y, cells, health, last + 1, facing, List.of());
+        m.addGroup(g);
+        sound(SOUND_BUZZ, m, x, y);
+        if (s.audible()) {
+            sound(SOUND_BUZZ, m, x, y);
+        }
+        if (s.onceOnly()) {
+            s.disable();
+        } else {
+            int ticks = s.action() >> 8;
+            if (ticks != 0) {
+                s.disableUntil(now + (ticks > 127 ? (ticks - 126) << 6 : ticks));
+            }
+        }
+        out.changed = true;
+        boolean falls = m.dropsThrough(x, y) && !type.levitates();
+        if (falls || m.activeTeleporter(x, y, Teleporter.Kind.CREATURE) != null) {
+            if (moveGroup(m, g, x, y, x, y) == STOP) {
+                return true;
+            }
+        } else if (!type.levitates()) {
+            out.click |= m.groupArrived(x, y).click();
+        }
+        if (m == party.map()) {
+            activate(g);
+        }
+        startWandering(m, g);
+        return true;
     }
 }

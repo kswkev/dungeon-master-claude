@@ -250,6 +250,27 @@ class RealDungeonTest {
         assertTrue(damage > 0, "the mummy attacks");
     }
 
+    /** Sprint 15: the original's 50 creature generators sit on corridors, each making a creature its map allows. */
+    @Test
+    void creatureGenerators() {
+        int count = 0;
+        for (DungeonMap map : dungeon.maps()) {
+            for (dm.model.FloorSensor s : map.sensors()) {
+                if (s.type() == dm.model.FloorSensor.TYPE_GENERATOR) {
+                    count++;
+                    dm.model.CreatureType type = dm.model.CreatureType.of(s.data());
+                    assertNotNull(type);
+                    assertTrue(map.allowsCreature(type), type + " on level " + (map.level() + 1));
+                    assertEquals(dm.model.SquareType.CORRIDOR, map.get(s.x(), s.y()).type());
+                }
+            }
+        }
+        assertEquals(50, count);
+        DungeonMap level3 = dungeon.maps().get(2);
+        assertTrue(level3.sensors().stream().anyMatch(s -> s.type() == dm.model.FloorSensor.TYPE_GENERATOR
+                && s.x() == 24 && s.y() == 28 && dm.model.CreatureType.of(s.data()) == dm.model.CreatureType.TROLIN));
+    }
+
     /** Sprint 14: DM's wall zones put every wall piece where our fallback table does. */
     @Test
     void wallZonesMatchTheTable() throws Exception {

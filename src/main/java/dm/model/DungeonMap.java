@@ -213,18 +213,39 @@ public final class DungeonMap implements Serializable {
      * rattled. As in DM, a door rattles on every step except the last one,
      * where it settles fully open or shut, so a full 4-step move rattles 3 times.
      */
-    public record DoorTick(boolean moved, boolean rattled) {
-        public static final DoorTick NOTHING = new DoorTick(false, false);
+    public record DoorTick(boolean moved, boolean rattled, boolean thud) {
+        public static final DoorTick NOTHING = new DoorTick(false, false, false);
+
+        public DoorTick(boolean moved, boolean rattled) {
+            this(moved, rattled, false);
+        }
     }
 
-    /** Moves every door that isn't at its target one step. */
+    /**
+     * Moves every door that isn't at its target one step. A door closing on
+     * creatures (not ghostly ones) hurts them and bounces back a step once
+     * it is down to their height, with a wooden thud, as DM's door event
+     * does; it keeps trying until they die or move away.
+     */
     public DoorTick tickDoors() {
         boolean moved = false;
         boolean rattled = false;
+        boolean thud = false;
         for (int x = 0; x < width; x++) {
             for (int y = 0; y < height; y++) {
                 int state = doorState[x][y];
                 int target = doorTarget[x][y];
+                Group crushed = target > state && state != DOOR_BROKEN ? groupAt(x, y) : null;
+                if (crushed != null && !crushed.type().nonMaterial()
+                        && state >= (doorOpensVertically(x, y) ? crushed.type().height() : 1)) {
+                    if (party != null && dungeon != null) {
+                        dungeon.creatures().crushedByDoor(party, this, x, y);
+                    }
+                    doorState[x][y] = Math.max(DOOR_OPEN, state - 1);
+                    moved = true;
+                    thud = true;
+                    continue;
+                }
                 if (state != target && state != DOOR_BROKEN) {
                     int next = state + Integer.signum(target - state);
                     doorState[x][y] = next;
@@ -233,7 +254,7 @@ public final class DungeonMap implements Serializable {
                 }
             }
         }
-        return moved ? new DoorTick(true, rattled) : DoorTick.NOTHING;
+        return moved ? new DoorTick(true, rattled, thud) : DoorTick.NOTHING;
     }
 
     // ---- floor sensors -----------------------------------------------------
@@ -365,10 +386,11 @@ public final class DungeonMap implements Serializable {
 
     /**
      * Sends a sensor effect to square (x, y): a door opens (SET), closes
-     * (CLEAR) or toggles; a pit or teleporter opens, closes or toggles; on a
-     * wall square every AND/OR gate gets the effect as input {@code cell}.
-     * Other targets (creatures...) don't respond yet. A pit opening under
-     * the party drops it on its next {@link Party#settle()}.
+     * (CLEAR) or toggles; a pit or teleporter opens, closes or toggles (and
+     * a group on it falls or is sent on at once); on a wall square every
+     * AND/OR gate gets the effect as input {@code cell}; a corridor's
+     * creature generators make their creatures. A pit opening under the
+     * party drops it on its next {@link Party#settle()}.
      */
     private void applyEffect(int x, int y, int cell, FloorSensor.Effect effect, Outcome out, int depth) {
         if (!inBounds(x, y) || depth > MAX_CHAIN) {
@@ -380,16 +402,30 @@ public final class DungeonMap implements Serializable {
                 case CLEAR -> moveDoor(x, y, false);
                 case TOGGLE -> toggleDoor(x, y);
             };
-            case PIT -> pitOpen[x][y] = switch (effect) {
-                case SET, HOLD -> true;
-                case CLEAR -> false;
-                case TOGGLE -> !pitOpen[x][y];
-            };
-            case TELEPORTER -> teleporterOpen[x][y] = switch (effect) {
-                case SET, HOLD -> true;
-                case CLEAR -> false;
-                case TOGGLE -> !teleporterOpen[x][y];
-            };
+            case PIT -> {
+                pitOpen[x][y] = switch (effect) {
+                    case SET, HOLD -> true;
+                    case CLEAR -> false;
+                    case TOGGLE -> !pitOpen[x][y];
+                };
+                settleCreatures(x, y);
+            }
+            case TELEPORTER -> {
+                teleporterOpen[x][y] = switch (effect) {
+                    case SET, HOLD -> true;
+                    case CLEAR -> false;
+                    case TOGGLE -> !teleporterOpen[x][y];
+                };
+                settleCreatures(x, y);
+            }
+            case CORRIDOR -> {
+                for (FloorSensor s : new ArrayList<>(sensors)) {
+                    if (s.x() == x && s.y() == y && s.type() == FloorSensor.TYPE_GENERATOR && s.enabled()
+                            && party != null && dungeon != null) {
+                        dungeon.creatures().generate(party, this, s);
+                    }
+                }
+            }
             case WALL -> {
                 for (Direction side : Direction.values()) {
                     for (WallSensor gate : wallSensors(x, y, side)) {
@@ -541,6 +577,20 @@ public final class DungeonMap implements Serializable {
     /** Whether creatures stand on (x, y): the party can't step there and thrown items stop short. */
     public boolean hasCreatures(int x, int y) {
         return groupAt(x, y) != null;
+    }
+
+    /** A pit or teleporter has just changed under (x, y): a group standing there falls or is teleported. */
+    private void settleCreatures(int x, int y) {
+        if (party != null && dungeon != null && groupAt(x, y) != null) {
+            dungeon.creatures().settle(party, this, x, y);
+        }
+    }
+
+    /** Brings back generators whose rest is over (DM's event 65). */
+    void reenableGenerators(long now) {
+        for (FloorSensor s : sensors) {
+            s.reenable(now);
+        }
     }
 
     /** Takes {@code g} off this map (it died, or went to another map). */

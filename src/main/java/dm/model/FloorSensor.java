@@ -35,7 +35,13 @@ public final class FloorSensor implements Serializable {
     private final int targetX;
     private final int targetY;
     private final int ornament;
+    /** A generator's creature type, count (DM's value) and action word (health multiplier, re-arm delay). */
+    private final int data;
+    private final int value;
+    private final int action;
     private boolean enabled = true;
+    /** When a disabled generator comes back (DM's event 65), or -1. */
+    private long enableAt = -1;
     private boolean pressed;
 
     /**
@@ -43,6 +49,17 @@ public final class FloorSensor implements Serializable {
      */
     public FloorSensor(int x, int y, int type, Effect effect, boolean onceOnly, boolean revert, boolean audible,
                        int targetX, int targetY, int ornament) {
+        this(x, y, type, effect, onceOnly, revert, audible, targetX, targetY, ornament, 0, 0, 0);
+    }
+
+    /**
+     * @param data   word 1 bits 7-15: for a generator, the creature type
+     * @param value  word 2 bits 7-10: for a generator, the creature count (bit 3: random up to bits 0-2)
+     * @param action word 3, raw: for a generator, bits 4-7 the health multiplier (0: the map's
+     *               difficulty) and bits 8-15 the ticks before it works again (over 127: (n - 126) x 64)
+     */
+    public FloorSensor(int x, int y, int type, Effect effect, boolean onceOnly, boolean revert, boolean audible,
+                       int targetX, int targetY, int ornament, int data, int value, int action) {
         this.x = x;
         this.y = y;
         this.type = type;
@@ -53,6 +70,42 @@ public final class FloorSensor implements Serializable {
         this.targetX = targetX;
         this.targetY = targetY;
         this.ornament = ornament;
+        this.data = data;
+        this.value = value;
+        this.action = action;
+    }
+
+    public int data() {
+        return data;
+    }
+
+    public int value() {
+        return value;
+    }
+
+    public int action() {
+        return action;
+    }
+
+    /** A generator that has just made its creatures rests until {@code time}. */
+    void disableUntil(long time) {
+        enabled = false;
+        enableAt = time;
+    }
+
+    /** Brings a resting generator back once its time has come. Returns whether it did. */
+    boolean reenable(long now) {
+        if (!enabled && enableAt >= 0 && now >= enableAt) {
+            enabled = true;
+            enableAt = -1;
+            return true;
+        }
+        return false;
+    }
+
+    /** Once-only sensors (and generators) switch off for good. */
+    void disable() {
+        enabled = false;
     }
 
     /**

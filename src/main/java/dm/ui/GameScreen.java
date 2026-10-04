@@ -126,6 +126,9 @@ public final class GameScreen {
         if (doors.rattled()) {
             sounds.play(doorSound);
         }
+        if (doors.thud()) {
+            sounds.play(dmSound(WOODEN_THUD));
+        }
         DungeonMap.ProjectileTick flew = party.map().tickProjectiles();
         if (flew.click()) {
             sounds.play(clickSound);
@@ -143,6 +146,9 @@ public final class GameScreen {
         }
         return doors.moved() || flew.moved() || moved || upkeep.changed();
     }
+
+    /** DM's C04 wooden thud: a door bouncing off a creature. */
+    private static final int WOODEN_THUD = 4;
 
     private final Map<Integer, Sound> dmSounds = new HashMap<>();
 
