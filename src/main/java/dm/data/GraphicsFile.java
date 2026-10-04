@@ -63,6 +63,23 @@ public final class GraphicsFile {
     /** Playback rate of the PC samples. */
     public static final int SOUND_SAMPLE_RATE = 5500;
 
+    /**
+     * The GRAPHICS.DAT entry of each of DM's 34 sounds (its sound index), on
+     * the PC: ScummVM's soundsDOS table. It agrees with every sound confirmed
+     * by ear so far (switch 672, door 673, scream 677, swallow 678, and the
+     * bump, which is DM's "party damaged" 687). The creature sounds come
+     * from it too: 3, 7, 14-16, 19, 21, 29-31 attacks, 22-24, 26, 27, 32, 33
+     * movement, 9-12 a champion hit, 17 the teleporter buzz.
+     */
+    private static final int[] SOUND_ENTRIES = {
+            671, 672, 673, 688, 674, 675, 677, 689, 678, 679, 680, 681, 682, 683, 690, 691, 684, 685, 687, 692,
+            675, 693, 701, 702, 703, 704, 705, 706, 707, 708, 709, 710, 711, 712};
+
+    /** The GRAPHICS.DAT entry of DM sound {@code dmSound}, or -1. */
+    public static int soundEntry(int dmSound) {
+        return dmSound >= 0 && dmSound < SOUND_ENTRIES.length ? SOUND_ENTRIES[dmSound] : -1;
+    }
+
     private final byte[] data;
     private final int[] offsets;
     private final int[] sizes;

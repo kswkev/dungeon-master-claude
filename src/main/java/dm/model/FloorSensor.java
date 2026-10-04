@@ -21,6 +21,9 @@ public final class FloorSensor implements Serializable {
     public static final int TYPE_ANY = 1;
     public static final int TYPE_PARTY_OR_CREATURE = 2;
     public static final int TYPE_PARTY = 3;
+    /** Creates a creature group on its square when an effect reaches it (see {@link DungeonMap}). */
+    public static final int TYPE_GENERATOR = 6;
+    public static final int TYPE_CREATURE = 7;
 
     private final int x;
     private final int y;
@@ -76,6 +79,14 @@ public final class FloorSensor implements Serializable {
      */
     public boolean acceptsItems() {
         return enabled && type == TYPE_ANY;
+    }
+
+    /**
+     * Whether a (walking) creature on the square presses the sensor: DM's
+     * type 1 ("anything"), type 2 (party or creature) and type 7 (creature).
+     */
+    public boolean acceptsCreatures() {
+        return enabled && (type == TYPE_ANY || type == TYPE_PARTY_OR_CREATURE || type == TYPE_CREATURE);
     }
 
     /** Whether the sensor is held down (party or items on it), as of the last change on its square. */

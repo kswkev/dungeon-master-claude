@@ -17,7 +17,9 @@ import java.awt.Point;
 import java.awt.Rectangle;
 import java.awt.image.BufferedImage;
 import java.io.IOException;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.function.LongSupplier;
 
 /**
@@ -130,10 +132,23 @@ public final class GameScreen {
         }
         boolean moved = arrived(party.settle()); // a landing item may have opened a pit under the party
         Party.Tick upkeep = party.tick();
+        for (int dmSound : upkeep.sounds()) {
+            sounds.play(dmSound(dmSound));
+        }
+        if (upkeep.click()) {
+            sounds.play(clickSound);
+        }
         if (upkeep.damage() != null) {
             showDamage(upkeep.damage());
         }
         return doors.moved() || flew.moved() || moved || upkeep.changed();
+    }
+
+    private final Map<Integer, Sound> dmSounds = new HashMap<>();
+
+    /** DM sound {@code index} (creature attacks and steps, a champion hit...), loaded once. */
+    private Sound dmSound(int index) {
+        return dmSounds.computeIfAbsent(index, i -> art.sound(GraphicsFile.soundEntry(i)));
     }
 
     /**

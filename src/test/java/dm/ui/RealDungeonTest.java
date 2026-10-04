@@ -226,6 +226,30 @@ class RealDungeonTest {
         assertEquals(15, saves.load(1).map().groups().size());
     }
 
+    /**
+     * Sprint 15: left alone with a champion beside the mummy at (1,19), Level
+     * 2's creatures wander, and the mummy finds the party and attacks it.
+     */
+    @Test
+    void level2sCreaturesComeAlive() {
+        Party p = level2(3, 19, Direction.WEST);
+        p.setRandom(new java.util.Random(1));
+        p.recruit(dungeon.maps().get(0).mirrors().get(0));
+        DungeonMap level2 = p.map();
+        java.util.Map<dm.model.Group, String> start = new java.util.HashMap<>();
+        level2.groups().forEach(g -> start.put(g, g.x() + "," + g.y()));
+        int damage = 0;
+        for (int t = 0; t < 1500 && p.members().get(0).health() > 0; t++) {
+            Party.Tick tick = p.tick();
+            if (tick.damage() != null) {
+                damage += tick.damage()[0];
+            }
+        }
+        long moved = level2.groups().stream().filter(g -> !start.get(g).equals(g.x() + "," + g.y())).count();
+        assertTrue(moved > 0, "groups wander");
+        assertTrue(damage > 0, "the mummy attacks");
+    }
+
     /** Sprint 14: DM's wall zones put every wall piece where our fallback table does. */
     @Test
     void wallZonesMatchTheTable() throws Exception {

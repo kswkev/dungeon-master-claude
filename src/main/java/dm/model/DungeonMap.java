@@ -168,7 +168,15 @@ public final class DungeonMap implements Serializable {
 
     /** Which of DM's 4 door designs the door at (x, y) uses: 0 grate, 1 wood, 2 iron, 3 ra. */
     public int doorStyle(int x, int y) {
-        return doorStyles != null && inBounds(x, y) ? doorStyles[x][y] : 0;
+        return doorStyles != null && inBounds(x, y) ? doorStyles[x][y] & 3 : 0;
+    }
+
+    /** Bit 4 of a door's style entry: the door opens upward (DM's door bit 5), so a short creature fits under it part-open. */
+    public static final int DOOR_VERTICAL = 0x10;
+
+    /** Whether the door at (x, y) slides up rather than sideways. */
+    public boolean doorOpensVertically(int x, int y) {
+        return doorStyles != null && inBounds(x, y) && (doorStyles[x][y] & DOOR_VERTICAL) != 0;
     }
 
     /** Live state of the door at (x, y): 0 open, 1-3 part open, 4 closed, 5 broken. */
@@ -299,7 +307,9 @@ public final class DungeonMap implements Serializable {
     private boolean pressedNow(FloorSensor s) {
         boolean partyOn = party != null && party.map() == this && party.x() == s.x() && party.y() == s.y()
                 && s.triggeredBy(party);
-        return partyOn || s.acceptsItems() && hasItems(s.x(), s.y());
+        Group g = groupAt(s.x(), s.y());
+        boolean creatureOn = g != null && !g.type().levitates() && s.acceptsCreatures();
+        return partyOn || creatureOn || s.acceptsItems() && hasItems(s.x(), s.y());
     }
 
     /**
@@ -506,7 +516,7 @@ public final class DungeonMap implements Serializable {
 
     private final List<Group> groups = new ArrayList<>();
     /** The creature types this map allows (its creature list), which decide DM's palette colours 9 and 10. */
-    private List<CreatureType> creatureTypes = List.of();
+    private List<CreatureType> creatureTypes;
 
     public void addGroup(Group g) {
         if (inBounds(g.x(), g.y())) {
@@ -533,42 +543,32 @@ public final class DungeonMap implements Serializable {
         return groupAt(x, y) != null;
     }
 
-    /** How far a group can see the party along a row or column, until creature AI comes. */
-    public static final int CREATURE_SIGHT = 3;
-
-    /**
-     * A stand-in for DM's creature AI: every group that can see the party
-     * along a clear row or column, within {@link #CREATURE_SIGHT} squares,
-     * turns to face it. Returns whether any turned.
-     */
-    public boolean faceParty(int px, int py) {
-        boolean turned = false;
-        for (Group g : groups) {
-            int dx = px - g.x();
-            int dy = py - g.y();
-            if ((dx != 0) == (dy != 0) || Math.abs(dx) + Math.abs(dy) > CREATURE_SIGHT) {
-                continue;
-            }
-            Direction toward = dx > 0 ? Direction.EAST : dx < 0 ? Direction.WEST : dy > 0 ? Direction.SOUTH : Direction.NORTH;
-            boolean clear = true;
-            for (int i = 1; i < Math.abs(dx) + Math.abs(dy); i++) {
-                int x = g.x() + toward.dx * i;
-                int y = g.y() + toward.dy * i;
-                if (!isPassable(x, y)) {
-                    clear = false;
-                    break;
-                }
-            }
-            if (clear && g.facing() != toward) {
-                g.face(toward);
-                turned = true;
-            }
-        }
-        return turned;
+    /** Takes {@code g} off this map (it died, or went to another map). */
+    void removeGroup(Group g) {
+        groups.remove(g);
     }
 
+    /**
+     * A group has left (x, y) or arrived there: the floor sensors on the
+     * square are checked again, since creatures press DM's "anything",
+     * "party or creature" and "creature" plates (types 1, 2 and 7).
+     */
+    StepResult groupLeft(int x, int y) {
+        Outcome out = new Outcome();
+        updateSensors(x, y, out);
+        return out.result();
+    }
+
+    StepResult groupArrived(int x, int y) {
+        return groupLeft(x, y);
+    }
+
+    /** Whether DM lets {@code type} live on this map (its creature list); a map built without one allows any. */
+    public boolean allowsCreature(CreatureType type) {
+        return creatureTypes == null || creatureTypes.contains(type);
+    }
     public List<CreatureType> creatureTypes() {
-        return creatureTypes;
+        return creatureTypes == null ? List.of() : creatureTypes;
     }
 
     public void setCreatureTypes(List<CreatureType> types) {

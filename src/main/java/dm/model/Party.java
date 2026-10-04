@@ -81,11 +81,21 @@ public final class Party implements Serializable {
         this.y = y;
         this.facing = facing;
         map.placeParty(this);
+        dungeon.creatures().partyArrived(this, map);
     }
 
-    /** Replaces the random numbers behind fall damage, for tests. */
+    /** Replaces the random numbers behind fall damage and the creatures' decisions, for tests. */
     public void setRandom(Random random) {
         this.random = random;
+    }
+
+    Random random() {
+        return random;
+    }
+
+    /** The dungeon the party is in: every map, and the creatures' timeline. */
+    public Dungeon dungeon() {
+        return dungeon;
     }
 
     /** The map the party is on. */
@@ -232,7 +242,11 @@ public final class Party implements Serializable {
         int nx = x + d.dx;
         int ny = y + d.dy;
         blockedByCreatures = map.hasCreatures(nx, ny);
-        if (!map.isPassable(nx, ny) || blockedByCreatures) {
+        if (blockedByCreatures) { // DM: the group turns on the party
+            dungeon.creatures().react(this, map, nx, ny, CreatureAI.PARTY_ADJACENT);
+            return null;
+        }
+        if (!map.isPassable(nx, ny)) {
             return null;
         }
         Square target = map.get(nx, ny);
@@ -263,13 +277,161 @@ public final class Party implements Serializable {
         int fromY = y;
         x = nx;
         y = ny;
+        leaveScent(from, fromX, fromY, to, nx, ny);
+        Group squashed = to.groupAt(nx, ny);
+        if (squashed != null) { // DM deletes a group the party lands on (by teleporter)
+            to.removeGroup(squashed);
+            dungeon.creatures().deleteEvents(to, nx, ny);
+            for (Item item : squashed.possessions()) {
+                to.dropItem(nx, ny, random.nextInt(4), item);
+            }
+        }
         if (to == from) {
             return from.partyMoved(this, fromX, fromY);
         }
         map = to;
         DungeonMap.StepResult left = from.partyLeft(fromX, fromY);
+        dungeon.creatures().partyLeft(from);
+        dungeon.creatures().partyArrived(this, to);
         return left.and(to.partyMoved(this, -1, -1))
                 .and(new DungeonMap.StepResult(false, false, true));
+    }
+
+    // ---- scent (DM's party scents, which creatures follow) --------------------
+
+    /** A square the party walked on, and how strongly it still smells of it. */
+    private static final class Scent implements Serializable {
+        private static final long serialVersionUID = 1L;
+        final DungeonMap map;
+        final int x;
+        final int y;
+        int strength;
+
+        Scent(DungeonMap map, int x, int y) {
+            this.map = map;
+            this.x = x;
+            this.y = y;
+        }
+
+        boolean at(DungeonMap m, int sx, int sy) {
+            return map == m && x == sx && y == sy;
+        }
+    }
+
+    /** DM keeps the last 24 squares the party walked on. */
+    private static final int MAX_SCENTS = 24;
+    private final List<Scent> scents = new ArrayList<>();
+    private long lastPartyMoveTime;
+
+    /**
+     * DM's F267 for the party: the square left smells stronger the longer
+     * the party stood on it (up to 80), and the new square starts at 24.
+     */
+    private void leaveScent(DungeonMap from, int fromX, int fromY, DungeonMap to, int toX, int toY) {
+        if (members.isEmpty()) {
+            return;
+        }
+        while (scents.size() >= MAX_SCENTS) {
+            scents.remove(0);
+        }
+        if (!scents.isEmpty()) {
+            addScentStrength(from, fromX, fromY, (int) (time - lastPartyMoveTime), false);
+        }
+        lastPartyMoveTime = time;
+        scents.add(new Scent(to, toX, toY));
+        addScentStrength(to, toX, toY, 24, true);
+    }
+
+    /** DM's F316. */
+    private void addScentStrength(DungeonMap m, int sx, int sy, int cycles, boolean merge) {
+        Integer value = null;
+        for (int i = scents.size() - 1; i >= 0; i--) {
+            Scent s = scents.get(i);
+            if (s.at(m, sx, sy)) {
+                if (value == null) {
+                    value = merge ? Math.max(s.strength, cycles) : Math.min(80, s.strength + cycles);
+                }
+                s.strength = value;
+            }
+        }
+    }
+
+    /** DM's F331 (part): every scent but the party's own square fades by 1; the oldest goes when it's gone. */
+    private void fadeScents() {
+        for (int i = 0; i + 1 < scents.size(); i++) {
+            Scent s = scents.get(i);
+            if (!s.at(map, x, y)) {
+                s.strength = Math.max(0, s.strength - 1);
+                if (s.strength == 0 && i == 0) {
+                    scents.remove(0);
+                }
+            }
+        }
+    }
+
+    /** DM's F315: 1 + the index of the latest scent on (sx, sy) of {@code m}, or 0. */
+    int scentOrdinal(DungeonMap m, int sx, int sy) {
+        for (int i = scents.size() - 1; i >= 0; i--) {
+            if (scents.get(i).at(m, sx, sy)) {
+                return i + 1;
+            }
+        }
+        return 0;
+    }
+
+    int scentStrength(int index) {
+        return scents.get(index).strength;
+    }
+
+    /** The square of scent {@code index}, or null if there is none. */
+    int[] scentAt(int index) {
+        return index < scents.size() ? new int[] {scents.get(index).x, scents.get(index).y} : null;
+    }
+
+    /** The member standing in absolute cell {@code cell} of the party's square (DM's F285), or -1. */
+    int memberInCell(int cell) {
+        Champion c = positions[(cell - facing.ordinal()) & 3];
+        return c == null ? -1 : members.indexOf(c);
+    }
+
+    // ---- poison --------------------------------------------------------------
+
+    /** DM's poison events come every 36 ticks. */
+    static final int POISON_PERIOD = 36;
+
+    /**
+     * DM's F322: poison of strength {@code attack} works on member
+     * {@code member}: attack / 64 damage now (at least 1), and again 36 ticks
+     * later with attack - 1, until it runs out. Returns the damage done now.
+     */
+    int poison(int member, int attack) {
+        Champion c = members.get(member);
+        if (c.health() == 0) {
+            return 0;
+        }
+        int damage = c.takeDamage(Math.max(1, attack >> 6));
+        if (attack - 1 > 0) {
+            c.poisons().add(new Champion.Poison(attack - 1, time + POISON_PERIOD));
+        }
+        return damage;
+    }
+
+    /** Runs the poison events due now. Returns damage per member, or null. */
+    private int[] tickPoison() {
+        int[] damage = null;
+        for (int i = 0; i < members.size(); i++) {
+            Champion c = members.get(i);
+            List<Champion.Poison> due = new ArrayList<>();
+            c.poisons().removeIf(p -> p.due() <= time && due.add(p));
+            for (Champion.Poison p : due) {
+                int d = poison(i, p.attack());
+                if (d > 0) {
+                    damage = damage == null ? new int[members.size()] : damage;
+                    damage[i] += d;
+                }
+            }
+        }
+        return damage;
     }
 
     /**
@@ -308,9 +470,17 @@ public final class Party implements Serializable {
 
     // ---- upkeep -------------------------------------------------------------
 
-    /** What a game tick did to the champions. */
-    public record Tick(boolean changed, int[] damage) {
-        public static final Tick NOTHING = new Tick(false, null);
+    /**
+     * What a game tick did: whether anything visible changed, the damage
+     * each member took (indexed like {@link #members()}, or null), the DM
+     * sounds the creatures made, and whether a sensor under one clicked.
+     */
+    public record Tick(boolean changed, int[] damage, List<Integer> sounds, boolean click) {
+        public static final Tick NOTHING = new Tick(false, null, List.of(), false);
+
+        public Tick(boolean changed, int[] damage) {
+            this(changed, damage, List.of(), false);
+        }
     }
 
     /** The game clock: game ticks since the start. */
@@ -328,20 +498,40 @@ public final class Party implements Serializable {
     public Tick tick() {
         time++;
         boolean burnt = time % Light.BURN_PERIOD == 0 && burnTorches();
-        boolean turned = map.faceParty(x, y);
-        if (time % Upkeep.PERIOD != 0 || members.isEmpty()) {
-            return burnt || turned ? new Tick(true, null) : Tick.NOTHING;
+        CreatureAI.Outcome creatures = dungeon.creatures().tick(this);
+        int[] damage = add(creatures.damage(), tickPoison());
+        boolean changed = burnt || creatures.changed() || damage != null;
+        if (time % Upkeep.PERIOD == 0 && !members.isEmpty()) {
+            fadeScents();
+            int[] upkeep = new int[members.size()];
+            boolean hurt = false;
+            for (int i = 0; i < members.size(); i++) {
+                Champion c = members.get(i);
+                if (c.health() > 0) {
+                    upkeep[i] = c.takeDamage(Upkeep.applyTimeEffects(c, time, lastMove));
+                    hurt |= upkeep[i] > 0;
+                }
+            }
+            damage = add(damage, hurt ? upkeep : null);
+            changed = true;
         }
-        int[] damage = new int[members.size()];
-        boolean hurt = false;
-        for (int i = 0; i < members.size(); i++) {
-            Champion c = members.get(i);
-            if (c.health() > 0) {
-                damage[i] = c.takeDamage(Upkeep.applyTimeEffects(c, time, lastMove));
-                hurt |= damage[i] > 0;
+        if (!changed && creatures.sounds().isEmpty() && !creatures.click()) {
+            return Tick.NOTHING;
+        }
+        return new Tick(changed, damage, List.copyOf(creatures.sounds()), creatures.click());
+    }
+
+    /** Adds two damage arrays (either may be null). */
+    private static int[] add(int[] a, int[] b) {
+        if (a == null) {
+            return b;
+        }
+        if (b != null) {
+            for (int i = 0; i < Math.min(a.length, b.length); i++) {
+                a[i] += b[i];
             }
         }
-        return new Tick(true, hurt ? damage : null);
+        return a;
     }
 
     /** The hand slots DM scans for torches, in its order: action hand, then ready hand. */

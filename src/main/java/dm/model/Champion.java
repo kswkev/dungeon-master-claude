@@ -270,6 +270,8 @@ public final class Champion implements Serializable {
     /** The base skill numbers, for {@link #skillLevel}. */
     public static final int PRIEST = 2;
     public static final int WIZARD = 3;
+    /** DM's hidden parry skill (a fighter skill): parrying lessens creatures' blows. */
+    public static final int PARRY = 7;
 
     /**
      * What the champion carries, in tenths of a kilogram: everything on the
