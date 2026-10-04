@@ -39,11 +39,6 @@ public final class Party implements Serializable {
      */
     public static final int BUMP_DAMAGE = 1;
     /**
-     * How many squares a thrown item flies. In DM it depends on the
-     * thrower's strength and the item's weight, which aren't modelled yet.
-     */
-    public static final int THROW_RANGE = 4;
-    /**
      * DM's attack strength for falling into a pit (F0324 with 20): each
      * champion takes half of it plus a random amount below that half, so
      * 10-19 points. In DM leg and foot armour soften it; armour isn't
@@ -144,6 +139,7 @@ public final class Party implements Serializable {
         }
         Champion c = mirror.champion();
         members.add(c);
+        c.face(facing);
         c.setFood(1500 + random.nextInt(256)); // DM's F280
         c.setWater(1500 + random.nextInt(256));
         for (int p = 0; p < MAX_MEMBERS; p++) {
@@ -206,12 +202,25 @@ public final class Party implements Serializable {
         return damage;
     }
 
+    /**
+     * DM's F284: the party turns to {@code d}, and every champion turns by
+     * the same amount (a champion who had turned to an attacker stays turned
+     * relative to the party).
+     */
+    private void turnTo(Direction d) {
+        int delta = (d.ordinal() - facing.ordinal()) & 3;
+        for (Champion c : members) {
+            c.face(Direction.fromIndex(c.facing().ordinal() + delta));
+        }
+        facing = d;
+    }
+
     public void turnLeft() {
-        facing = facing.turnLeft();
+        turnTo(facing.turnLeft());
     }
 
     public void turnRight() {
-        facing = facing.turnRight();
+        turnTo(facing.turnRight());
     }
 
     /** Whether the last blocked step was stopped by creatures rather than a wall (no bump then, as in DM). */
@@ -261,7 +270,7 @@ public final class Party implements Serializable {
         DungeonMap.StepResult result = moveTo(map, nx, ny);
         if (stairs != null) {
             DungeonMap.StairsExit exit = stairs.map().stairsExit(stairs.x(), stairs.y());
-            facing = exit.facing();
+            turnTo(exit.facing());
             result = result.and(moveTo(stairs.map(), exit.x(), exit.y()));
         }
         return result.and(settle());
@@ -394,6 +403,232 @@ public final class Party implements Serializable {
         return c == null ? -1 : members.indexOf(c);
     }
 
+    /** The absolute cell (0 NW, 1 NE, 2 SE, 3 SW) of the party's square that {@code c} stands on (DM's champion cell). */
+    int cellOf(Champion c) {
+        return (Math.max(0, positionOf(c)) + facing.ordinal()) & 3;
+    }
+
+    // ---- actions (DM's action area, Sprint 16) ------------------------------------
+
+    /**
+     * The actions member {@code member} can take with what is in their
+     * action hand, as DM's action menu lists them; empty when they can't act
+     * (dead, recovering from their last action, or holding something with no
+     * actions). Spells and item magic aren't offered yet.
+     */
+    public List<Integer> actions(int member) {
+        return member < 0 || member >= members.size() ? List.of() : Combat.actionsFor(members.get(member));
+    }
+
+    /**
+     * Member {@code member} performs {@code action}, one of {@link #actions}
+     * (DM's F391 and F407). Returns what DM's action area then shows: the
+     * damage a blow did (0 for none), or {@link #CANT_REACH} or
+     * {@link #NEED_AMMO}.
+     */
+    public int act(int member, int action) {
+        if (!actions(member).contains(action)) {
+            return 0;
+        }
+        return Combat.act(this, member, action);
+    }
+
+    /** {@link #act}'s result when a back-row champion can't reach past the one in front. */
+    public static final int CANT_REACH = Combat.CANT_REACH;
+    /** {@link #act}'s result when a bow or sling has nothing to shoot. */
+    public static final int NEED_AMMO = Combat.NEED_AMMO;
+
+    /**
+     * DM's F329: the leader throws the item on the pointer from the left or
+     * right of the party's front, the way it faces. Returns false if there
+     * was nothing to throw or nobody to throw it.
+     */
+    public boolean throwHeld(boolean right) {
+        Champion thrower = leader();
+        return held != null && thrower != null && Combat.throwFrom(this, members.indexOf(thrower), null, right ? 1 : 0);
+    }
+
+    /**
+     * DM's F325 for member {@code member}: stamina spent; spending more than
+     * is left hurts by half the shortfall (shown with the next tick).
+     */
+    void spendStamina(int member, int amount) {
+        Champion c = members.get(member);
+        int damage = c.decrementStamina(amount);
+        if (damage > 0) {
+            dungeon.creatures().hurtChampion(this, member, damage, 0, 0);
+        }
+    }
+
+    /**
+     * The rope's CLIMB DOWN (DM's F407 with F267): the party steps onto the
+     * pit ahead and, if it is open, climbs down to the level below unhurt,
+     * which tires every champion (a little more for a heavy load). Returns
+     * false if there is no pit ahead, or creatures hover over it.
+     */
+    boolean climbDown() {
+        int ax = x + facing.dx;
+        int ay = y + facing.dy;
+        if (map.get(ax, ay).type() != SquareType.PIT || map.hasCreatures(ax, ay)) {
+            return false;
+        }
+        lastMove = time;
+        moveTo(map, ax, ay);
+        Dungeon.Location below = map.dropsThrough(x, y) ? map.below(x, y) : null;
+        if (below != null) {
+            moveTo(below.map(), below.x(), below.y());
+            for (int i = 0; i < members.size(); i++) {
+                Champion c = members.get(i);
+                if (c.health() > 0) {
+                    spendStamina(i, c.load() * 25 / c.maxLoad() + 1);
+                }
+            }
+        }
+        dungeon.creatures().changed(this);
+        return true;
+    }
+
+    /** Lets everyone recovering from an action whose time is up act again (DM's event 11). Returns whether anyone did. */
+    private boolean enableActions() {
+        boolean any = false;
+        for (Champion c : members) {
+            if (c.actionDisabled() && c.enabledAt() <= time) {
+                Combat.enable(c);
+                any = true;
+            }
+        }
+        return any;
+    }
+
+    /**
+     * DM's F390: each champion but the leader turns to face the hardest blow
+     * they took since the last tick. Returns whether anyone turned.
+     */
+    private boolean faceAttackers() {
+        boolean turned = false;
+        Champion lead = leader();
+        for (Champion c : members) {
+            if (c != lead && c.maxDamageReceived() > 0 && c.facing() != c.maxDamageDirection()) {
+                c.face(c.maxDamageDirection());
+                turned = true;
+            }
+            c.clearMaxDamageReceived();
+        }
+        return turned;
+    }
+
+    // ---- experience (DM's F304) ------------------------------------------------
+
+    /** When a creature last attacked the party (DM's G361); fighting skills learn faster right after. */
+    private long lastCreatureAttackTime = -200;
+
+    void creatureAttacked() {
+        lastCreatureAttackTime = time;
+    }
+
+    /** A line for DM's message area: text, in member {@code member}'s colour (-1 for the default cyan). */
+    public record Message(String text, int member) {
+    }
+
+    private transient List<Message> messages;
+
+    /** Messages printed since the last call, oldest first; the screen shows them in its message area. */
+    public List<Message> takeMessages() {
+        List<Message> out = messages == null ? List.of() : messages;
+        messages = null;
+        return out;
+    }
+
+    void message(String text, int member) {
+        if (messages == null) {
+            messages = new ArrayList<>();
+        }
+        messages.add(new Message(text, member));
+    }
+
+    /**
+     * DM's F304: member {@code member} earns {@code amount} experience in
+     * {@code skill} (and its base skill, for a hidden one). Fighting skills
+     * (swing to shoot) learn half as fast with no creature attack in the last
+     * 150 ticks and twice as fast within 25; deeper maps multiply it by their
+     * difficulty. A new base skill level raises statistics, health, stamina
+     * and mana as DM does and is announced in the message area.
+     */
+    public void addSkillExperience(int member, int skill, int amount) {
+        Champion c = members.get(member);
+        boolean fighting = skill >= Champion.SWING && skill <= Champion.SHOOT;
+        if (fighting && lastCreatureAttackTime < time - 150) {
+            amount >>= 1;
+        }
+        if (amount == 0) {
+            return;
+        }
+        if (map.difficulty() != 0) {
+            amount *= map.difficulty();
+        }
+        int base = skill >= Champion.SWING ? (skill - Champion.SWING) >> 2 : skill;
+        int before = c.baseLevel(base, false);
+        if (skill >= Champion.SWING && lastCreatureAttackTime > time - 25) {
+            amount <<= 1;
+        }
+        c.addExperience(skill, amount);
+        if (c.temporaryExperience(skill) < 32000) {
+            c.addTemporaryExperience(skill, Math.max(1, Math.min(amount >> 3, 100)));
+        }
+        if (skill >= Champion.SWING) {
+            c.addExperience(base, amount);
+        }
+        int after = c.baseLevel(base, false);
+        if (after > before) {
+            levelUp(c, base, after);
+            message(c.name() + " JUST GAINED A " + Champion.BASE_SKILLS.get(base) + " LEVEL!", member);
+        }
+    }
+
+    /** F304's gains for reaching level {@code level} in base skill {@code base}. */
+    private void levelUp(Champion c, int base, int level) {
+        int minor = random.nextInt(2);
+        int major = 1 + random.nextInt(2);
+        int vitality = random.nextInt(2);
+        if (base != Champion.PRIEST) {
+            vitality &= level; // 0 on even levels
+        }
+        c.raiseMaxStat(Champion.Stat.VITALITY, vitality);
+        int stamina = c.rawMaxStamina();
+        c.raiseMaxStat(Champion.Stat.ANTI_FIRE, random.nextInt(2) & ~level); // 0 on odd levels
+        int health = level;
+        switch (base) {
+            case Champion.FIGHTER -> {
+                stamina >>= 4;
+                health *= 3;
+                c.raiseMaxStat(Champion.Stat.STRENGTH, major);
+                c.raiseMaxStat(Champion.Stat.DEXTERITY, minor);
+            }
+            case Champion.NINJA -> {
+                stamina /= 21;
+                health <<= 1;
+                c.raiseMaxStat(Champion.Stat.STRENGTH, minor);
+                c.raiseMaxStat(Champion.Stat.DEXTERITY, major);
+            }
+            default -> { // wizard and priest
+                if (base == Champion.WIZARD) {
+                    stamina >>= 5;
+                    c.raiseMaxMana(level + (level >> 1));
+                    c.raiseMaxStat(Champion.Stat.WISDOM, major);
+                } else {
+                    stamina /= 25;
+                    c.raiseMaxMana(level);
+                    health += (health + 1) >> 1;
+                    c.raiseMaxStat(Champion.Stat.WISDOM, minor);
+                }
+                c.raiseMaxMana(Math.min(random.nextInt(4), level - 1));
+                c.raiseMaxStat(Champion.Stat.ANTI_MAGIC, random.nextInt(3));
+            }
+        }
+        c.raiseMaxHealth(health + random.nextInt((health >> 1) + 1));
+        c.raiseMaxStamina(stamina + random.nextInt((stamina >> 1) + 1));
+    }
+
     // ---- poison --------------------------------------------------------------
 
     /** DM's poison events come every 36 ticks. */
@@ -457,7 +692,7 @@ public final class Party implements Serializable {
             if (to == null) {
                 break;
             }
-            facing = t.turn(facing);
+            turnTo(t.turn(facing));
             boolean spinner = to.map() == map && to.x() == x && to.y() == y;
             result = result.and(spinner ? DungeonMap.StepResult.NOTHING : moveTo(to.map(), to.x(), to.y()))
                     .and(new DungeonMap.StepResult(false, t.audible(), false, false, true, null));
@@ -503,9 +738,12 @@ public final class Party implements Serializable {
             m.reenableGenerators(time);
             smoked |= m.tickSmoke() && m == map;
         }
+        boolean landed = Flight.tick(this);
+        boolean enabled = enableActions();
         CreatureAI.Outcome creatures = dungeon.creatures().tick(this);
+        boolean turned = faceAttackers();
         int[] damage = add(creatures.damage(), tickPoison());
-        boolean changed = burnt || smoked || creatures.changed() || damage != null;
+        boolean changed = burnt || smoked || enabled || turned || creatures.changed() || damage != null;
         if (time % Upkeep.PERIOD == 0 && !members.isEmpty()) {
             fadeScents();
             int[] upkeep = new int[members.size()];
@@ -515,15 +753,20 @@ public final class Party implements Serializable {
                 if (c.health() > 0) {
                     upkeep[i] = c.takeDamage(Upkeep.applyTimeEffects(c, time, lastMove));
                     hurt |= upkeep[i] > 0;
+                    if (c.facing() != facing && lastCreatureAttackTime < time - 60) {
+                        c.face(facing); // F331: with no attack for a while, the champion turns back
+                        c.clearMaxDamageReceived();
+                    }
                 }
             }
             damage = add(damage, hurt ? upkeep : null);
             changed = true;
         }
-        if (!changed && creatures.sounds().isEmpty() && !creatures.click()) {
+        boolean click = creatures.click() || landed;
+        if (!changed && creatures.sounds().isEmpty() && !click) {
             return Tick.NOTHING;
         }
-        return new Tick(changed, damage, List.copyOf(creatures.sounds()), creatures.click());
+        return new Tick(changed, damage, List.copyOf(creatures.sounds()), click);
     }
 
     /** Adds two damage arrays (either may be null). */

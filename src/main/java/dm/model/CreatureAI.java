@@ -26,9 +26,13 @@ import java.util.Random;
  * random step now and then, as in DM. The original's labels survive as the
  * states of {@link #processEvent}, so it can be checked against the source.
  *
- * <p>Not yet: spells and projectiles (creatures that cast fight in melee
- * when adjacent, and approach otherwise), fluxcages, invisibility, freeze
- * life, sleeping, the party's own attacks, and parry experience.
+ * <p>The champions' side of a fight ({@link Combat}, {@link Flight}) comes
+ * here to hurt creatures (F190, with DM's drops and fear) and to frighten
+ * them (F401).
+ *
+ * <p>Not yet: creature spells and projectiles (creatures that cast fight in
+ * melee when adjacent, and approach otherwise), fluxcages, invisibility,
+ * freeze life and sleeping.
  */
 public final class CreatureAI implements Serializable {
 
@@ -63,6 +67,8 @@ public final class CreatureAI implements Serializable {
     public static final int SOUND_BUZZ = 17;
     public static final int SOUND_CHAMPION_0_DAMAGED = 9;
     public static final int SOUND_COMBAT = 16;
+    public static final int SOUND_METALLIC_THUD = 0;
+    public static final int SOUND_WOODEN_THUD = 4;
 
     /** A group event waiting on DM's timeline. */
     static final class Event implements Serializable {
@@ -1136,7 +1142,7 @@ public final class CreatureAI implements Serializable {
     }
 
     /** DM's F176: the ordinal of the creature standing on {@code cell}, or 0. */
-    private static int creatureOrdinalInCell(Group g, int cell) {
+    static int creatureOrdinalInCell(Group g, int cell) {
         if (g.centred()) {
             return 1;
         }
@@ -1222,6 +1228,7 @@ public final class CreatureAI implements Serializable {
 
     /** DM's F207: creature {@code i} strikes at the party. Returns whether it attacked. */
     private boolean creatureAttacks(Group g, int x, int y, int i) {
+        party.creatureAttacked();
         CreatureType info = g.type();
         int targetCell = g.centred() ? rnd(2) : ((g.cellOf(i) + 5 - primaryDirToParty) & 2) >> 1;
         targetCell = (targetCell + primaryDirToParty) & 3;
@@ -1245,7 +1252,9 @@ public final class CreatureAI implements Serializable {
         if (info == CreatureType.GIGGLER) {
             steal(g, champion);
         } else {
-            championDamage(g, champion);
+            int damage = championDamage(g, champion) + 1;
+            // The champion turns to face the hardest blow (F390 does it each tick).
+            party.members().get(champion).receivedBlow(damage, Direction.fromIndex(primaryDirToParty + 2));
         }
         if (info.attackSound() >= 0) {
             sound(info.attackSound(), map, x, y);
@@ -1277,17 +1286,18 @@ public final class CreatureAI implements Serializable {
         return -1;
     }
 
-    /** DM's F230: the creature's blow on member {@code member}, with DM's hit roll, wounds and poison. */
-    private void championDamage(Group g, int member) {
+    /** DM's F230: the creature's blow on member {@code member}, with DM's hit roll, wounds and poison. Returns the damage. */
+    private int championDamage(Group g, int member) {
         if (!alive(member)) {
-            return;
+            return 0;
         }
         Champion c = party.members().get(member);
         CreatureType info = g.type();
         int difficulty = party.map().difficulty() << 1;
+        party.addSkillExperience(member, Champion.PARRY, info.experience());
         if (!((c.dexterity(party.load(c), random) < rnd(32) + info.dexterity() + difficulty - 16 || rnd(4) == 0)
                 && !c.isLucky(60, random))) {
-            return; // dodged
+            return 0; // dodged
         }
         int woundTest = rnd(65536);
         int allowedWound;
@@ -1306,7 +1316,7 @@ public final class CreatureAI implements Serializable {
         int attack = rnd(16) + info.attack() + difficulty - (c.skillLevel(Champion.PARRY) << 1);
         if (attack <= 1) {
             if (rnd(2) != 0) {
-                return;
+                return 0;
             }
             attack = rnd(4) + 2;
         }
@@ -1329,6 +1339,7 @@ public final class CreatureAI implements Serializable {
                 }
             }
         }
+        return damage;
     }
 
     /**
@@ -1411,7 +1422,7 @@ public final class CreatureAI implements Serializable {
         for (int hand = 0; hand <= 1; hand++) {
             Item item = c.items().get(Champion.WOUND_SLOTS.get(hand));
             if (item != null && item.isShield()) {
-                shields += ((strength(c, hand) + ItemCatalog.armourDefense(item, sharp))
+                shields += ((c.strength(Champion.WOUND_SLOTS.get(hand), random) + ItemCatalog.armourDefense(item, sharp))
                         * WOUND_DEFENSE_FACTOR[part]) >> (hand == part ? 4 : 5);
             }
         }
@@ -1419,7 +1430,7 @@ public final class CreatureAI implements Serializable {
         if (sharp) {
             defense >>= 1;
         }
-        defense += shields;
+        defense += c.actionDefense() + shields;
         if (part > 1) {
             defense += ItemCatalog.armourDefense(c.items().get(Champion.WOUND_SLOTS.get(part)), sharp);
         }
@@ -1427,25 +1438,6 @@ public final class CreatureAI implements Serializable {
             defense -= 8 + rnd(4);
         }
         return Math.max(0, Math.min(defense >> 1, 100));
-    }
-
-    /** DM's F312 for what a hand holds (weapon skills come with combat). */
-    private int strength(Champion c, int hand) {
-        int strength = rnd(16) + c.stat(Champion.Stat.STRENGTH);
-        Item item = c.items().get(Champion.WOUND_SLOTS.get(hand));
-        int weight = item == null ? 0 : item.weight();
-        int sixteenth = c.maxLoad() >> 4;
-        if (weight <= sixteenth) {
-            strength += weight - 12;
-        } else {
-            int threshold = sixteenth + ((sixteenth - 12) >> 1);
-            strength += weight <= threshold ? (weight - sixteenth) >> 1 : -((weight - threshold) << 1);
-        }
-        strength = c.staminaAdjusted(strength);
-        if ((c.wounds() & (1 << hand)) != 0) {
-            strength >>= 1;
-        }
-        return Math.max(0, Math.min(strength >> 1, 100));
     }
 
     /**
@@ -1525,19 +1517,24 @@ public final class CreatureAI implements Serializable {
                 to = below.map();
                 x = below.x();
                 y = below.y();
-                if (damageAll(g, 20, to, x, y) == 2) {
+                int outcome = damageAll(g, 20, to, x, y, false);
+                if (outcome == KILLED_ALL) {
                     killed = true;
                     break;
+                }
+                if (outcome == KILLED_SOME) {
+                    dropMovingCreatureFixedPossessions(info, to, x, y);
                 }
             } else {
                 break;
             }
         }
         if (killed || !to.allowsCreature(info)) {
+            dropMovingCreatureFixedPossessions(info, to, x, y);
+            dropGroupPossessions(g, to, x, y);
             m.removeGroup(g);
             deleteEvents(m, fx, fy);
             out.click |= m.groupLeft(fx, fy).click();
-            dropPossessions(g, to, x, y);
             out.changed = true;
             return STOP;
         }
@@ -1599,14 +1596,25 @@ public final class CreatureAI implements Serializable {
         }
     }
 
+    /** DM's damage outcomes (F190, F191). */
+    static final int KILLED_NONE = 0;
+    static final int KILLED_SOME = 1;
+    static final int KILLED_ALL = 2;
+
+    /** DM's G392: the cells of creatures that died while their group was moving, whose drops wait for where it lands. */
+    private transient List<Integer> movingDeathCells;
+
     /**
      * DM's F191: an attack of about {@code attack} on every creature in the
-     * group on (x, y) of {@code m}. Returns 0 if none died, 1 if some did,
-     * 2 if all did. A group that dies here is removed by the caller.
+     * group on (x, y) of {@code m}. Returns {@link #KILLED_NONE},
+     * {@link #KILLED_SOME} or {@link #KILLED_ALL}. With {@code notMoving} a
+     * group that dies is removed here with its drops; a moving group (one
+     * falling down a pit) is left to its caller.
      */
-    int damageAll(Group g, int attack, DungeonMap m, int x, int y) {
+    int damageAll(Group g, int attack, DungeonMap m, int x, int y, boolean notMoving) {
+        movingDeathCells = new ArrayList<>();
         if (attack <= 0) {
-            return 0;
+            return KILLED_NONE;
         }
         int seed = (attack >> 3) + 1;
         attack -= seed;
@@ -1614,58 +1622,137 @@ public final class CreatureAI implements Serializable {
         boolean all = true;
         boolean some = false;
         for (int i = g.count() - 1; i >= 0; i--) {
-            boolean died = damageCreature(g, i, attack + rnd(seed), m, x, y);
-            all &= died;
-            some |= died;
+            int outcome = damageCreature(g, i, attack + rnd(seed), m, x, y, notMoving);
+            all &= outcome != KILLED_NONE;
+            some |= outcome != KILLED_NONE;
         }
-        return all ? 2 : some ? 1 : 0;
+        return all ? KILLED_ALL : some ? KILLED_SOME : KILLED_NONE;
     }
 
     /**
-     * DM's F190: hurts creature {@code i}; true if it died, leaving a puff of
-     * smoke on its cell (DM's smoke explosion, bigger for bigger creatures).
-     * The last one dying leaves the group empty.
+     * DM's F190: hurts creature {@code i} of the group on (x, y). One that
+     * dies leaves a puff of smoke on its cell (DM's smoke explosion, bigger
+     * for bigger creatures) and drops its type's fixed possessions; if others
+     * are left and the group was attacking, they may lose heart and flee.
+     * The last one dying takes the group with it (when {@code notMoving}),
+     * dropping everything it carried. Returns {@link #KILLED_NONE},
+     * {@link #KILLED_SOME} or {@link #KILLED_ALL}.
      */
-    private boolean damageCreature(Group g, int i, int damage, DungeonMap m, int x, int y) {
+    private int damageCreature(Group g, int i, int damage, DungeonMap m, int x, int y, boolean notMoving) {
         CreatureType info = g.type();
         if (info.archenemy()) {
-            return false;
+            return KILLED_NONE;
         }
         if (g.health(i) > damage) {
             if (damage > 0) {
                 g.setHealth(i, g.health(i) - damage);
             }
-            return false;
+            return KILLED_NONE;
         }
-        if (g.count() > 1 && g.behaviour() == Group.ATTACK && party != null) {
-            int fear = info.fearResistance();
-            if (fear != 15) {
-                fear += g.count() - 2;
-                if (fear < rnd(16)) { // seeing one die frightens the rest
-                    g.delayFleeing = rnd(100 - (fear << 2)) + 20;
-                    g.setBehaviour(Group.FLEE);
+        int cell = g.centred() ? Group.CENTRED : g.cellOf(i);
+        int outcome;
+        if (g.count() == 1) {
+            if (notMoving) {
+                dropGroupPossessions(g, m, x, y);
+                deleteGroup(m, g);
+            }
+            outcome = KILLED_ALL;
+        } else {
+            if (info.dropsFixedPossessions()) {
+                if (notMoving) {
+                    dropFixedPossessions(info, m, x, y, cell);
+                } else if (movingDeathCells != null) {
+                    movingDeathCells.add(cell);
                 }
             }
+            if (g.behaviour() == Group.ATTACK && party != null && m == party.map()) {
+                int fear = info.fearResistance();
+                if (fear != 15) {
+                    fear += g.count() - 2;
+                    if (fear < rnd(16)) { // seeing one die frightens the rest
+                        g.delayFleeing = rnd(100 - (fear << 2)) + 20;
+                        g.setBehaviour(Group.FLEE);
+                    }
+                }
+            }
+            g.remove(i);
+            outcome = KILLED_SOME;
         }
         int size = switch (info.size()) {
             case QUARTER -> 110;
             case HALF -> 190;
             case FULL -> 255;
         };
-        m.addSmoke(x, y, g.centred() ? Group.CENTRED : g.cellOf(i), size);
-        g.remove(i);
-        if (m == party.map()) {
+        m.addSmoke(x, y, cell, size);
+        if (party != null && m == party.map()) {
             out.changed = true;
         }
-        return true;
+        return outcome;
     }
 
-    /** DM's F188: a dead group's possessions fall on its square, each on a random cell. */
-    private void dropPossessions(Group g, DungeonMap m, int x, int y) {
-        for (Item item : g.possessions()) {
-            m.dropItem(x, y, rnd(4), item);
+    /** DM's F189: the group leaves the dungeon (its square's sensors feel it go) with its events. */
+    private void deleteGroup(DungeonMap m, Group g) {
+        m.removeGroup(g);
+        deleteEvents(m, g.x(), g.y());
+        out.click |= m.groupLeft(g.x(), g.y()).click();
+        out.changed = true;
+    }
+
+    /**
+     * DM's F186: what one dead creature of type {@code info} always carries
+     * falls on (x, y): its own cell, or a random one a quarter of the time
+     * (always for a centred creature); "maybe" items only half the time.
+     * A metallic thud if a weapon fell, a wooden one otherwise.
+     */
+    private void dropFixedPossessions(CreatureType info, DungeonMap m, int x, int y, int cell) {
+        int[][] possessions = info.fixedPossessions();
+        if (possessions.length == 0) {
+            return;
         }
-        g.possessions().clear();
+        boolean weapon = false;
+        for (int[] p : possessions) {
+            if (p[2] != 0 && rnd(2) != 0) {
+                continue;
+            }
+            Item.Category category = Item.Category.values()[p[0]];
+            weapon |= category == Item.Category.WEAPON;
+            int at = cell == Group.CENTRED || rnd(4) == 0 ? rnd(4) : cell;
+            m.dropItem(x, y, at, ItemCatalog.item(category, p[1]));
+        }
+        sound(weapon ? SOUND_METALLIC_THUD : SOUND_WOODEN_THUD, m, x, y);
+    }
+
+    /** DM's F187: the fixed possessions of creatures that died as their group moved, dropped where it landed. */
+    private void dropMovingCreatureFixedPossessions(CreatureType info, DungeonMap m, int x, int y) {
+        if (movingDeathCells == null) {
+            return;
+        }
+        while (!movingDeathCells.isEmpty()) {
+            dropFixedPossessions(info, m, x, y, movingDeathCells.remove(movingDeathCells.size() - 1));
+        }
+    }
+
+    /**
+     * DM's F188: a dead group's things fall on (x, y): each creature's fixed
+     * possessions (if its type drops them), then what the group carried,
+     * each on a random cell.
+     */
+    private void dropGroupPossessions(Group g, DungeonMap m, int x, int y) {
+        CreatureType info = g.type();
+        if (info.dropsFixedPossessions()) {
+            for (int i = g.count() - 1; i >= 0; i--) {
+                dropFixedPossessions(info, m, x, y, g.centred() ? Group.CENTRED : g.cellOf(i));
+            }
+        }
+        if (!g.possessions().isEmpty()) {
+            boolean weapon = false;
+            for (Item item : g.possessions()) {
+                weapon |= item.category() == Item.Category.WEAPON;
+                m.dropItem(x, y, rnd(4), item);
+            }
+            g.possessions().clear();
+            sound(weapon ? SOUND_METALLIC_THUD : SOUND_WOODEN_THUD, m, x, y);
+        }
     }
 
     /**
@@ -1680,18 +1767,99 @@ public final class CreatureAI implements Serializable {
         }
         begin(party);
         map = m;
-        boolean alive = true;
-        if (damageAll(g, 5, m, x, y) == 2) {
-            m.removeGroup(g);
-            deleteEvents(m, x, y);
-            m.groupLeft(x, y);
-            dropPossessions(g, m, x, y);
-            alive = false;
-        } else if (m == party.map()) {
+        boolean alive = damageAll(g, 5, m, x, y, true) != KILLED_ALL;
+        if (alive && m == party.map()) {
             processEvent(m, x, y, DANGER_ON_SQUARE, 0);
         }
         out.changed = true;
         return alive;
+    }
+
+    // ---- the champions fight back (Sprint 16) ----------------------------------
+
+    /**
+     * DM's F190 for a champion's blow or a projectile: creature {@code i}
+     * of group {@code g} takes {@code damage}. Returns the outcome
+     * ({@link #KILLED_NONE}, {@link #KILLED_SOME} or {@link #KILLED_ALL});
+     * a group that dies is gone, its things on the floor.
+     */
+    int hitCreature(Party party, DungeonMap m, Group g, int i, int damage) {
+        begin(party);
+        map = m;
+        movingDeathCells = null;
+        return damageCreature(g, i, damage, m, g.x(), g.y(), true);
+    }
+
+    /**
+     * F401's fright: an action of {@code amount} (plus the champion's
+     * influence) against the group's fear resistance. A frightened group
+     * stops attacking and flees for a while. Returns whether it was.
+     */
+    boolean frighten(Party party, DungeonMap m, Group g, int amount) {
+        begin(party);
+        map = m;
+        CreatureType info = g.type();
+        int fear = info.fearResistance();
+        if (fear > rnd(amount) || fear == 15) {
+            return false;
+        }
+        if (g.behaviour() == Group.ATTACK) {
+            stopAttacking(g, m, g.x(), g.y());
+            startWandering(m, g);
+        }
+        g.setBehaviour(Group.FLEE);
+        g.delayFleeing = ((16 - fear) << 2) / info.movementTicks();
+        out.changed = true;
+        return true;
+    }
+
+    /**
+     * DM's F177: the creature a champion standing on {@code cell} of the
+     * party's square reaches in the group on (x, y), as an index, or -1:
+     * the first of DM's ordered cells (F229) that has a creature.
+     */
+    int meleeTarget(Party party, DungeonMap m, int x, int y, int cell) {
+        Group g = m.groupAt(x, y);
+        if (g == null) {
+            return -1;
+        }
+        begin(party);
+        map = m;
+        for (int c : orderedCells(x, y, party.x(), party.y(), cell)) {
+            int ordinal = creatureOrdinalInCell(g, c);
+            if (ordinal != 0) {
+                return ordinal - 1;
+            }
+        }
+        return -1;
+    }
+
+    /** DM's F229: the cells of the target square (x, y) in the order an attacker on (ax, ay)'s {@code cell} reaches them. */
+    private int[] orderedCells(int x, int y, int ax, int ay, int cell) {
+        int index = directionsTo(x, y, ax, ay) << 1;
+        if ((index & 2) == 0) {
+            cell++;
+        }
+        index += (cell >> 1) & 1;
+        return ATTACK_ORDER[index];
+    }
+
+    /** F321 for a projectile hitting member {@code member}: the damage done, shown with the next tick. */
+    int hurtChampion(Party party, int member, int attack, int allowedWounds, int attackType) {
+        begin(party);
+        return hurt(member, attack, allowedWounds, attackType);
+    }
+
+    /** A DM sound made on (x, y) of {@code m}, heard with the next tick if the party is near. */
+    void soundAt(Party party, int dmSound, DungeonMap m, int x, int y) {
+        begin(party);
+        sound(dmSound, m, x, y);
+    }
+
+    /** Something visible changed between ticks (a door broke, a projectile was thrown): the next tick repaints. */
+    void changed(Party party) {
+        begin(party);
+        out.changed = true;
     }
 
     /**

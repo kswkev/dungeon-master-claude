@@ -40,16 +40,6 @@ class CreatureTest {
     }
 
     @Test
-    void thrownItemsStopInFrontOfCreatures() {
-        map.throwItem(SWORD, 3, 1, Direction.EAST, false, 4);
-        for (int i = 0; i < 5; i++) {
-            map.tickProjectiles();
-        }
-        assertTrue(map.hasItems(4, 1), "it lands short of the mummies");
-        assertFalse(map.hasItems(5, 1));
-    }
-
-    @Test
     void theMapListsCreatures() {
         assertEquals(mummies, map.groupAt(5, 1));
         assertNull(map.groupAt(4, 1));

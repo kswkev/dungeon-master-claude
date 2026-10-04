@@ -10,8 +10,7 @@ import java.util.Random;
  *   <li>{@link #stepCost}: F366, paid by every living champion on every move attempt;</li>
  *   <li>{@link #consume}: F349, putting the held item in a champion's mouth.</li>
  * </ul>
- * Sleeping and temporary experience aren't modelled yet, so those branches
- * of DM's code are left out. (Poison runs on its own clock, in {@link Party#tick}.)
+ * Sleeping isn't modelled yet, so that branch of DM's code is left out. (Poison runs on its own clock, in {@link Party#tick}.)
  */
 public final class Upkeep {
 
@@ -42,6 +41,7 @@ public final class Upkeep {
         } else if (c.mana() > c.maxMana()) {
             c.setMana(c.mana() - 1);
         }
+        c.fadeTemporaryExperience();
 
         // Stamina: fed and watered champions recover it, eating and drinking as they do; starving ones lose it.
         int stamina = c.rawStamina();

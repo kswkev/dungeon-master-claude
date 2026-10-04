@@ -2,6 +2,7 @@ package dm.ui;
 
 import dm.data.SaveGames;
 import dm.data.Sound;
+import dm.model.Actions;
 import dm.model.Champion;
 import dm.model.ChampionMirror;
 import dm.model.Decorations;
@@ -622,7 +623,53 @@ class GameScreenTest {
     }
 
     @Test
+    void clickingAChampionsActionIconOpensTheirMenuAndAnActionUsesIt() {
+        recruitElija();
+        screen.press(240, 100); // Elija's icon, the first
+        assertEquals(0, screen.actionArea().acting());
+        assertEquals(List.of(Actions.PUNCH, Actions.KICK, Actions.WAR_CRY), screen.actionArea().menu());
+        render(); // the menu
+        screen.press(260, 115); // the third row: WAR CRY
+        assertEquals(-1, screen.actionArea().acting());
+        assertTrue(party.members().get(0).actionDisabled());
+        render(); // the icon, shaded
+        screen.press(240, 100);
+        assertEquals(-1, screen.actionArea().acting(), "no menu while recovering");
+    }
+
+    @Test
+    void passClosesTheMenuWithoutActing() {
+        recruitElija();
+        screen.press(240, 100);
+        screen.press(300, 80); // the right end of the name row
+        assertEquals(-1, screen.actionArea().acting());
+        assertFalse(party.members().get(0).actionDisabled());
+    }
+
+    @Test
+    void theActionAreaShowsTheDamageForATick() {
+        ActionArea area = screen.actionArea();
+        area.performed(25);
+        assertEquals(0, area.shownDamage(), "from the next tick");
+        assertTrue(screen.tick());
+        assertEquals(25, area.shownDamage());
+        recruitElija();
+        render(); // the burst, drawn by hand without GRAPHICS.DAT
+        assertTrue(screen.tick());
+        assertEquals(0, area.shownDamage(), "then the icons are back");
+    }
+
+    @Test
+    void anEmptyPartyCannotThrow() {
+        party.setHeld(SWORD);
+        clickAir(false);
+        assertSame(SWORD, party.held(), "DM's F329 needs a leader to throw");
+        assertTrue(party.map().projectiles().isEmpty());
+    }
+
+    @Test
     void throwingAtTheWallAheadDropsTheItemOnTheThrowersSquare() {
+        recruitElija();
         party.setHeld(SWORD);
         clickAir(false);
         assertNull(party.held());
@@ -631,17 +678,19 @@ class GameScreenTest {
         assertTrue(screen.tick());
         assertTrue(party.map().projectiles().isEmpty());
         assertEquals(List.of(SWORD), party.map().itemsAt(1, 1, 0), "north-west: far-left facing north");
-        assertFalse(screen.tick(), "nothing moves any more");
     }
 
     @Test
-    void aThrowFliesDownTheCorridorOneSquarePerTick() {
+    void aThrowFliesDownTheCorridorHalfASquarePerTick() {
+        recruitElija();
         party.turnRight();
         party.turnRight(); // face south: (1,2) is open, (1,3) is wall
         party.setHeld(SWORD);
         clickAir(false);
         screen.tick();
-        assertEquals(2, party.map().projectiles().get(0).y(), "one square on");
+        assertEquals(2, party.map().projectiles().get(0).y(), "into the next square");
+        screen.tick();
+        assertEquals(2, party.map().projectiles().get(0).y(), "across it");
         screen.tick();
         assertTrue(party.map().projectiles().isEmpty());
         assertEquals(List.of(SWORD), party.map().itemsAt(1, 2, Direction.SOUTH.cellOf(0)),

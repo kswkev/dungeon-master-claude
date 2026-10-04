@@ -138,17 +138,19 @@ class TeleporterTest {
         DungeonMap upper = level(0, 3, OPEN);
         DungeonMap lower = level(1);
         upper.addTeleporter(to(3, 1, 2, 0, false, BOTH));
-        new Dungeon(List.of(upper, lower));
-        upper.throwItem(SWORD, 1, 1, Direction.EAST, false, 4);
-        upper.tickProjectiles(); // to (2,1)
-        assertTrue(upper.tickProjectiles().click(), "into the teleporter: on to the lower level's (2,1)");
+        Party p = new Party(List.of(upper, lower), 0, 1, 1, Direction.EAST);
+        Flight.launch(p, SWORD, upper, 1, 1, 1, Direction.EAST, 200, 100, 5);
+        p.tick(); // to (2,1)
+        p.tick(); // across it
+        p.tick(); // into the teleporter: on to the lower level's (2,1)
         assertTrue(upper.projectiles().isEmpty());
         assertEquals(1, lower.projectiles().size());
         assertEquals(2, lower.projectiles().get(0).x());
-        for (int i = 0; i < 4; i++) {
-            lower.tickProjectiles();
+        assertEquals(Direction.EAST, lower.projectiles().get(0).direction());
+        for (int i = 0; i < 40; i++) {
+            p.tick();
         }
-        assertTrue(lower.hasItems(4, 1), "it kept flying east, for what was left of its range");
+        assertTrue(lower.hasItems(7, 1), "it kept flying east, to the far wall");
     }
 
     @Test

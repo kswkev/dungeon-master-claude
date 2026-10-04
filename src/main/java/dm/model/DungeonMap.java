@@ -15,8 +15,8 @@ import java.util.function.ToIntFunction;
  * a door's state (0 open .. 4 closed, 5 broken) starts from its square byte
  * and moves one step per {@link #tickDoors()} toward a target set by sensors.
  * Items lie in piles on each square's 4 cells (on a wall square, a cell is a
- * side: alcove and torch-holder contents), and thrown items fly one square
- * per {@link #tickProjectiles()}. Pits open and close, and wall sensors
+ * side: alcove and torch-holder contents), and thrown items fly through the
+ * air ({@link Flight}). Pits open and close, and wall sensors
  * change state when clicked ({@link #clickWall}).
  */
 public final class DungeonMap implements Serializable {
@@ -61,7 +61,7 @@ public final class DungeonMap implements Serializable {
     private final int width;
     private final int height;
     private final List<ChampionMirror> mirrors;
-    private final int[][] doorStyles;
+    private int[][] doorStyles;
     private final int[][] doorState;
     private final int[][] doorTarget;
     private final List<FloorSensor> sensors = new ArrayList<>();
@@ -179,6 +179,55 @@ public final class DungeonMap implements Serializable {
         return doorStyles != null && inBounds(x, y) && (doorStyles[x][y] & DOOR_VERTICAL) != 0;
     }
 
+    /** Door bit 7: spells (fireballs and the like) can break the door. */
+    public static final int DOOR_MAGIC_DESTRUCTIBLE = 0x20;
+    /** Door bit 8: blows and thrown things can break the door. */
+    public static final int DOOR_MELEE_DESTRUCTIBLE = 0x40;
+
+    /** Sets the door at (x, y)'s design (0-3) and flags ({@link #DOOR_VERTICAL} and the destructible bits). */
+    public void setDoorStyle(int x, int y, int style) {
+        if (doorStyles == null) {
+            doorStyles = new int[width][height];
+        }
+        if (inBounds(x, y)) {
+            doorStyles[x][y] = style;
+        }
+    }
+
+    /** DM's G254 door defense by design (portcullis, wood, iron, ra): the attack that breaks it. */
+    private static final int[] DOOR_DEFENSE = {110, 42, 230, 255};
+
+    /** Whether the door's design lets small thrown things through (G254 attribute bit 1: only the portcullis). */
+    boolean doorLetsProjectilesThrough(int x, int y) {
+        return doorStyle(x, y) == 0;
+    }
+
+    /** Doors a blow has broken, breaking a few ticks later (DM's event 2), by square key, with the ticks left. */
+    private final Map<Integer, Integer> doorsBreaking = new HashMap<>();
+
+    /**
+     * DM's F232: an attack of {@code attack} on the closed door at (x, y).
+     * If the door can be broken that way (blows or magic) and the attack
+     * matches its design's defense, it breaks: at once, or {@code ticks}
+     * later. Returns whether it will break.
+     */
+    public boolean breakDoor(int x, int y, int attack, boolean magic, int ticks) {
+        if (!isDoor(x, y) || doorStyles == null) {
+            return false;
+        }
+        int flags = doorStyles[x][y];
+        if ((flags & (magic ? DOOR_MAGIC_DESTRUCTIBLE : DOOR_MELEE_DESTRUCTIBLE)) == 0
+                || attack < DOOR_DEFENSE[doorStyle(x, y)] || doorState[x][y] != DOOR_CLOSED) {
+            return false;
+        }
+        if (ticks > 0) {
+            doorsBreaking.put(x * height + y, ticks);
+        } else {
+            doorState[x][y] = doorTarget[x][y] = DOOR_BROKEN;
+        }
+        return true;
+    }
+
     /** Live state of the door at (x, y): 0 open, 1-3 part open, 4 closed, 5 broken. */
     public int doorState(int x, int y) {
         return inBounds(x, y) ? doorState[x][y] : DOOR_CLOSED;
@@ -231,6 +280,17 @@ public final class DungeonMap implements Serializable {
         boolean moved = false;
         boolean rattled = false;
         boolean thud = false;
+        for (var it = doorsBreaking.entrySet().iterator(); it.hasNext(); ) {
+            var e = it.next();
+            e.setValue(e.getValue() - 1);
+            if (e.getValue() <= 0) {
+                int x = e.getKey() / height;
+                int y = e.getKey() % height;
+                doorState[x][y] = doorTarget[x][y] = DOOR_BROKEN;
+                moved = true;
+                it.remove();
+            }
+        }
         for (int x = 0; x < width; x++) {
             for (int y = 0; y < height; y++) {
                 int state = doorState[x][y];
@@ -1015,59 +1075,15 @@ public final class DungeonMap implements Serializable {
         return new Pickup(item, out.result());
     }
 
-    // ---- thrown items ------------------------------------------------------
+    // ---- things in flight ----------------------------------------------------
 
-    /** Items in flight, oldest first. */
+    /** Items in flight on this map, oldest first ({@link Flight} moves them). */
     public List<Projectile> projectiles() {
         return Collections.unmodifiableList(projectiles);
     }
 
-    /**
-     * Throws {@code item} from (x, y) toward {@code direction}, on the left or
-     * right side. It starts in the thrower's square and lands, on the far cell
-     * of its side, in the last open square it reaches.
-     */
-    public void throwItem(Item item, int x, int y, Direction direction, boolean rightSide, int range) {
-        int cell = direction.cellOf(rightSide ? 1 : 0);
-        projectiles.add(new Projectile(item, x, y, direction, cell, range));
-    }
-
-    /** What a projectile tick did: whether anything was in flight, and whether a landing clicked a sensor. */
-    public record ProjectileTick(boolean moved, boolean click) {
-        public static final ProjectileTick NOTHING = new ProjectileTick(false, false);
-    }
-
-    /**
-     * Moves every item in flight one square. One that can't go further (a
-     * wall or closed door ahead, or out of range) drops onto its square,
-     * through {@link #dropItem}, so it can press a plate or fall into a pit.
-     * Items fly over open pits; an open teleporter that takes objects sends
-     * one on from its target square, turned like the teleporter turns.
-     */
-    public ProjectileTick tickProjectiles() {
-        if (projectiles.isEmpty()) {
-            return ProjectileTick.NOTHING;
-        }
-        List<Projectile> current = new ArrayList<>(projectiles);
-        projectiles.clear();
-        boolean click = false;
-        for (Projectile p : current) {
-            Projectile next = p.advance();
-            if (p.range() > 0 && isPassable(next.x(), next.y()) && !hasCreatures(next.x(), next.y())) {
-                Teleporter t = activeTeleporter(next.x(), next.y(), Teleporter.Kind.ITEM);
-                Dungeon.Location to = t == null ? null : destination(t);
-                if (to != null) {
-                    click |= t.audible();
-                    to.map().projectiles.add(new Projectile(p.item(), to.x(), to.y(), t.turn(p.direction()),
-                            t.turn(Direction.fromIndex(p.cell())).ordinal(), next.range()));
-                } else {
-                    projectiles.add(next);
-                }
-            } else {
-                click |= dropItem(p.x(), p.y(), p.cell(), p.item()).click();
-            }
-        }
-        return new ProjectileTick(true, click);
+    List<Projectile> projectileList() {
+        return projectiles;
     }
 
     // ---- champions ---------------------------------------------------------

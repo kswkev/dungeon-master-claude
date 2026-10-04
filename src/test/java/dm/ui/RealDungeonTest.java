@@ -135,11 +135,13 @@ class RealDungeonTest {
     @Test
     void anItemThrownIntoTheTeleporterClosesThePit() {
         Party p = level2(12, 16, Direction.EAST);
+        p.recruit(dungeon.maps().get(0).mirrors().get(0));
         DungeonMap map = p.map();
         assertTrue(map.isPitOpen(13, 15));
-        map.throwItem(ItemCatalog.item(Item.Category.WEAPON, 10), 12, 16, Direction.EAST, false, Party.THROW_RANGE);
-        for (int i = 0; i < Party.THROW_RANGE + 1; i++) {
-            map.tickProjectiles();
+        p.setHeld(ItemCatalog.item(Item.Category.WEAPON, 10));
+        assertTrue(p.throwHeld(false));
+        for (int i = 0; i < 30 && !map.hasItems(14, 14); i++) {
+            p.tick();
         }
         assertTrue(map.hasItems(14, 14), "teleported onto the plate");
         assertFalse(map.isPitOpen(13, 15));
@@ -248,6 +250,41 @@ class RealDungeonTest {
         long moved = level2.groups().stream().filter(g -> !start.get(g).equals(g.x() + "," + g.y())).count();
         assertTrue(moved > 0, "groups wander");
         assertTrue(damage > 0, "the mummy attacks");
+    }
+
+    /**
+     * Sprint 16: beside the mummy at (1,19) with a sword, a champion's
+     * swings hurt the mummies, and the mummies fight back.
+     */
+    @Test
+    void aChampionFightsLevel2sMummies() {
+        Party p = level2(2, 19, Direction.WEST);
+        p.setRandom(new java.util.Random(1));
+        p.recruit(dungeon.maps().get(0).mirrors().get(0));
+        dm.model.Champion c = p.members().get(0);
+        c.take(dm.model.Slot.ACTION_HAND);
+        c.place(dm.model.Slot.ACTION_HAND, ItemCatalog.item(Item.Category.WEAPON, 10));
+        dm.model.Group mummies = p.map().groupAt(1, 19);
+        assertNotNull(mummies);
+        int start = totalHealth(mummies);
+        int best = 0;
+        for (int swing = 0; swing < 20 && c.health() > 0 && p.map().groupAt(1, 19) == mummies; swing++) {
+            for (int t = 0; t < 100 && c.actionDisabled(); t++) {
+                p.tick();
+            }
+            best = Math.max(best, p.act(0, dm.model.Actions.SWING));
+        }
+        assertTrue(best > 0, "a blow lands");
+        assertTrue(p.map().groupAt(1, 19) != mummies || totalHealth(mummies) < start);
+        assertTrue(c.health() < c.maxHealth(), "and the mummies hit back");
+    }
+
+    private static int totalHealth(dm.model.Group g) {
+        int sum = 0;
+        for (int i = 0; i < g.count(); i++) {
+            sum += g.health(i);
+        }
+        return sum;
     }
 
     /** Sprint 15: the original's 50 creature generators sit on corridors, each making a creature its map allows. */

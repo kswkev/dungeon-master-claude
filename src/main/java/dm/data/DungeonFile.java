@@ -211,8 +211,9 @@ public final class DungeonFile {
     /**
      * Each map offers two door designs: set 0 in bits 8-11 of its graphics-set
      * word, set 1 in bits 12-15. Bit 0 of a door square's door thing picks
-     * which set that door uses, and bit 5 whether it opens upward
-     * ({@link DungeonMap#DOOR_VERTICAL}).
+     * which set that door uses, bit 5 whether it opens upward
+     * ({@link DungeonMap#DOOR_VERTICAL}), and bits 7 and 8 whether magic or
+     * blows can break it.
      */
     private static int[][] doorStyles(Square[][] squares, List<List<Thing>>[] squareThings, int graphicsSets) {
         int[][] styles = new int[squares.length][];
@@ -225,6 +226,12 @@ public final class DungeonFile {
                         styles[x][y] = (graphicsSets >>> (secondSet ? 12 : 8)) & 3;
                         if ((t.words()[1] & 0x20) != 0) {
                             styles[x][y] |= DungeonMap.DOOR_VERTICAL;
+                        }
+                        if ((t.words()[1] & 0x80) != 0) {
+                            styles[x][y] |= DungeonMap.DOOR_MAGIC_DESTRUCTIBLE;
+                        }
+                        if ((t.words()[1] & 0x100) != 0) {
+                            styles[x][y] |= DungeonMap.DOOR_MELEE_DESTRUCTIBLE;
                         }
                         break;
                     }
