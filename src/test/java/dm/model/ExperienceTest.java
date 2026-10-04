@@ -17,6 +17,7 @@ class ExperienceTest {
         Party p = new Party(List.of(map), 0, 1, 1, Direction.NORTH);
         p.setRandom(new Random(5));
         p.recruit(new ChampionMirror(0, 0, Direction.SOUTH, Champion.parse(ChampionTest.ELIJA, 0)));
+        p.takeMessages();
         return p;
     }
 

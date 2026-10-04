@@ -136,6 +136,16 @@ public final class GameWindow extends JFrame {
                         repaint();
                         return;
                     }
+                    if (game.typing()) {
+                        game.type(e.getKeyChar());
+                        repaint();
+                        return;
+                    }
+                    if (e.getKeyCode() == KeyEvent.VK_ENTER) {
+                        game.pressReturn();
+                        repaint();
+                        return;
+                    }
                     MovementPanel.Action action = KeyMap.action(e.getKeyCode(), e.getKeyLocation());
                     if (action != null) {
                         game.key(action);

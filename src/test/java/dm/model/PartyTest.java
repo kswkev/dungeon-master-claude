@@ -136,6 +136,65 @@ class PartyTest {
         assertEquals(1, p.members().size());
     }
 
+    @Test
+    void resurrectingAndReincarnatingAreAnnounced() {
+        DungeonMap hall = hallWithMirrors(2);
+        Party p = new Party(hall, 1, 1, Direction.NORTH);
+        Champion second = hall.mirrors().get(1).champion();
+        int statsBefore = statTotal(second);
+        assertTrue(p.recruit(hall.mirrors().get(0)));
+        String first = p.members().get(0).name();
+        assertFalse(p.reincarnate(hall.mirrors().get(1), first + "  ", "X"), "a member's name already");
+        assertFalse(p.reincarnate(hall.mirrors().get(1), " ", "X"), "no name");
+        assertFalse(hall.mirrors().get(1).taken());
+        assertTrue(p.reincarnate(hall.mirrors().get(1), "ZED  ", "THE NEW "));
+        assertEquals("ZED", second.name());
+        assertEquals("THE NEW", second.title());
+        assertEquals(statsBefore + 12 * 2, statTotal(second), "12 points, each on current and maximum");
+        for (int skill = 0; skill < 20; skill++) {
+            assertEquals(1, second.skillLevel(skill), "every skill forgotten");
+        }
+        List<Party.Message> messages = p.takeMessages();
+        assertEquals(first + " RESURRECTED.", messages.get(0).text());
+        assertEquals(0, messages.get(0).member());
+        assertEquals("ZED REINCARNATED.", messages.get(1).text());
+        assertEquals(1, messages.get(1).member());
+    }
+
+    private static int statTotal(Champion c) {
+        int total = 0;
+        for (Champion.Stat s : Champion.Stat.values()) {
+            total += c.stat(s) + c.maxStat(s);
+        }
+        return total;
+    }
+
+    @Test
+    void sleepingSpeedsUpkeepUntilWoken() {
+        Party p = fullParty();
+        Champion c = p.members().get(0);
+        int fighter = c.skillLevel(Champion.FIGHTER);
+        assertTrue(p.sleep());
+        assertTrue(p.sleeping());
+        assertEquals(1, c.skillLevel(Champion.FIGHTER), "everyone is unskilled asleep");
+        int food = c.food();
+        for (int i = 0; i < Upkeep.SLEEPING_PERIOD; i++) {
+            p.tick();
+        }
+        assertTrue(c.food() < food, "time effects every 16 ticks while asleep");
+        p.creatureAttacked();
+        assertFalse(p.sleeping(), "an attack wakes the party");
+        assertEquals(fighter, c.skillLevel(Champion.FIGHTER));
+    }
+
+    @Test
+    void nobodyToSleep() {
+        DungeonMap hall = hallWithMirrors(1);
+        Party p = new Party(hall, 1, 1, Direction.NORTH);
+        assertFalse(p.sleep());
+        assertFalse(p.sleeping());
+    }
+
     private static Party fullParty() {
         DungeonMap hall = hallWithMirrors(4);
         Party p = new Party(hall, 1, 1, Direction.NORTH);

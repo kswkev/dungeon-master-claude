@@ -2,6 +2,7 @@ package dm.model;
 
 import java.io.Serializable;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.Collections;
 import java.util.EnumMap;
 import java.util.List;
@@ -39,8 +40,8 @@ public final class Champion implements Serializable {
 
     private static final int HIDDEN_SKILL_COUNT = 16;
 
-    private final String name;
-    private final String title;
+    private String name;
+    private String title;
     private final char gender;
     private final int portrait;
     private int health;
@@ -121,6 +122,9 @@ public final class Champion implements Serializable {
      * Moonstone (influence).
      */
     public int skillLevel(int skill) {
+        if (asleep) {
+            return 1; // F303: everyone is unskilled in their sleep
+        }
         int level = baseLevel(skill, true);
         Item hand = items.get(Slot.ACTION_HAND);
         boolean weapon = hand != null && hand.category() == Item.Category.WEAPON;
@@ -451,6 +455,39 @@ public final class Champion implements Serializable {
     /** DM's temporary experience per skill: earned with experience, fading by 1 every 64 ticks. */
     private final int[] temporaryExperience = new int[BASE_SKILLS.size() + HIDDEN_SKILL_COUNT];
 
+    /** Whether the party is asleep (DM's G300, which F303, F310 and F313 read); set by {@link Party#sleep}. */
+    private boolean asleep;
+
+    void setAsleep(boolean asleep) {
+        this.asleep = asleep;
+    }
+
+    boolean asleep() {
+        return asleep;
+    }
+
+    /** The longest name and title DM's rename panel takes (F281). */
+    public static final int MAX_NAME = 7;
+    public static final int MAX_TITLE = 19;
+
+    /**
+     * DM's reincarnation (F280 with F281): the champion takes a new name and
+     * title, forgets every skill (experience and temporary experience 0, so
+     * every level is 1), and gains 12 statistic points, each going to a
+     * random statistic (luck included), current and maximum alike.
+     */
+    void reincarnate(String newName, String newTitle, Random random) {
+        name = newName;
+        title = newTitle;
+        Arrays.fill(experience, 0);
+        Arrays.fill(temporaryExperience, 0);
+        for (int i = 0; i < 12; i++) {
+            int s = random.nextInt(stats.length);
+            stats[s]++;
+            maxStats[s]++;
+        }
+    }
+
     long experience(int skill) {
         return experience[skill];
     }
@@ -635,6 +672,9 @@ public final class Champion implements Serializable {
     int dexterity(int load, Random random) {
         int dexterity = random.nextInt(8) + stat(Stat.DEXTERITY);
         dexterity -= (int) ((long) (dexterity >> 1) * load / maxLoad());
+        if (asleep) {
+            dexterity >>= 1;
+        }
         int low = 1 + random.nextInt(8);
         int high = 100 - random.nextInt(8);
         return Math.max(low, Math.min(dexterity >> 1, high));

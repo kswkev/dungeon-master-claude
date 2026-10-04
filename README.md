@@ -20,7 +20,7 @@ A Java remake of FTL's *Dungeon Master* (1988), built one sprint at a time.
 - Face a mirror from the square in front of it and click the portrait to open the champion's character sheet. The sheet shows their equipment, health, stamina and mana, stats and skill levels. Hover over an item to see its name.
 - **Resurrect** adds the champion to your party (up to 4) and leaves the mirror empty. **Cancel** leaves them where they are.
 - Party members appear in the boxes across the top with their hands and health/stamina/mana bars. Click a box to reopen that champion's sheet.
-- Reincarnate, spells and actions come in later sprints.
+- Reincarnate came in Sprint 17; spells come later.
 
 **Sprint 3: done.** Walking into a wall or closed door now gives the original feedback:
 - the original thud sound from GRAPHICS.DAT;
@@ -128,6 +128,12 @@ Run with `"-Ddm.debug=true"` to list every decoration on Level 1.
 
 **Not yet:** spells, including the magic in items' action menus (a staff's fireball and the like); exploding bombs.
 
+**Sprint 17: done.**
+- **Reincarnate:** a champion in a mirror now shows the original's panel with RESURRECT, REINCARNATE and CANCEL. REINCARNATE opens the original's keyboard: type (or click) a new name and title, then OK. The champion forgets every skill but gains 12 statistic points. Hold the eye to see a candidate's skills and statistics first. As in the original, you can only look at a candidate with room in the party and nothing in your hand.
+- **Sleeping:** click the ZZZ on a champion's sheet. The view goes dark with WAKE UP, time passes faster, and the champions recover mana, stamina and health twice as fast. Click the view or press Return to wake up; any creature attack wakes the party too, and sleepers defend poorly.
+- **Teleporters:** a visible teleporter now shimmers with the original's sparkling field, shaped like the square it fills, at every distance and to the sides.
+- **Distance colours:** wall decorations and objects two or three squares away take the original's darker, duller colours, as creatures and doors already did.
+
 ## Requirements
 
 - JDK 17 or newer
@@ -179,7 +185,8 @@ The tests cover:
 - the DUNGEON.DAT loader on generated test files: both byte orders, a compressed file, a champion mirror, and broken or missing files;
 - the GRAPHICS.DAT image decoder and text decoder;
 - champion parsing, skill levels and where starting items go;
-- recruiting, and the click flow of portrait → sheet → Resurrect/Cancel;
+- recruiting, the click flow of portrait → sheet → Resurrect/Reincarnate/Cancel, and the rename keyboard;
+- sleeping and waking;
 - wall bumps, the formation box, pressure plates and door animation;
 - decoration placement (including DM's random formula), inscriptions and the screen-layout table;
 - moving items between inventory slots, floor items, picking up, dropping and throwing;

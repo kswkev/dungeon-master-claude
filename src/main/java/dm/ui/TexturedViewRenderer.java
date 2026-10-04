@@ -106,10 +106,16 @@ public final class TexturedViewRenderer implements ViewRenderer {
     }
 
     @Override
+    public boolean animated() {
+        return fieldDrawn;
+    }
+
+    @Override
     public void draw(Graphics2D screen, Party party) {
         portraitHit = null;
         wallHit = null;
         doorButtonHit = null;
+        fieldDrawn = false;
         Graphics2D g = (Graphics2D) screen.create(VIEWPORT.x, VIEWPORT.y, VIEWPORT.width, VIEWPORT.height);
         try {
             DungeonMap map = party.map();
@@ -141,6 +147,9 @@ public final class TexturedViewRenderer implements ViewRenderer {
                     } else {
                         drawItems(g, map, d, l, fwd, mx, my, true);
                         drawItems(g, map, d, l, fwd, mx, my, false);
+                        if (showsField(map, sq, mx, my)) {
+                            drawTeleporter(g, d, l);
+                        }
                     }
                 }
             }
@@ -231,13 +240,15 @@ public final class TexturedViewRenderer implements ViewRenderer {
 
     /** Draws a front-view decoration on {@code face} and returns where it went (viewport coordinates), or null. */
     private Rectangle drawFrontDecoration(Graphics2D g, int ornament, Rectangle face, int d, int l) {
-        BufferedImage img = art.sprite(FIRST_WALL_ORNAMENT + 2 * ornament + 1);
+        int graphic = FIRST_WALL_ORNAMENT + 2 * ornament + 1;
+        BufferedImage img = art.sprite(graphic);
         if (img == null) {
             return null;
         }
         double scale = face.width / (double) FRONT[1].width;
         int w = (int) Math.round(img.getWidth() * scale);
         int h = (int) Math.round(img.getHeight() * scale);
+        img = distant(graphic, w, h, wallOrnamentChanges(d), false);
         int x;
         int y;
         Point centre = d == 1 && l != 0 ? null
@@ -252,7 +263,7 @@ public final class TexturedViewRenderer implements ViewRenderer {
             x = face.x + (face.width - w) / 2;
             y = (int) Math.round(face.y + face.height / 2.0 - h / 2.0 - 6 * scale);
         }
-        if (standsOnFloor(ornament, img)) {
+        if (standsOnFloor(ornament, art.sprite(graphic))) {
             y = face.y + face.height - h;
         } else if (level(ornament) > 0) {
             y = (int) Math.round(face.y + level(ornament) * face.height - h / 2.0);
@@ -316,6 +327,7 @@ public final class TexturedViewRenderer implements ViewRenderer {
         double scale = SIDE_SCALE[d];
         int w = Math.max(1, (int) Math.round(img.getWidth() * scale));
         int h = Math.max(1, (int) Math.round(img.getHeight() * scale));
+        img = distant(index, w, h, wallOrnamentChanges(d), rightSide);
         int cx = SIDE_FACE_CENTRE[d][0];
         if (rightSide) {
             cx = VIEWPORT.width - cx;
@@ -340,11 +352,8 @@ public final class TexturedViewRenderer implements ViewRenderer {
     // PC graphics; [depth][column] tables, column 0 left, 1 centre, 2 right.
     // A right-hand square uses the left piece mirrored, as DM does.
 
-    /** Horizontal distance between neighbouring squares on each depth's mid-square plane (teleporter, floor decorations). */
+    /** Horizontal distance between neighbouring squares on each depth's mid-square plane (floor decorations). */
     private static final int[] MID_SPACING = {0, 128, 84, 56};
-    /** The door opening at each depth, for the teleporter overlay. */
-    private static final Rectangle[] DOOR_PANEL = {
-            null, new Rectangle(64, 14, 96, 88), new Rectangle(80, 20, 64, 61), new Rectangle(90, 28, 44, 38)};
 
     private static final int FIRST_DOOR = 246;
     /** Door panels: zone for a shut door; a part-open one (states 1-3) uses the zone plus its state. */
@@ -424,14 +433,18 @@ public final class TexturedViewRenderer implements ViewRenderer {
         if (doorFront && d > 0) {
             drawDoor(g, map, d, l, mx, my);
         }
-        if (sq.type() == SquareType.TELEPORTER && d > 0 && sq.teleporterVisible() && map.isTeleporterOpen(mx, my)) {
-            drawTeleporter(g, d, l, mx, my);
-        }
         drawItems(g, map, d, l, fwd, mx, my, false);
         if (doorFront) {
             drawCreatures(g, map, d, l, fwd, mx, my);
         }
         drawSmoke(g, map, d, l, fwd, mx, my);
+        if (showsField(map, sq, mx, my)) {
+            drawTeleporter(g, d, l); // over everything on the square, as DM's F0113 comes last
+        }
+    }
+
+    private static boolean showsField(DungeonMap map, Square sq, int mx, int my) {
+        return sq.type() == SquareType.TELEPORTER && sq.teleporterVisible() && map.isTeleporterOpen(mx, my);
     }
 
     // ---- smoke (DM's smoke explosion where a creature died) -------------------
@@ -718,6 +731,7 @@ public final class TexturedViewRenderer implements ViewRenderer {
     private void drawObject(Graphics2D g, Item item, Point at, int scale32, boolean onFloor) {
         int graphic = ItemCatalog.floorGraphic(item);
         BufferedImage img = graphic < 0 ? null : art.sprite(graphic);
+        boolean own = img != null;
         if (img == null) {
             BufferedImage icon = art.iconSprite(item);
             if (icon == null) {
@@ -727,8 +741,52 @@ public final class TexturedViewRenderer implements ViewRenderer {
         }
         int w = Math.max(1, img.getWidth() * scale32 / 32);
         int h = Math.max(1, img.getHeight() * scale32 / 32);
+        if (own) {
+            img = distant(graphic, w, h, objectChanges(scale32), false);
+        }
         int y = onFloor ? at.y - h : at.y - h / 2;
         g.drawImage(img, at.x - w / 2, y, w, h, null);
+    }
+
+    // ---- distance colours -----------------------------------------------------
+    //
+    // DM shrinks pictures for D2 and D3 itself, picking source pixels, and
+    // swaps colours as it does (F0129's palette changes): far things lose
+    // their highlights and darken, before the light's palette dims the view.
+
+    /** G0213/G0214: objects (and things in flight) shrunk to D3 and D2 sizes. */
+    private static final int[] PAL_CHANGES_OBJECT_D3 = {0, 120, 10, 30, 40, 30, 0, 60, 30, 90, 100, 110, 0, 20, 140, 130};
+    private static final int[] PAL_CHANGES_OBJECT_D2 = {0, 10, 20, 30, 40, 30, 60, 70, 50, 90, 100, 110, 120, 130, 140, 150};
+
+    private static int[] wallOrnamentChanges(int d) {
+        return d == 3 ? PAL_CHANGES_WALL_ORNAMENT_D3 : d == 2 ? PAL_CHANGES_WALL_ORNAMENT_D2 : null;
+    }
+
+    /**
+     * DM keeps two shrunk object sizes, each with its colours: the D2 one
+     * (our D1 far and D2 near scales) and the D3 one (D2 far and D3). Larger
+     * pictures keep their colours.
+     */
+    static int[] objectChanges(int scale32) {
+        return scale32 >= 27 ? null : scale32 >= 16 ? PAL_CHANGES_OBJECT_D2 : PAL_CHANGES_OBJECT_D3;
+    }
+
+    private final java.util.Map<String, BufferedImage> distantImages = new java.util.HashMap<>();
+
+    /**
+     * Graphic {@code graphic} shrunk to w x h DM's way with colour changes
+     * {@code changes} (null: none), colour 10 see-through, mirrored if asked.
+     */
+    private BufferedImage distant(int graphic, int w, int h, int[] changes, boolean flip) {
+        String key = graphic + "/" + w + "x" + h + "/" + (changes == null ? 0 : changes.hashCode()) + "/" + flip;
+        return distantImages.computeIfAbsent(key, k -> {
+            IndexedImage src = art.indexed(graphic);
+            if (src == null) {
+                return null;
+            }
+            IndexedImage small = Bitmaps.shrink(src, w, h, changes);
+            return Bitmaps.toImage(flip ? Bitmaps.flip(small) : small, Art.TRANSPARENT, Bitmaps.palette());
+        });
     }
 
     private void drawFloorOrnament(Graphics2D g, int d, int l, int ornament) {
@@ -773,8 +831,9 @@ public final class TexturedViewRenderer implements ViewRenderer {
     private static final int[] DOOR_ORNAMENT_SET = {0, 1, 1, 1, 0, 2, 3, 1, 2, 2, 1, 1};
     private static final int[] PAL_CHANGES_DOOR_ORNAMENT_D3 = {0, 120, 10, 30, 40, 30, 0, 60, 30, 90, 100, 110, 0, 20, 0, 130};
     private static final int[] PAL_CHANGES_DOOR_ORNAMENT_D2 = {0, 10, 20, 30, 40, 30, 60, 70, 50, 90, 100, 110, 120, 130, 140, 150};
-    private static final int[] PAL_CHANGES_DOOR_BUTTON_D3 = {0, 0, 120, 30, 40, 30, 0, 60, 30, 90, 100, 110, 0, 10, 0, 20};
-    private static final int[] PAL_CHANGES_DOOR_BUTTON_D2 = {0, 120, 10, 30, 40, 30, 60, 70, 50, 90, 100, 110, 0, 20, 140, 130};
+    /** G0198/G0199: door buttons and wall decorations shrunk for D3 and D2. */
+    private static final int[] PAL_CHANGES_WALL_ORNAMENT_D3 = {0, 0, 120, 30, 40, 30, 0, 60, 30, 90, 100, 110, 0, 10, 0, 20};
+    private static final int[] PAL_CHANGES_WALL_ORNAMENT_D2 = {0, 120, 10, 30, 40, 30, 60, 70, 50, 90, 100, 110, 0, 20, 140, 130};
 
     /**
      * A door seen head-on, as DM draws it on the PC (F0111, ScummVM's DOS
@@ -880,7 +939,7 @@ public final class TexturedViewRenderer implements ViewRenderer {
         if (index < 3) {
             int h = DOOR_BUTTON_HEIGHT[index];
             int w = Math.max(1, Math.round(src.width() * h / (float) src.height()));
-            img = Bitmaps.shrink(src, w, h, index == 2 ? PAL_CHANGES_DOOR_BUTTON_D2 : PAL_CHANGES_DOOR_BUTTON_D3);
+            img = Bitmaps.shrink(src, w, h, index == 2 ? PAL_CHANGES_WALL_ORNAMENT_D2 : PAL_CHANGES_WALL_ORNAMENT_D3);
         }
         Rectangle drawn = drawZoned(g, Bitmaps.toImage(img, Art.TRANSPARENT, Bitmaps.palette()),
                 DOOR_BUTTON_ZONE + index, false);
@@ -888,22 +947,93 @@ public final class TexturedViewRenderer implements ViewRenderer {
             doorButtonHit = new Rectangle(drawn.x + VIEWPORT.x, drawn.y + VIEWPORT.y, drawn.width, drawn.height);
         }
     }
-    /** DM's teleporters are a shimmering blue field; drawn as a translucent overlay with fixed sparkles. */
-    private void drawTeleporter(Graphics2D g, int d, int l, int mx, int my) {
-        Rectangle panel = DOOR_PANEL[d];
-        int shift = MID_SPACING[d] * l;
-        int pad = panel.width / 6;
-        Rectangle field = new Rectangle(panel.x - pad + shift, panel.y, panel.width + 2 * pad, panel.height);
-        g.setColor(new java.awt.Color(80, 140, 255, 90));
-        g.fillRect(field.x, field.y, field.width, field.height);
-        long seed = mx * 31L + my * 17L;
-        g.setColor(new java.awt.Color(200, 230, 255, 170));
-        for (int i = 0; i < 40; i++) {
-            seed = seed * 6364136223846793005L + 1442695040888963407L;
-            int px = field.x + (int) (((seed >>> 33) & 0xFFFF) % field.width);
-            int py = field.y + (int) (((seed >>> 17) & 0xFFFF) % field.height);
-            g.fillRect(px, py, 1, 1);
+    // ---- teleporter fields (DM's F0113) ----------------------------------------
+    //
+    // A visible, open teleporter fills its square's outline with the 32x32
+    // field pattern (graphic 76). The outline is where the square's wall
+    // piece would be: the front face for the centre column, and for the side
+    // squares the PC's field masks 70-75, which are exactly the left wall
+    // pieces' silhouettes (mirrored on the right). The pattern isn't tiled:
+    // DM copies it 16 pixels at a time, unit after unit, along the rows of
+    // the box, starting at a random unit and wrapping a little before or
+    // after the pattern's 64 units, so it comes out scrambled and different
+    // every frame.
+
+    private static final int FIELD_TELEPORTER = 76;
+    /** Masks for the side squares by [depth][|lateral|] (none for the centre). */
+    private static final int[][] FIELD_MASK = {{-1, 75}, {-1, 74}, {-1, 73, 72}, {-1, 71, 70}};
+    /** G0188's base unit count by [depth][centre 0, side 1]; DM adds random(2). */
+    private static final int[][] FIELD_UNITS = {{59, 63}, {61, 63}, {60, 63}, {63, 63}};
+    private static final int FIELD_UNIT = 16;
+
+    private final java.util.Random fieldRandom = new java.util.Random();
+    private boolean fieldDrawn;
+
+    private void drawTeleporter(Graphics2D g, int d, int l) {
+        IndexedImage pattern = art.indexed(FIELD_TELEPORTER);
+        if (pattern == null) {
+            return;
         }
+        // The box (viewport coordinates) and where the unclipped wall piece would start.
+        Rectangle box;
+        int pieceX;
+        int pieceY;
+        int pieceW;
+        if (d == 0 && l == 0) {
+            box = new Rectangle(0, 0, VIEWPORT.width, VIEWPORT.height);
+            pieceX = 0;
+            pieceY = 0;
+            pieceW = box.width;
+        } else {
+            IndexedImage piece = art.indexed(WALL[d][l + 2]);
+            int[] c = piece == null ? null : art.coord(WALL_ZONE[d][l + 2], piece.width(), piece.height());
+            if (c == null) {
+                return;
+            }
+            box = new Rectangle(c[0], c[1], c[2], c[3]);
+            pieceX = c[0] - c[4];
+            pieceY = c[1] - c[5];
+            pieceW = piece.width();
+        }
+        IndexedImage mask = l == 0 ? null : art.indexed(FIELD_MASK[d][Math.abs(l)]);
+        boolean right = l > 0;
+        int maskX = mask == null ? 0 : right ? pieceX + pieceW - mask.width() : pieceX;
+
+        int units = FIELD_UNITS[d][l == 0 ? 0 : 1] + fieldRandom.nextInt(2);
+        int unit = fieldRandom.nextInt(32);
+        int perRow = pattern.width() / FIELD_UNIT;
+        int firstUnitX = Math.floorDiv(box.x, FIELD_UNIT) * FIELD_UNIT;
+        BufferedImage out = new BufferedImage(box.width, box.height, BufferedImage.TYPE_INT_ARGB);
+        int[] colours = Bitmaps.palette();
+        for (int y = box.y; y < box.y + box.height; y++) {
+            for (int ux = firstUnitX; ux < box.x + box.width; ux += FIELD_UNIT) {
+                int srcY = unit / perRow;
+                int srcX = (unit % perRow) * FIELD_UNIT;
+                for (int x = Math.max(ux, box.x); x < Math.min(ux + FIELD_UNIT, box.x + box.width); x++) {
+                    int c = pattern.pixel(srcX + x - ux, srcY);
+                    if (c == Art.TRANSPARENT || c == 0 || !inMask(mask, right, x - maskX, y - pieceY)) {
+                        continue;
+                    }
+                    out.setRGB(x - box.x, y - box.y, 0xFF000000 | colours[c]);
+                }
+                if (++unit >= units) {
+                    unit = 0;
+                }
+            }
+        }
+        g.drawImage(out, box.x, box.y, null);
+        fieldDrawn = true;
+    }
+
+    /** Whether mask pixel (x, y) (mirrored for a right-hand square) lets the field through: white does, black and outside don't. */
+    private static boolean inMask(IndexedImage mask, boolean mirrored, int x, int y) {
+        if (mask == null) {
+            return true;
+        }
+        if (x < 0 || y < 0 || x >= mask.width() || y >= mask.height()) {
+            return false;
+        }
+        return mask.pixel(mirrored ? mask.width() - 1 - x : x, y) != 0;
     }
 
     /** DM's wall zones by [depth][lateral + 2] (ScummVM's PC zone numbers 702-717); -1 where none. */

@@ -1394,6 +1394,7 @@ public final class CreatureAI implements Serializable {
                     c.addWounds((1 << rnd(8)) & allowedWounds);
                 } while (attack > (adjusted <<= 1) && adjusted != 0);
             }
+            party.wakeUp(); // a blow that gets through armour wakes the party
         }
         int taken = c.takeDamage(attack);
         addDamage(member, taken);
@@ -1436,6 +1437,9 @@ public final class CreatureAI implements Serializable {
         }
         if ((c.wounds() & (1 << part)) != 0) {
             defense -= 8 + rnd(4);
+        }
+        if (c.asleep()) {
+            defense >>= 1;
         }
         return Math.max(0, Math.min(defense >> 1, 100));
     }
@@ -1543,7 +1547,7 @@ public final class CreatureAI implements Serializable {
         if (occupied) {
             return BLOCKED;
         }
-        if (info.movementSound() >= 0) {
+        if (info.movementSound() >= 0 && !party.sleeping()) { // DM's F514: sleepers hear no footsteps
             sound(info.movementSound(), to, x, y);
         }
         boolean wasOnPartyMap = m == party.map();

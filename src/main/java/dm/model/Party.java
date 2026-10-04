@@ -134,6 +134,14 @@ public final class Party implements Serializable {
 
     /** Resurrects the mirror's champion into the party; false if the party is full or the mirror is empty. */
     public boolean recruit(ChampionMirror mirror) {
+        if (!recruitQuietly(mirror)) {
+            return false;
+        }
+        message(mirror.champion().name() + " RESURRECTED.", members.size() - 1);
+        return true;
+    }
+
+    private boolean recruitQuietly(ChampionMirror mirror) {
         if (isFull() || mirror.taken()) {
             return false;
         }
@@ -150,6 +158,31 @@ public final class Party implements Serializable {
         }
         mirror.markTaken();
         return true;
+    }
+
+    /**
+     * DM's Reincarnate: the mirror's champion joins as {@link #recruit} does,
+     * under a new name and title, with no skills and 12 more statistic points
+     * ({@link Champion#reincarnate}). False if the party is full, the mirror
+     * is empty, or the name is blank or already a member's (DM's rename
+     * panel won't take those).
+     */
+    public boolean reincarnate(ChampionMirror mirror, String name, String title) {
+        String n = name.stripTrailing();
+        if (isFull() || mirror.taken() || !nameFree(n)) {
+            return false;
+        }
+        Champion c = mirror.champion();
+        c.reincarnate(n, title.stripTrailing(), random);
+        recruitQuietly(mirror);
+        message(c.name() + " REINCARNATED.", members.size() - 1);
+        return true;
+    }
+
+    /** Whether {@code name} could be a reincarnated champion's: not blank, and no member already has it. */
+    public boolean nameFree(String name) {
+        String n = name.stripTrailing();
+        return !n.isEmpty() && members.stream().noneMatch(m -> m.name().equals(n));
     }
 
     /** The champion standing in formation position {@code position}, or null. */
@@ -524,6 +557,44 @@ public final class Party implements Serializable {
 
     void creatureAttacked() {
         lastCreatureAttackTime = time;
+        wakeUp(); // F230: any blow aimed at a sleeper wakes the party
+    }
+
+    // ---- sleeping ----------------------------------------------------------------
+
+    /** DM's G300: the party is asleep, from the sheet's ZZZ icon until woken. */
+    private boolean sleeping;
+
+    public boolean sleeping() {
+        return sleeping;
+    }
+
+    /**
+     * The party lies down to sleep. While asleep time effects come four
+     * times as often with mana, stamina and health regained twice as fast,
+     * every skill counts as level 1, dexterity and armour are halved, and
+     * creatures walk silently. False with no one alive to sleep.
+     */
+    public boolean sleep() {
+        if (members.stream().noneMatch(c -> c.health() > 0)) {
+            return false;
+        }
+        setSleeping(true);
+        return true;
+    }
+
+    /** DM's F314: the party wakes (clicking the view, Return, or being attacked). */
+    public void wakeUp() {
+        if (sleeping) {
+            setSleeping(false);
+        }
+    }
+
+    private void setSleeping(boolean asleep) {
+        sleeping = asleep;
+        for (Champion c : members) {
+            c.setAsleep(asleep);
+        }
     }
 
     /** A line for DM's message area: text, in member {@code member}'s colour (-1 for the default cyan). */
@@ -744,16 +815,16 @@ public final class Party implements Serializable {
         boolean turned = faceAttackers();
         int[] damage = add(creatures.damage(), tickPoison());
         boolean changed = burnt || smoked || enabled || turned || creatures.changed() || damage != null;
-        if (time % Upkeep.PERIOD == 0 && !members.isEmpty()) {
+        if (time % (sleeping ? Upkeep.SLEEPING_PERIOD : Upkeep.PERIOD) == 0 && !members.isEmpty()) {
             fadeScents();
             int[] upkeep = new int[members.size()];
             boolean hurt = false;
             for (int i = 0; i < members.size(); i++) {
                 Champion c = members.get(i);
                 if (c.health() > 0) {
-                    upkeep[i] = c.takeDamage(Upkeep.applyTimeEffects(c, time, lastMove));
+                    upkeep[i] = c.takeDamage(Upkeep.applyTimeEffects(c, time, lastMove, sleeping));
                     hurt |= upkeep[i] > 0;
-                    if (c.facing() != facing && lastCreatureAttackTime < time - 60) {
+                    if (!sleeping && c.facing() != facing && lastCreatureAttackTime < time - 60) {
                         c.face(facing); // F331: with no attack for a while, the champion turns back
                         c.clearMaxDamageReceived();
                     }

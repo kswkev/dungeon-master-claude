@@ -29,7 +29,7 @@ class UpkeepTest {
 
     @Test
     void aRestedFedChampionGetsALittleHungrierAndThirstier() {
-        assertEquals(0, Upkeep.applyTimeEffects(elija, 64, 0));
+        assertEquals(0, Upkeep.applyTimeEffects(elija, 64, 0, false));
         assertEquals(1598, elija.food());
         assertEquals(1599, elija.water());
         assertEquals(580, elija.rawStamina(), "already full");
@@ -38,7 +38,7 @@ class UpkeepTest {
     @Test
     void lowStaminaComesBackFasterAndCostsMoreFood() {
         elija.decrementStamina(480); // down to 100: below an eighth, so 8 cycles
-        Upkeep.applyTimeEffects(elija, 64, 0);
+        Upkeep.applyTimeEffects(elija, 64, 0, false);
         assertEquals(116, elija.rawStamina());
         assertEquals(1580, elija.food());
         assertEquals(1591, elija.water());
@@ -47,9 +47,9 @@ class UpkeepTest {
     @Test
     void manaComesBackWhenTheTimePatternIsBelowWisdomPlusMagicLevels() {
         elija.setMana(10);
-        Upkeep.applyTimeEffects(elija, 64, 0); // pattern 64: not below 42 + 5
+        Upkeep.applyTimeEffects(elija, 64, 0, false); // pattern 64: not below 42 + 5
         assertEquals(10, elija.mana());
-        Upkeep.applyTimeEffects(elija, 128, 0); // pattern 32: 1 mana for 11 stamina, then rest refills it
+        Upkeep.applyTimeEffects(elija, 128, 0, false); // pattern 32: 1 mana for 11 stamina, then rest refills it
         assertEquals(11, elija.mana());
         assertEquals(580, elija.rawStamina());
         assertEquals(1598 - 6, elija.food(), "resting longer than 80 ticks: three cycles");
@@ -61,7 +61,7 @@ class UpkeepTest {
         elija.setFood(-600);
         elija.setWater(-600);
         elija.decrementStamina(579); // 1 left
-        assertEquals(3, Upkeep.applyTimeEffects(elija, 64, 0), "8 stamina owed, half of the 7 missing as damage");
+        assertEquals(3, Upkeep.applyTimeEffects(elija, 64, 0, false), "8 stamina owed, half of the 7 missing as damage");
         assertEquals(0, elija.rawStamina());
         assertEquals(-608, elija.food());
         assertEquals(-604, elija.water());
@@ -70,8 +70,21 @@ class UpkeepTest {
     @Test
     void healthComesBackWhileStaminaIsAboveAQuarter() {
         elija.takeDamage(10);
-        Upkeep.applyTimeEffects(elija, 128, 0); // pattern 32 < vitality 36 + 12
+        Upkeep.applyTimeEffects(elija, 128, 0, false); // pattern 32 < vitality 36 + 12
         assertEquals(51, elija.health(), "60 / 128 + 1");
+    }
+
+    @Test
+    void sleepersRecoverTwiceAsFast() {
+        elija.decrementStamina(480);
+        elija.takeDamage(10);
+        elija.setStat(Champion.Stat.STRENGTH, 40);
+        Upkeep.applyTimeEffects(elija, 64, 0, true);
+        assertEquals(132, elija.rawStamina(), "twice the 16 an awake champion gets");
+        assertEquals(1580, elija.food(), "eating as much as awake");
+        assertEquals(41, elija.stat(Champion.Stat.STRENGTH), "statistics every 64 ticks, not 256");
+        Upkeep.applyTimeEffects(elija, 128, 0, true);
+        assertEquals(52, elija.health(), "(60 / 128 + 1) doubled");
     }
 
     @Test

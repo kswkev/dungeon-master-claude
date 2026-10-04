@@ -389,6 +389,40 @@ class RealDungeonTest {
         assertEquals(48, before.y - ViewRenderer.VIEWPORT.y + before.height / 2, 1.0);
     }
 
+    /**
+     * The visible teleporter at (13,16) on Level 2 is DM's field (graphic
+     * 76's cyan sparkles) over the D1 front face, and only there; it
+     * changes every frame, so the view keeps redrawing.
+     */
+    @Test
+    void aTeleporterShowsDmsField() {
+        assumeTrue(Files.exists(GRAPHICS), "needs the original GRAPHICS.DAT");
+        ViewRenderer view = ViewRenderer.forArt(Art.load(GRAPHICS));
+        BufferedImage img = new BufferedImage(320, 200, BufferedImage.TYPE_INT_RGB);
+        Graphics2D g = img.createGraphics();
+        view.draw(g, level2(12, 16, Direction.EAST));
+        g.dispose();
+        assertTrue(view.animated());
+        int cyan = Art.PALETTE[4].getRGB() & 0xFFFFFF;
+        int inside = 0;
+        int outside = 0;
+        Rectangle v = ViewRenderer.VIEWPORT;
+        for (int y = v.y; y < v.y + v.height; y++) {
+            for (int x = 0; x < v.width; x++) {
+                if ((img.getRGB(x, y) & 0xFFFFFF) == cyan) {
+                    boolean front = x >= 32 && x < 192 && y >= v.y + 9 && y < v.y + 120;
+                    if (front) {
+                        inside++;
+                    } else {
+                        outside++;
+                    }
+                }
+            }
+        }
+        assertTrue(inside > 100, "sparkles over the D1 face: " + inside);
+        assertEquals(0, outside);
+    }
+
     private static ViewRenderer render(Party party) {
         ViewRenderer view = ViewRenderer.forArt(Art.load(GRAPHICS));
         BufferedImage img = new BufferedImage(320, 200, BufferedImage.TYPE_INT_RGB);
