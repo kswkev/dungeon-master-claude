@@ -13,6 +13,8 @@ public final class Dungeon implements Serializable {
     private static final long serialVersionUID = 1L;
 
     private final List<DungeonMap> maps;
+    /** DM's creature timeline, shared by every map. */
+    private final CreatureAI creatures = new CreatureAI(this);
 
     public Dungeon(List<DungeonMap> maps) {
         this.maps = List.copyOf(maps);
@@ -23,6 +25,10 @@ public final class Dungeon implements Serializable {
 
     public List<DungeonMap> maps() {
         return maps;
+    }
+
+    CreatureAI creatures() {
+        return creatures;
     }
 
     /** The map at {@code index} in DUNGEON.DAT's order (teleporters name maps this way), or null. */

@@ -110,7 +110,14 @@ Run with `"-Ddm.debug=true"` to list every decoration on Level 1.
 - They stand in the way (no bump), stop thrown items, and turn to face you when they can see you. They don't move or attack yet.
 - Doors, stairs (now also seen side-on), pits (including the faint invisible ones and holes in the ceiling) and the champion mirrors are placed by the original's own screen layout data rather than by hand.
 
-**Not yet:** creature movement and attacks, combat and spells.
+**Sprint 15: done.** Creatures come alive, with the original's own behaviour (ported from ReDMCSB):
+- **They hunt you:** creatures wander, notice the party when they see it (less far in the dark) or smell it, follow its scent trail, run at it, and turn and shuffle into the front of their square to strike.
+- **They hurt:** each blow uses the original's hit roll against the champion's dexterity and luck, is softened by the armour and shields on the body part it lands on, and can wound that part. Wounded hands, head, torso, legs and feet show as red boxes, as in the original. Scorpions, wasps, worms and others poison: poison keeps hurting until it wears off or a BRO potion (antivenin) cures it, and a VI potion heals wounds. Gigglers steal from your hands instead.
+- **They're seen and heard:** each creature shows its attack picture as it strikes, its own way of mirroring and jittering, and the original's attack, footstep and "ouch" sounds play.
+- **The dungeon acts on them:** they can't pass closed doors (ghosts can), stay out of open pits (unless they fly), fall through pits that open under them, are carried by creature teleporters, and press pressure plates. A door shut on a creature hurts it and bounces back. The original's 50 creature generators make new creatures.
+- Creatures that cast spells (Vexirks, Wizard Eyes, Demons and others) only fight hand to hand for now.
+
+**Not yet:** fighting back (combat) and spells.
 
 ## Requirements
 
@@ -170,7 +177,8 @@ The tests cover:
 - wall sensors, alcoves, door buttons and AND/OR gates;
 - stairs between levels;
 - pits, teleporters, levers, alcove clicks and plates pressed by items;
-- the Sprint 11 bug reports replayed on your own Level 2. These run only when `data/` holds the game files, so CI skips them.
+- creature behaviour, attacks, wounds, poison, and creatures with doors, pits, teleporters, plates and generators;
+- the Sprint 11 bug reports replayed on your own Level 2, and the creatures there. These run only when `data/` holds the game files, so CI skips them.
 
 GitHub Actions builds the project and runs the tests on every push and pull request to `develop` and `main`.
 

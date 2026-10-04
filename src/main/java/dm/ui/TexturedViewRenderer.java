@@ -254,8 +254,8 @@ public final class TexturedViewRenderer implements ViewRenderer {
         }
         if (standsOnFloor(ornament, img)) {
             y = face.y + face.height - h;
-        } else if (EYE_LEVEL_ORNAMENTS.contains(ornament)) {
-            y = (int) Math.round(face.y + EYE_LEVEL * face.height - h / 2.0);
+        } else if (level(ornament) > 0) {
+            y = (int) Math.round(face.y + level(ornament) * face.height - h / 2.0);
         }
         g.drawImage(img, x, y, w, h, null);
         return new Rectangle(x, y, w, h);
@@ -272,6 +272,26 @@ public final class TexturedViewRenderer implements ViewRenderer {
     static final Set<Integer> EYE_LEVEL_ORNAMENTS = Set.of(
             4, 5, 6, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30, 31, 32, 44, 45, 51, 52, 53);
     static final double EYE_LEVEL = 40 / 111.0;
+
+    /** The champion mirror's frame, as a wall decoration (side views and other front faces). */
+    static final int MIRROR_ORNAMENT = 43;
+    /**
+     * Where the mirror's frame is centred on every wall face, as a fraction
+     * of the face's height (#30): the same as the straight-on D1 mirror,
+     * which the user confirmed against the original (frame top at the
+     * portrait zone's y 35 less the glass offset, so its centre is 41.5 of
+     * the D1 face's 111 rows down). The straight-on D2/D3 mirrors already
+     * sit there.
+     */
+    static final double MIRROR_LEVEL = (35 - GLASS_Y + MIRROR_H / 2.0 - FRONT[1].y) / FRONT[1].height;
+
+    /** The fraction of a face's height a decoration is centred on, or 0 for the default placement. */
+    static double level(int ornament) {
+        if (ornament == MIRROR_ORNAMENT) {
+            return MIRROR_LEVEL;
+        }
+        return EYE_LEVEL_ORNAMENTS.contains(ornament) ? EYE_LEVEL : 0;
+    }
 
     /**
      * Decorations that sit at the foot of the wall rather than around its
@@ -304,9 +324,9 @@ public final class TexturedViewRenderer implements ViewRenderer {
         BufferedImage front = art.sprite(index + 1);
         if (front != null && standsOnFloor(ornament, front)) {
             y = SIDE_FACE_CENTRE[d][1] + SIDE_FACE_HEIGHT[d] / 2 - h;
-        } else if (EYE_LEVEL_ORNAMENTS.contains(ornament)) {
+        } else if (level(ornament) > 0) {
             int top = SIDE_FACE_CENTRE[d][1] - SIDE_FACE_HEIGHT[d] / 2;
-            y = (int) Math.round(top + EYE_LEVEL * SIDE_FACE_HEIGHT[d] - h / 2.0);
+            y = (int) Math.round(top + level(ornament) * SIDE_FACE_HEIGHT[d] - h / 2.0);
         }
         g.drawImage(img, cx - w / 2, y, w, h, null);
     }
@@ -411,6 +431,86 @@ public final class TexturedViewRenderer implements ViewRenderer {
         if (doorFront) {
             drawCreatures(g, map, d, l, fwd, mx, my);
         }
+        drawSmoke(g, map, d, l, fwd, mx, my);
+    }
+
+    // ---- smoke (DM's smoke explosion where a creature died) -------------------
+
+    /**
+     * Smoke shares the poison cloud's picture. The PC's explosion pictures
+     * are 486 fire, 487 spell and 488 poison (DM's C348-C350, found by size
+     * and look), followed by the explosion patterns from 489.
+     */
+    private static final int SMOKE_GRAPHIC = 488;
+    /** DM's G212 palette changes for smoke (new colour x 10). */
+    private static final int[] SMOKE_CHANGES = {0, 10, 20, 30, 40, 50, 120, 10, 80, 90, 100, 110, 120, 130, 140, 150};
+    /** DM's G216 explosion base scales for D3, D2, D1, D0 (in 32nds, times the explosion's size / 256). */
+    private static final int[] EXPLOSION_SCALE = {16, 23, 32, 32};
+    /**
+     * DM's G226: an explosion's centre on the left or right column of a
+     * square, by explosion view square: D3 C/L/R, D2 C/L/R, D1 C/L/R, D0 C/L/R.
+     */
+    private static final int[][][] EXPLOSION_XY = {
+            {{95, 50}, {127, 50}}, {{31, 50}, {63, 50}}, {{159, 50}, {191, 50}},
+            {{92, 53}, {131, 53}}, {{-3, 53}, {46, 53}}, {{177, 53}, {226, 53}},
+            {{83, 57}, {141, 57}}, {{-54, 57}, {18, 57}}, {{207, 57}, {277, 57}},
+            {{0, 0}, {0, 0}}, {{-73, 60}, {-33, 60}}, {{256, 60}, {296, 60}}};
+    /** DM's G225: a centred explosion's centre, in the same order. */
+    private static final int[][] CENTRED_EXPLOSION_XY = {
+            {111, 50}, {45, 50}, {179, 50}, {111, 53}, {20, 53}, {205, 53},
+            {111, 57}, {-30, 57}, {253, 57}, {111, 60}, {-53, 60}, {276, 60}};
+
+    private final java.util.Map<Integer, BufferedImage> smokeImages = new java.util.HashMap<>();
+    private final java.util.Random smokeFlips = new java.util.Random();
+
+    /**
+     * The puffs of smoke on a square, as DM's F0115 draws explosions: on the
+     * left or right column of the square (or its centre), the poison-cloud
+     * picture in smoke colours, scaled by the puff's size and the distance
+     * (F0114), and flipped at random each time it is drawn, so it churns.
+     */
+    private void drawSmoke(Graphics2D g, DungeonMap map, int d, int l, Direction fwd, int mx, int my) {
+        if (Math.abs(l) > 1 || d > MAX_DEPTH || (d == 0 && l == 0)) {
+            return;
+        }
+        List<DungeonMap.Smoke> puffs = map.smokeAt(mx, my);
+        if (puffs.isEmpty()) {
+            return;
+        }
+        int index = (MAX_DEPTH - d) * 3 + (l == 0 ? 0 : l < 0 ? 1 : 2);
+        for (DungeonMap.Smoke s : puffs) {
+            int[] at;
+            if (s.centred()) {
+                at = CENTRED_EXPLOSION_XY[index];
+            } else {
+                boolean left = s.cell() == fwd.ordinal() || s.cell() == fwd.turnLeft().ordinal();
+                at = EXPLOSION_XY[index][left ? 0 : 1];
+            }
+            int scale = Math.min(32, Math.max(4, (Math.max(48, s.attack() + 1) * EXPLOSION_SCALE[MAX_DEPTH - d]) >> 8) & ~1);
+            BufferedImage img = smokeImage(scale);
+            if (img == null) {
+                return;
+            }
+            int w = img.getWidth();
+            int h = img.getHeight();
+            int x = at[0] - w / 2 + 1;
+            int y = at[1] - (h >> 1) + ((h & 1) == 0 ? 1 : 0);
+            boolean flipX = smokeFlips.nextBoolean();
+            boolean flipY = smokeFlips.nextBoolean();
+            g.drawImage(img, flipX ? x + w : x, flipY ? y + h : y, flipX ? -w : w, flipY ? -h : h, null);
+        }
+    }
+
+    private BufferedImage smokeImage(int scale) {
+        return smokeImages.computeIfAbsent(scale, sc -> {
+            IndexedImage src = art.indexed(SMOKE_GRAPHIC);
+            if (src == null) {
+                return null;
+            }
+            IndexedImage small = Bitmaps.shrink(src, Bitmaps.scaled(src.width(), sc), Bitmaps.scaled(src.height(), sc),
+                    SMOKE_CHANGES);
+            return Bitmaps.toImage(small, 10, Bitmaps.palette());
+        });
     }
 
     // ---- creatures -----------------------------------------------------------
@@ -441,58 +541,91 @@ public final class TexturedViewRenderer implements ViewRenderer {
             return;
         }
         CreatureType type = group.type();
-        int delta = Math.floorMod(fwd.ordinal() - group.facing().ordinal(), 4);
-        boolean side = (delta & 1) != 0;
-        CreatureType.View view = side && type.hasSide() ? CreatureType.View.SIDE
-                : delta == 0 && type.hasBack() ? CreatureType.View.BACK : CreatureType.View.FRONT;
-        boolean flip = view == CreatureType.View.SIDE && delta == 1;
-        if (d == 2 && view == CreatureType.View.FRONT && type.specialD2Front() && type.specialD2FrontIsFlipped()) {
-            flip = true;
-        }
-        BufferedImage img = creatureArt.picture(type, view, Math.max(d, 1), flip, map);
-        if (img == null) {
-            return;
-        }
-        List<Integer> back = new ArrayList<>();
-        List<Integer> front = new ArrayList<>();
+        // {coordinate cell, creature} for the back row, then the front row.
+        List<int[]> back = new ArrayList<>();
+        List<int[]> front = new ArrayList<>();
         switch (type.size()) {
-            case FULL -> front.add(4);
+            case FULL -> front.add(new int[] {4, 0});
             case HALF -> {
+                boolean side = (delta(fwd, group, 0) & 1) != 0;
                 if (group.centred()) {
-                    front.add(side ? 3 : 4);
+                    front.add(new int[] {side ? 3 : 4, 0});
                 } else {
                     for (int i = 0; i < group.count(); i++) {
                         int vc = fwd.viewCellOf(group.cellOf(i));
                         if (side) {
-                            (vc <= 1 ? back : front).add(vc <= 1 ? 2 : 4);
+                            (vc <= 1 ? back : front).add(new int[] {vc <= 1 ? 2 : 4, i});
                         } else {
-                            front.add(vc == 0 || vc == 3 ? 0 : 1);
+                            front.add(new int[] {vc == 0 || vc == 3 ? 0 : 1, i});
                         }
                     }
                 }
             }
             case QUARTER -> {
                 if (group.centred()) {
-                    front.add(4);
+                    front.add(new int[] {4, 0});
                 } else {
                     for (int i = 0; i < group.count(); i++) {
                         int vc = fwd.viewCellOf(group.cellOf(i));
-                        (vc <= 1 ? back : front).add(vc);
+                        (vc <= 1 ? back : front).add(new int[] {vc, i});
                     }
                 }
             }
         }
         int[][] coords = CreatureArt.COORDINATES[Math.min(type.coordinateSet(), 2)][square];
-        for (List<Integer> row : List.of(back, front)) {
-            for (int cell : row) {
-                int[] at = coords[cell];
+        int[] shift = SHIFT_SETS[Math.min(Math.max(d, 1), 3) - 1];
+        for (List<int[]> row : List.of(back, front)) {
+            for (int[] placed : row) {
+                int[] at = coords[placed[0]];
                 if (at[0] == 0 && at[1] == 0) {
                     continue; // DM hides this cell from here
                 }
-                int x = at[0] - img.getWidth() / 2 + 1;
-                g.drawImage(img, x, at[1] - img.getHeight() + 1, null);
+                int i = placed[1];
+                BufferedImage img = creaturePicture(map, group, i, fwd, d);
+                if (img == null) {
+                    continue;
+                }
+                int x = at[0] + shift[group.jitterX(i) & 7] - img.getWidth() / 2 + 1;
+                int y = at[1] + shift[group.jitterY(i) & 7] - img.getHeight() + 1;
+                g.drawImage(img, x, y, null);
             }
         }
+    }
+
+    /** DM's G223 shift sets: a creature's jitter (its aspect's offsets) in pixels at D1, D2 and D3. */
+    private static final int[][] SHIFT_SETS = {
+            {0, 1, 2, 3, 0, -3, -2, -1}, {0, 1, 1, 2, 0, -2, -1, -1}, {0, 1, 1, 1, 0, -1, -1, -1}};
+
+    /** How creature {@code i} faces relative to the view: 0 away from it, odd side-on, 2 toward it. */
+    private static int delta(Direction fwd, Group group, int i) {
+        return Math.floorMod(fwd.ordinal() - group.facing(i).ordinal(), 4);
+    }
+
+    /**
+     * Creature {@code i}'s picture, as DM's F115 picks it: the side view
+     * (mirrored seen from the right) when side-on, the back when facing
+     * away, otherwise the attack picture while it strikes or the front;
+     * those two are mirrored when its look says so.
+     */
+    private BufferedImage creaturePicture(DungeonMap map, Group group, int i, Direction fwd, int d) {
+        CreatureType type = group.type();
+        int delta = delta(fwd, group, i);
+        CreatureType.View view;
+        boolean flip;
+        if ((delta & 1) != 0 && type.hasSide()) {
+            view = CreatureType.View.SIDE;
+            flip = delta == 1;
+        } else if (delta == 0 && type.hasBack()) {
+            view = CreatureType.View.BACK;
+            flip = false;
+        } else {
+            view = group.attacking(i) && type.hasAttack() ? CreatureType.View.ATTACK : CreatureType.View.FRONT;
+            flip = group.flipped(i);
+            if (d == 2 && view == CreatureType.View.FRONT && type.specialD2Front() && type.specialD2FrontIsFlipped()) {
+                flip = true;
+            }
+        }
+        return creatureArt.picture(type, view, Math.max(d, 1), flip, map);
     }
 
     /** Stairs seen side-on, beside the view at D2, D1 or D0 (DM draws none at D3 or straight ahead). */

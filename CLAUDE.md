@@ -20,7 +20,9 @@ A Java/Swing remake of FTL's *Dungeon Master* (1988), built sprint by sprint.
 - Sprint 13: save, load and quit from the disk icon on the character sheet (a game menu built from DM's dialog art, 4 save slots).
 - Sprint 14: creatures you can see (groups from DUNGEON.DAT drawn with DM's art, blocking the party, facing it, saved), and the whole view on DM's own layout zones (doors, stairs, pits, ceiling pits, mirrors).
 
-Creature AI and attacks (Sprint 15), combat (Sprint 16) and spells are not implemented yet.
+- Sprint 15: creature AI and attacks, ported from ReDMCSB: DM's group timeline, sight, smell and scent trails, attacks with hit rolls, armour, wounds and poison, attack pictures and sounds, and creatures with doors, pits, teleporters, plates and generators.
+
+Combat (Sprint 16) and spells are not implemented yet.
 
 ## Commands
 
@@ -57,7 +59,7 @@ Code lives under `src/main/java/dm/`, in three layers.
 - The javadoc on `DungeonFile` documents the file layout.
 - Each map definition carries the map's X/Y offset (two bytes after the first 4 skipped bytes), its position in dungeon-wide coordinates (`DungeonMap.offsetX/offsetY`). Every staircase's partner is at the same dungeon-wide position one level up or down.
 - Squares are stored column-major (`[x][y]`), one byte each. Bits 5-7 hold the element type and bits 0-4 hold attributes. Bit 4 means the square has a thing list.
-  - Pits: bit 3 open, bit 2 imaginary (drawn, nothing falls), bit 0 invisible (not drawn, things still fall).
+  - Pits: bit 3 open, bit 2 imaginary (drawn, nothing falls), bit 0 invisible (not drawn, things still fall). ReDMCSB's DEFS.H has these two the other way round (MASK0x0001_PIT_IMAGINARY, MASK0x0004_PIT_INVISIBLE); still to check in the original. Only 4 pits in the PC file have bit 2 set: the closed row on Level 12 at (10,26)-(10,29).
   - Teleporters: bit 3 open (active), bit 2 visible.
 - **Teleporters** (`TeleporterFinder` → `dm.model.Teleporter`): thing type 1 on a teleporter square, layout from ReDMCSB.
   - Word 1: target X bits 0-4, Y bits 5-9, rotation bits 10-11, absolute rotation bit 12, scope bits 13-14 (0 items, 1 creatures, 2 items and the party, 3 everything; checked in the original on Level 2 (13,16), #20), audible bit 15.
@@ -66,6 +68,10 @@ Code lives under `src/main/java/dm/`, in three layers.
   - A teleporter that targets its own square is a "spinner": it only turns the party.
 - **Creature groups** (`GroupFinder` → `dm.model.Group`): thing type 4, 16 bytes: next, possessions (their own thing list), type byte (0-26, `CreatureType`), cells byte (2 bits per creature; 0xFF one creature centred), 4 hit-point words, then direction bits 8-9 and count-1 bits 5-6. A map's allowed creature types are the first of its ornament lists (`OrnamentLists.creatures`, `DungeonMap.creatureTypes`).
   - `CreatureType` holds DM's G0243/G0219 data (from ScummVM): size (quarter/half/full), which pictures exist (front, side, back, attack, in that order from 584 + firstGraphic), coordinate set (0 ground, 1 large, 2 flying), transparent colour, and the replacement colour sets (1-based) for colours 9 and 10.
+  - Since Sprint 15 it also has the rest of G0243 (`INFO`): movement and attack ticks, defense, base health, attack, poison attack, dexterity, sight/smell/attack ranges, properties (fear, wariness), resistances, animation ticks, wound probabilities (feet, torso, legs, head nibbles from the bottom) and attack type; and the attribute flags (side attack, prefer back row, attack any champion, levitation, non-material, height bits 7-8, night vision, archenemy). `attackSound()` maps the attack sound ordinal through DM's G0244; `movementSound()` is DM's F0514.
+  - The group's attribute word also holds the behaviour in bits 0-3.
+- **Doors:** the door thing's bit 0 picks the map's door set (style 0-3) and bit 5 means it opens upward; `doorStyles` keeps both (`DungeonMap.DOOR_VERTICAL`).
+- **Creature generators** (floor sensor type 6, `FloorSensor.TYPE_GENERATOR`): word 1's data is the creature type, word 2 bits 7-10 the count (bit 3 set: random up to bits 0-2; otherwise the value is the count), word 3 bits 4-7 the health multiplier (0 = the map's difficulty) and bits 8-15 the ticks it rests (over 127: (n - 126) × 64). All 50 in the PC file are on corridors. ReDMCSB DEFS.H (M45/M46) confirms the layout.
 - **Things** (`Thing`, `Thing.Store`):
   - A thing id packs the cell (bits 14-15), type (10-13) and index (0-9). Each record's first word links to the next thing, and 0xFFFE ends the list.
   - Squares with things take entries from the square-first-things table in column-major order, starting at that column's cumulative count.
@@ -80,6 +86,7 @@ Code lives under `src/main/java/dm/`, in three layers.
   - Entries 671 and up are sounds and data, not images. Entry 694 is the object name list, indexed by icon number.
   - Sounds (671–693 and 701–712) are a big-endian sample count followed by unsigned 8-bit mono PCM, played at `SOUND_SAMPLE_RATE` (5500 Hz).
   - `GraphicsFile.sound()` reads them. Which index is which effect has to be checked by ear with `-Ddm.soundtest`. The user confirmed 687 as the wall bump, 678 as the swallow and 677 as the scream (`SOUND_SCREAM`), which plays as a pit fall starts and, in DM, when a champion dies.
+  - `GraphicsFile.soundEntry(dmSound)` maps DM's 34 sound indexes to PC entries (ScummVM's soundsDOS table). It agrees with every sound confirmed by ear (672 switch, 673 door, 677 scream, 678 swallow, 687 "party damaged" = the bump). The creature sounds come from it: attacks 688-693, 684, 708-710 and 674 (the wooden thud), footsteps 701-703, 705, 706, 711 and 712, a champion being hit 679-682, and the buzz 685. They still need checking by ear.
   - The useful entry indexes are constants on `GraphicsFile` (inventory 17, portraits 26, icon sheets 42-48, mirror 346, floor objects 498-583).
   - Icon sheets use colour 12 as their background; `Art.iconSprite` makes it transparent for the pointer.
 - **Screen layout** (`Zones`, entry 696): DM's "zones", so some screen coordinates *are* in the PC data after all.
@@ -89,7 +96,7 @@ Code lives under `src/main/java/dm/`, in three layers.
   - 2548-2554: objects in alcoves (D3 C/L/R, D2 C/L/R, D1 C). Two more such sets follow (2555, 2562), and which one DM uses when is unknown.
   - 3000-3006: front wall decoration *centres* (type 0 points), in the same order. A second set at 3007 sits a few px lower; all decorations use the first. With these, alcove objects sit on the shelf.
   - DM's per-decoration coordinate sets aren't in the zone table, so some decorations are placed by hand. `TexturedViewRenderer.FLOOR_LEVEL_ORNAMENTS` (the moss tuft 33 and the drain grate 34, as the user reported) and full-height pictures stand at the foot of the wall, on side faces too. Add more as they're spotted against the original.
-  - `EYE_LEVEL_ORNAMENTS` (#15) are centred higher: row 48 of the viewport at D1 (40 of the face's 111 rows), and the same fraction of every other front or side face. They are 4-6, 15-32, 44-45 and 51-53 (keyholes, locks, slots, gems, the skull, the hook and ring, and the lever positions), all confirmed by the user against the original.
+  - `EYE_LEVEL_ORNAMENTS` (#15) are centred higher: row 48 of the viewport at D1 (40 of the face's 111 rows), and the same fraction of every other front or side face. They are 4-6, 15-32, 44-45 and 51-53 (keyholes, locks, slots, gems, the skull, the hook and ring, and the lever positions), all confirmed by the user against the original. The champion mirror's frame (decoration 43, `MIRROR_ORNAMENT`) is centred at `MIRROR_LEVEL` (41.5/111) on side faces and on front faces other than D1 straight ahead. That is the height of the straight-on D1 mirror, which the user confirmed (#30); `level(ornament)` picks the fraction.
   - 1500-1510 look like floor-decoration points.
   - **Layout engine** (`Zones.coord`, `Art.coord`): a port of DM's F0635 GET_COORD (ScummVM's DisplayMan::getCoord). It anchors a picture in a zone by the zone's type (0-8 anchors, 9 sizes, 10-18 relative to a grandparent's size), walks up the parents and clips; it returns {x, y, w, h, srcX, srcY} in viewport coordinates. Zone numbers are ScummVM's PC ones: walls 702-717, door frames 718-734, wall portrait 737, stairs front 802-825 and side 826-833, floor pits 852-863, ceiling pits 864-872, door button 1950 (+0 D3R, +1 D3C, +2 D2C, +3 D1C), door panels 3720-3800 (+state for part-open). `RealDungeonTest.wallZonesMatchTheTable` pins the walls.
 - **Ornament lists** (`OrnamentLists`): each map's creature/wall/floor/door ornament lists come straight after its squares.
@@ -140,11 +147,62 @@ Code lives under `src/main/java/dm/`, in three layers.
   - `applyEffect` opens, closes and toggles pits and teleporters (live `pitOpen`/`teleporterOpen`).
 - `Party` holds up to 4 `Champion`s. `recruit(mirror)` adds the champion and marks the `ChampionMirror` as taken, so it renders empty. `facingMirror()` is the untaken mirror on the adjacent wall straight ahead.
 - **Formation:** `members()` is the recruit order, which is also the colour and status-box order. `at(position)` is the formation, using DM's cells: `FRONT_LEFT` 0, `FRONT_RIGHT` 1, `BACK_RIGHT` 2, `BACK_LEFT` 3. `bump(move)` damages the two positions on the side that hit the wall.
-- **Creatures (Sprint 14, no AI yet):** `DungeonMap.groups`/`groupAt`/`hasCreatures`. The party can't step onto a creature square; that's a plain block without a bump (`Party.blockedByCreatures`). Thrown items stop in front and land. Each tick, `DungeonMap.faceParty` turns any group that sees the party along a clear row or column within 3 squares (a stand-in for Sprint 15's AI). Groups are saved (`SaveGames.VERSION` 2). The ASCII map shows them as M.
+- **Creatures:** `DungeonMap.groups`/`groupAt`/`hasCreatures`/`removeGroup`/`allowsCreature` (a map built without a creature list allows any).
+  - The party can't step onto a creature square. That's a plain block without a bump (`Party.blockedByCreatures`), and the group reacts (DM's "party adjacent": it attacks).
+  - Thrown items stop in front and land.
+  - A party landing on a group (by teleporter) deletes it, as DM does.
+  - Groups are saved with the whole AI state (`SaveGames.VERSION` 3). The ASCII map shows them as M.
+  - `Group` keeps what DM keeps in ACTIVE_GROUP: a direction and an aspect per creature (attacking, flipped, jitter), the behaviour (WANDER 0, FLEE 5, ATTACK 6, APPROACH 7), the target, prior and home squares, the last move time and the fleeing delay. `remove(i)` drops a dead creature and closes the gap.
+- **Creature AI** (`CreatureAI`, owned by `Dungeon`): a port of ReDMCSB GROUP1.C F175-F209 and GROUP2.C F230. ReDMCSB wins where ScummVM differs (e.g. F182 clears all four attack flags).
+  - **Timeline:** it runs on DM's timeline of `Event`s (map, square, type, time, ticks, priority), sorted as F234 does: by time, then higher type, then priority.
+    - Types: 29-31 reactions, 32-36 aspect updates, 37 group behaviour, 38-41 creature behaviour.
+    - `Party.tick()` runs the due ones each tick.
+    - `addGroupEvent` is F208: an aspect event goes first when it is due sooner, carrying the delay to the behaviour event in `ticks`.
+  - **`processEvent`** is F209. Its goto labels are the states of a loop (`SET_ATTACK` = T209_044 and so on), so it can be compared line by line with the source.
+  - **Seeing** (F200/F199/F197):
+    - only within the creature's facing quarter (F227);
+    - only up to the sight range minus half the palette index, unless the creature has night vision;
+    - only along an unblocked line. Walls block it, as do closed fake walls and doors 3/4 or fully closed, unless the door design is see-through (portcullis and ra doors).
+  - **Smelling** (F201/F198): the party within (smell + 1)/2 squares, or a fresh enough scent on the square, leading to the next scent.
+  - **Moving** (F202) is never into:
+    - walls, stairs or closed fake walls;
+    - open pits, unless the creature levitates;
+    - the party or other groups;
+    - a door closed beyond the creature's height (non-material creatures pass).
+    Wary creatures (wariness 10+) won't take a teleporter to a map that doesn't allow them.
+  - **`moveGroup`** is F267 for groups:
+    - it follows creature teleporters, turning the group as F262 does, and drops through pits (F191 damage 20);
+    - it checks the plates left and entered, plays the footstep, and moves the group between maps;
+    - leaving or reaching the party's map deactivates or activates the group (F184/F183), and it starts wandering again (F180);
+    - if the party or a group stands where it would land, it waits 5 ticks.
+  - **Attacks** (F207 picks the target with F286/F229; F230 does the damage through F321):
+    - The hit roll: the champion's dexterity (F310) against the creature's dexterity + 2×difficulty, or 1 in 4, then F311 luck at 60.
+    - The wound is chosen from the creature's probabilities.
+    - For attack types other than normal, the attack is scaled by the body part's defense (F313): worn armour, shields in hands with F312 strength, vitality, and minus 8-11 if already wounded.
+    - Wounds are rolled against vitality, and the parry skill (`Champion.PARRY`) lowers the attack.
+    - A hit plays the champion's "ouch" (C09 + index) and may poison (F322).
+    - Gigglers steal from the ready hand instead (DM's slot table is all zeros) and may flee.
+  - **Not done yet:**
+    - Spells and projectiles: `attackRange` is 1 for everyone, so casters approach and fight hand to hand.
+    - Fluxcages, invisibility, freeze life, sleep and parry experience.
+    - Fixed possessions dropped on death, and the party attacking.
+  - Groups on other maps (after the party has been there) take a random step now and then, as in DM.
+  - **Smoke:** a creature that dies (falls, doors) leaves a puff of smoke, DM's smoke explosion (C040, F0190), on its cell or the square's centre (`DungeonMap.Smoke`).
+    - It starts at 110, 190 or 255 by creature size and shrinks by 40 a tick while above 55 (`tickSmoke`, every map, in `Party.tick`), so it lasts 3 to 6 ticks.
+    - `TexturedViewRenderer.drawSmoke` draws it after everything else on the square, at DM's explosion points (G225 centred, G226 left/right column).
+    - The picture is the poison cloud, PC graphic 488 (the explosions are 486 fire, 487 spell and 488 poison; DM's 348-350), in G212's smoke colours.
+    - It's scaled by max(48, size+1) × G216 base scale (16/23/32/32 for D3/D2/D1/D0) / 256, and flipped at random each frame.
+  - Between ticks, `react`, `crushedByDoor`, `settle` and `generate` add to an `Outcome`. The next tick hands it over: damage per member, DM sounds, clicks and whether anything changed.
+- **Scents** (`Party`, DM F267/F315/F316): the last 24 squares walked on, each with a strength.
+  - The square left gains the ticks spent on it, up to 80. A new square starts at 24.
+  - Every 64 ticks all but the party's own square fade by 1, and the oldest goes at 0.
+- **Poison** (DM F322): `Party.poison(member, attack)` does attack/64 damage (at least 1) and queues `Champion.Poison(attack - 1)` 36 ticks later, until it reaches 0. `Party.tick` runs them, and BRO (antivenin) clears them.
+- **Wounds:** `Champion.wounds()` holds DM's 6 bits in slot order (ready hand, action hand, head, torso, legs, feet; `WOUND_SLOTS`). A VI potion heals at least one (F349 and-ing with random bits).
 - **Doors and sensors in `DungeonMap`:**
   - Doors have live state (0 open … 4 closed, 5 broken), seeded from the square byte. `moveDoor`/`toggleDoor` set a target, and `tickDoors()` steps toward it once per game tick. As in DM, the door sound plays on every step except the last (`DoorTick.rattled`), so a full open or close rattles 3 times.
+  - A door closing on a material creature hurts the whole group by about 5 (F191) once the door is down to the creature's height (upward doors) or 1. It then bounces back a step with DM's wooden thud (`DoorTick.thud`, sound 4) and tries again next tick, and the group reacts by moving away (danger on its square).
   - `isPassable` uses the live state, so use it (not `Square.isPassable`) for doors.
-  - Floor sensors have a live `pressed` state: pressed while the party (if `triggeredBy` it) or, for type 1 only (`acceptsItems`), any item is on the square. Becoming pressed fires the effect; a released HOLD sensor clears. Revert swaps pressing and releasing: SET+revert fires on leaving, HOLD+revert clears while pressed (Level 2 (25,3) holds the pit at (24,5) shut). DM's type 2 is party/creature and type 3 party only, so neither counts items.
+  - Floor sensors have a live `pressed` state: pressed while the party (if `triggeredBy` it), a walking creature (types 1, 2 and 7, `acceptsCreatures`; `groupLeft`/`groupArrived` re-check the square) or, for type 1 only (`acceptsItems`), any item is on the square. Becoming pressed fires the effect; a released HOLD sensor clears. Revert swaps pressing and releasing: SET+revert fires on leaving, HOLD+revert clears while pressed (Level 2 (25,3) holds the pit at (24,5) shut). DM's type 2 is party/creature and type 3 party only, so neither counts items.
   - The map tracks the party while it's on it (`partyMoved`, `partyLeft`, `placeParty`). `updateSensors(x, y)` re-checks a square after the party moves, or after `dropItem`/`pickUpItem`. `initSensors` sets the starting state silently after loading.
   - Type-3 (party) sensors need ≥1 champion. In DM an empty party is the ghost Theron.
 - **Floor items:** `FloorItemFinder` puts every object thing on a non-wall square into `DungeonMap`'s piles (`itemsAt`/`addItem`/`takeItem`), one pile per cell (0 NW, 1 NE, 2 SE, 3 SW), with the top item last.
@@ -160,7 +218,8 @@ Code lives under `src/main/java/dm/`, in three layers.
   - `iconOf` comes from the UI (`Art.iconIndex`), because icon numbers live in GRAPHICS.DAT.
 - **`applyEffect`:**
   - doors: set = open, clear = close, toggle;
-  - pits: live `isPitOpen` state, visual only;
+  - pits and teleporters: live state; a group standing there falls or is teleported at once (`CreatureAI.settle`);
+  - corridors: their creature generators make a group (`CreatureAI.generate`, F185), then rest (`reenableGenerators`, run every tick on every map) or stop for good if once-only;
   - wall squares: each AND/OR gate there gets the effect as input bit = cell. A gate is "pressed" while its value equals the target, with the same HOLD/revert rules as plates.
   - Floor plates use it too. HOLD counts as SET.
 - `pressDoorButton` toggles a door.
@@ -180,8 +239,9 @@ Code lives under `src/main/java/dm/`, in three layers.
   - Every move attempt (blocked too) costs each living champion `load*3/maxLoad + 1` stamina (F366). `Party.load` counts the held item for the first member (DM's leader).
   - Stamina spent below 0 hurts by half the shortfall.
   - Food and water start at 1500 + random(256), cap at 2048 and bottom out at -1024.
-  - `Party.feed` / `Upkeep.consume` (F349): food is eaten, a waterskin gives 800 water per draught, a water flask 1600, other potions their DM effect (YA and antivenin do nothing yet), leaving an empty flask. Each plays the swallow (`SOUND_SWALLOW` 678, confirmed by ear), as does drinking at a fountain.
-  - Sleeping, wounds and poison aren't modelled.
+  - `Party.feed` / `Upkeep.consume` (F349): food is eaten, a waterskin gives 800 water per draught, a water flask 1600, other potions their DM effect, leaving an empty flask. BRO (antivenin) cures poison, VI also heals wounds, and YA does nothing yet. Each plays the swallow (`SOUND_SWALLOW` 678, confirmed by ear), as does drinking at a fountain.
+  - Sleeping isn't modelled.
+  - `Party.Tick` carries the creatures' damage and DM sounds as well as upkeep's. `GameScreen.showDamage` stays the one damage funnel.
 - **Death** (ReDMCSB F318/F319/F444):
   - Health 0 is dead. `GameScreen.showDamage` (the one funnel for bumps, falls and starvation) calls `Party.bury()`. Everything the champion carried falls onto their cell of the party's square in DM's drop order, hands last. Their BONES go on top, with charges = member index, for a later altar resurrection. They leave the formation, and the scream plays.
   - A killing blow shows no damage burst. The dead box is graphic 8 with the name. A dead champion's box opens no sheet, and their hands can't be clicked. Upkeep, step costs, falls, bumps and feeding skip the dead. `Party.leader()` is the first living member.
@@ -197,7 +257,7 @@ Code lives under `src/main/java/dm/`, in three layers.
 **`ui/`: draws everything at the original 320×200 resolution**
 - `GameScreen` holds all screen state and click routing, with no Swing. `GameWindow` is a thin wrapper that scales the 320×200 buffer with nearest-neighbour filtering and maps mouse positions back. Tests and scratch renders drive `GameScreen.press`/`render` directly.
 - `GameWindow` runs a game tick every `GameScreen.TICK_MS` (170 ms) through `GameScreen.tick()`. That animates doors and repaints only on change. Tests call `tick()` directly.
-- `FormationBox` (top-right, x 276-319) draws champion colours with graphic 28's icons. Click a champion, then a cell, to swap positions.
+- `FormationBox` (top-right, x 276-319) draws champion colours with graphic 28's icons. Click a champion, then a cell, to swap positions. Empty cells, like empty status boxes, stay black as in DM (#27); only the placeholder art (`!art.available()`) outlines them.
 - Click order:
   1. a hand box in `ChampionBars` (`handAt`), except on the box of the champion whose sheet is open;
   2. an open `CharacterSheet`;
@@ -220,13 +280,18 @@ Code lives under `src/main/java/dm/`, in three layers.
 - **Keyboard** (`KeyMap`, `GameScreen.key`): keys go through the same path as the arrow buttons, lighting the arrow while held. The PC numpad works (7/8/9 turn left, forward, turn right; 4/5/6 left, back, right), with Num Lock off too: keypad keys are told apart by `KEY_LOCATION_NUMPAD`, so the keypad's Left sidesteps while the arrow key's Left turns. The arrow keys work (up/down move, left/right turn), and so do W/A/S/D with Q/E to turn. Keys are ignored while a sheet is open or after the end.
 - Screen regions match the original layout:
   - the dungeon view is the `ViewRenderer.VIEWPORT` rectangle (the character sheet replaces it while open);
-  - the arrows are `MovementPanel.AREA`;
+  - the arrows are `MovementPanel.AREA`, drawn from GRAPHICS.DAT entry 13 (DM's cyan arrows, #28). The click boxes are DM's own (turns from F0365, moves from G0463), and a pressed arrow is highlighted as DM's F0006 does: colour index 4 is XOR-ed over its box, so cyan and black swap. Entry 9 is the spell panel and entry 10 the action panel (PASS), for later sprints;
   - the champion boxes run across the top;
-  - the spell and action areas are drawn as empty outlines for now.
+  - the spell and action areas stay black for now (outlined only with placeholder art).
 - `CharacterSheet` slot positions come from DM's inventory background (graphic 17).
   - On a party member's sheet, clicking a cell (`Action.SLOT`, `slotAt`) picks up, places or swaps through `GameScreen.clickSlot`. A candidate's items can't be touched.
   - The mouth (`Action.MOUTH`, viewport (56,13)) feeds the held item. A member's panel shows DM's food/water panel (graphic 20 keyed on red, labels 30/31 keyed on dark grey, F344 bars); holding the eye (`Action.EYE`, (12,13)) shows skills and statistics instead, and draws the eye looking down to the right (icon 203 via `Art.icon(int)`; 202, the background's own, is the eye not looking). Candidates always show their statistics.
   - An item that doesn't fit stays in hand.
+  - Wounds and poison, as DM's F292 draws them:
+    - a wounded body part's cell gets the red slot box (graphic 34, keyed on colour 12) and, if empty, the wounded outline (icon 212 + 2×slot + 1);
+    - the mouth box is red while the champion is hungry, thirsty or poisoned, and the eye box while any statistic is below its maximum;
+    - a poisoned champion's food/water panel shows the POISONED label (graphic 32 at (112,105));
+    - in the status boxes a wounded hand gets box 34, and the wounded hand outline (213/215) when it is empty.
   - With no sheet open, a click in the bottom of the view (`GameScreen.FLOOR_CLICK_Y` and below) picks up from or drops onto the party square's left or right cell ahead. A click higher up with an item in hand throws it from that side.
   - While an item is held, `GameWindow` hides the OS cursor and `GameScreen` draws `Art.iconSprite` (the icon with background colour 12 transparent) centred on the pointer, on top of everything. Text uses `PixelFont`, a hand-made 5×5 font, because the PC GRAPHICS.DAT has no UI font image.
 - Blocked moves go through `GameScreen.bump()`:
@@ -247,7 +312,7 @@ Code lives under `src/main/java/dm/`, in three layers.
   - **Doors** (F0111): frames from the wall set (front 86, left pillars D1C 87, D2C 88, D3C 89, D3L/R 90, lintels 91/92); the panel 246 + style×3 + (D3 0, D2 1, D1 2), with its decoration painted on by DM's G0207 boxes (G0196 picks the box set; D2/D3 shrunk with DM's palette changes; colour 9 see-through, colour 10 cuts holes) and a broken door cut by mask 439. Part-open doors use zone + state. The button (453) is shrunk for D2/D3 by height.
   - **Mirrors:** at D1 the portrait goes in zone 737 (96,35) and the frame around it; D2/D3 frames are raised to match.
   - **Teleporters** are drawn (as a translucent overlay) only when visible and open. Graphics 70-75 look like DM's field masks and 76/77 like 32×32 field patterns; using them is still to do.
-  - **Creatures** (`drawCreatures`, `CreatureArt`, after ScummVM's F0115 creature block): view squares D3 C/L/R, D2, D1, D0 L/R; positions from DM's coordinate sets G0224 (x centre, bottom y) by cell: quarter-square creatures on their view cell (0-3), half-square ones on a column (0/1) facing you or a row (2 back, 4 front) side-on, full-square and centred ones at 4. Back cells first. The facing difference picks the picture: back (0), side (odd; mirrored at 1), front. D2/D3 shrink to 20/32 and 16/32 with DM's creature palette changes, the transparent colour changed with them.
+  - **Creatures** (`drawCreatures`, `CreatureArt`, after ScummVM's F0115 creature block): view squares D3 C/L/R, D2, D1, D0 L/R; positions from DM's coordinate sets G0224 (x centre, bottom y) by cell: quarter-square creatures on their view cell (0-3), half-square ones on a column (0/1) facing you or a row (2 back, 4 front) side-on, full-square and centred ones at 4. Back cells first. Each creature's own facing difference picks its picture (`creaturePicture`): back (0), side (odd; mirrored at 1), otherwise the attack picture while its aspect says it is attacking, or the front, mirrored when its aspect says so. Its aspect's jitter moves it by DM's G223 shift sets (by depth). D2/D3 shrink to 20/32 and 16/32 with DM's creature palette changes, the transparent colour changed with them.
   - **Colours 9 and 10:** a map's creature types replace them with DM's replacement colour sets (G0220, six light levels each), across the whole viewport, as DM's palette does. `GameScreen.drawView` passes them to `Darkness.apply`, which remaps even at full light. In D2/D3 creature pictures, 9/10 become the set's D2/D3 colour.
   - **Objects** use the zone points, scaled by DM's object scales: 32/32 at D0, then 27/21 (D1 near/far), 18/14 (D2), 12 (D3). Far cells are drawn before a door and near cells after it; items in flight come last. **Floor ornaments** (pressure plates etc.) are 6 pieces each from graphic 385, centred on each depth's mid-square floor line. Graphics 415-420 are the black-flame-pit *ornament*, not pits.
   - **Door design:** `DungeonMap.doorStyle` (bits 8-15 of the map's graphics-set word, chosen by bit 0 of the door thing) picks one of 4 designs (graphics 246 + style×3).

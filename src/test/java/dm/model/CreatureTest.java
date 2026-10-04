@@ -10,7 +10,7 @@ import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
-/** Creatures this sprint: they stand in the way, stop thrown items, and face a party they can see. */
+/** Creatures stand in the way and stop thrown items (their behaviour is in {@link CreatureAITest}). */
 class CreatureTest {
 
     private static final Item SWORD = ItemCatalog.item(Item.Category.WEAPON, 10);
@@ -47,32 +47,6 @@ class CreatureTest {
         }
         assertTrue(map.hasItems(4, 1), "it lands short of the mummies");
         assertFalse(map.hasItems(5, 1));
-    }
-
-    @Test
-    void groupsTurnToFaceAPartyTheyCanSee() {
-        assertTrue(map.faceParty(party.x(), party.y()));
-        assertEquals(Direction.WEST, mummies.facing());
-        assertFalse(map.faceParty(party.x(), party.y()), "already facing it");
-    }
-
-    @Test
-    void groupsDontSeeThroughWallsOrFarAway() {
-        DungeonMap walled = DungeonMap.fromAscii(0, "#########", "#...#...#", "#########");
-        Group g = new Group(CreatureType.SCREAMER, 6, 1, Group.CENTRED, new int[] {50, 0, 0, 0}, 1, Direction.NORTH,
-                List.of());
-        walled.addGroup(g);
-        assertFalse(walled.faceParty(2, 1), "a wall between");
-        DungeonMap open = DungeonMap.fromAscii(0, "########", "#......#", "########");
-        open.addGroup(g);
-        assertFalse(open.faceParty(1, 1), "five squares is too far");
-        assertTrue(open.faceParty(3, 1));
-    }
-
-    @Test
-    void theTickTurnsThem() {
-        party.tick();
-        assertEquals(Direction.WEST, mummies.facing());
     }
 
     @Test

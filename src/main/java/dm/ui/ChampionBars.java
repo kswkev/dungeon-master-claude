@@ -110,8 +110,10 @@ public final class ChampionBars {
             Champion c = i < members.size() ? members.get(i)
                     : i == members.size() ? candidate : null;
             if (c == null) {
-                g.setColor(new Color(40, 40, 40));
-                g.drawRect(x, 0, BOX_W - 1, BOX_H - 1);
+                if (!art.available()) { // DM leaves an empty status box black (#27); placeholders outline it
+                    g.setColor(new Color(40, 40, 40));
+                    g.drawRect(x, 0, BOX_W - 1, BOX_H - 1);
+                }
                 continue;
             }
             if (c.health() == 0 && c != candidate) {
@@ -130,8 +132,8 @@ public final class ChampionBars {
                 }
             } else {
                 PixelFont.draw(g, c.name(), x + 2, 2, COLORS[i]);
-                drawHand(g, shown(c, Slot.READY_HAND), x + READY_HAND_X, HAND_Y);
-                drawHand(g, shown(c, Slot.ACTION_HAND), x + ACTION_HAND_X, HAND_Y);
+                drawHand(g, c, Slot.READY_HAND, x + READY_HAND_X, HAND_Y);
+                drawHand(g, c, Slot.ACTION_HAND, x + ACTION_HAND_X, HAND_Y);
             }
             drawBar(g, x + BAR_X[0], c.health(), c.maxHealth(), COLORS[i]);
             drawBar(g, x + BAR_X[1], c.stamina(), c.maxStamina(), COLORS[i]);
@@ -182,15 +184,25 @@ public final class ChampionBars {
         return item == null ? null : ItemCatalog.shownIn(item, hand);
     }
 
-    private void drawHand(Graphics2D g, Item item, int x, int y) {
-        BufferedImage box = art.image(GraphicsFile.SLOT_BOX);
+    /** DM's red slot box for a wounded hand, and the wounded hand outline (icons 213 and 215) when it's empty. */
+    private static final int SLOT_BOX_WOUNDED = 34;
+    private static final int WOUNDED_HAND_ICON = 213;
+
+    private void drawHand(Graphics2D g, Champion c, Slot hand, int x, int y) {
+        Item item = shown(c, hand);
+        boolean wounded = c.isWounded(hand);
+        BufferedImage box = art.image(wounded ? SLOT_BOX_WOUNDED : GraphicsFile.SLOT_BOX);
         if (box != null) {
             g.drawImage(box, x, y, null);
         } else {
-            g.setColor(Art.PALETTE[1]);
+            g.setColor(Art.PALETTE[wounded ? 8 : 1]);
             g.drawRect(x, y, 17, 17);
         }
         if (item == null) {
+            BufferedImage outline = wounded ? art.icon(WOUNDED_HAND_ICON + (hand == Slot.ACTION_HAND ? 2 : 0)) : null;
+            if (outline != null) {
+                g.drawImage(outline, x + 1, y + 1, null);
+            }
             return;
         }
         BufferedImage icon = art.icon(item);

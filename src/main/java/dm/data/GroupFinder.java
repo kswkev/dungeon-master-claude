@@ -43,7 +43,7 @@ final class GroupFinder {
         }
         int cells = (words[2] >>> 8) & 0xFF;
         int attributes = words[7];
-        int count = ((attributes >>> 5) & 3) + 1;
+        int count = ((attributes >>> 5) & 3) + 1; // bits 0-3 are the behaviour
         Direction facing = Direction.fromIndex((attributes >>> 8) & 3);
         int[] health = {words[3], words[4], words[5], words[6]};
         List<Item> possessions = new ArrayList<>();
@@ -53,6 +53,6 @@ final class GroupFinder {
                 possessions.add(item);
             }
         }
-        return new Group(type, x, y, cells, health, count, facing, possessions);
+        return new Group(type, x, y, cells, health, count, facing, attributes & 15, possessions);
     }
 }

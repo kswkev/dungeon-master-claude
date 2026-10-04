@@ -226,6 +226,94 @@ class RealDungeonTest {
         assertEquals(15, saves.load(1).map().groups().size());
     }
 
+    /**
+     * Sprint 15: left alone with a champion beside the mummy at (1,19), Level
+     * 2's creatures wander, and the mummy finds the party and attacks it.
+     */
+    @Test
+    void level2sCreaturesComeAlive() {
+        Party p = level2(3, 19, Direction.WEST);
+        p.setRandom(new java.util.Random(1));
+        p.recruit(dungeon.maps().get(0).mirrors().get(0));
+        DungeonMap level2 = p.map();
+        java.util.Map<dm.model.Group, String> start = new java.util.HashMap<>();
+        level2.groups().forEach(g -> start.put(g, g.x() + "," + g.y()));
+        int damage = 0;
+        for (int t = 0; t < 1500 && p.members().get(0).health() > 0; t++) {
+            Party.Tick tick = p.tick();
+            if (tick.damage() != null) {
+                damage += tick.damage()[0];
+            }
+        }
+        long moved = level2.groups().stream().filter(g -> !start.get(g).equals(g.x() + "," + g.y())).count();
+        assertTrue(moved > 0, "groups wander");
+        assertTrue(damage > 0, "the mummy attacks");
+    }
+
+    /** Sprint 15: the original's 50 creature generators sit on corridors, each making a creature its map allows. */
+    @Test
+    void creatureGenerators() {
+        int count = 0;
+        for (DungeonMap map : dungeon.maps()) {
+            for (dm.model.FloorSensor s : map.sensors()) {
+                if (s.type() == dm.model.FloorSensor.TYPE_GENERATOR) {
+                    count++;
+                    dm.model.CreatureType type = dm.model.CreatureType.of(s.data());
+                    assertNotNull(type);
+                    assertTrue(map.allowsCreature(type), type + " on level " + (map.level() + 1));
+                    assertEquals(dm.model.SquareType.CORRIDOR, map.get(s.x(), s.y()).type());
+                }
+            }
+        }
+        assertEquals(50, count);
+        DungeonMap level3 = dungeon.maps().get(2);
+        assertTrue(level3.sensors().stream().anyMatch(s -> s.type() == dm.model.FloorSensor.TYPE_GENERATOR
+                && s.x() == 24 && s.y() == 28 && dm.model.CreatureType.of(s.data()) == dm.model.CreatureType.TROLIN));
+    }
+
+    /**
+     * #27, #28, #30 on the user's screenshots: before anyone joins, the
+     * status boxes, formation box and spell/action areas are black; the arrow
+     * panel is DM's cyan picture, its pressed arrow inverted; and the mirror
+     * on the side wall from (9,4) facing east has its frame from row 30 (it
+     * was 43, the original's is 31).
+     */
+    @Test
+    void theScreenMatchesTheOriginalBeforeRecruiting() {
+        assumeTrue(Files.exists(GRAPHICS), "needs the original GRAPHICS.DAT");
+        Art art = Art.load(GRAPHICS);
+        Party p = new Party(dungeon.maps(), 0, 9, 4, Direction.EAST);
+        GameScreen s = new GameScreen(p, art, false);
+        BufferedImage img = render(s);
+        for (int[] at : new int[][] {{0, 0}, {68, 28}, {276, 4}, {233, 42}, {233, 77}, {319, 122}}) {
+            assertEquals(0, img.getRGB(at[0], at[1]) & 0xFFFFFF, "black at " + at[0] + "," + at[1]);
+        }
+        int frame = img.getRGB(233, 124) & 0xFFFFFF;
+        assertTrue((frame >> 16 & 255) < 80 && (frame >> 8 & 255) > 150 && (frame & 255) > 150,
+                "the arrow panel's cyan frame: " + Integer.toHexString(frame));
+        int mirrorTop = -1;
+        for (int y = 33; y < 169 && mirrorTop < 0; y++) {
+            for (int x = 38; x < 54; x++) {
+                int rgb = img.getRGB(x, y) & 0xFFFFFF;
+                int r = rgb >> 16 & 255;
+                int g = rgb >> 8 & 255;
+                if (r > 100 && g < 90 && r > g + 40) {
+                    mirrorTop = y - 33;
+                    break;
+                }
+            }
+        }
+        assertTrue(mirrorTop >= 28 && mirrorTop <= 32, "mirror frame top at row " + mirrorTop);
+    }
+
+    private static BufferedImage render(GameScreen s) {
+        BufferedImage img = new BufferedImage(320, 200, BufferedImage.TYPE_INT_RGB);
+        Graphics2D g = img.createGraphics();
+        s.render(g);
+        g.dispose();
+        return img;
+    }
+
     /** Sprint 14: DM's wall zones put every wall piece where our fallback table does. */
     @Test
     void wallZonesMatchTheTable() throws Exception {

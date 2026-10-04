@@ -168,7 +168,15 @@ public final class DungeonMap implements Serializable {
 
     /** Which of DM's 4 door designs the door at (x, y) uses: 0 grate, 1 wood, 2 iron, 3 ra. */
     public int doorStyle(int x, int y) {
-        return doorStyles != null && inBounds(x, y) ? doorStyles[x][y] : 0;
+        return doorStyles != null && inBounds(x, y) ? doorStyles[x][y] & 3 : 0;
+    }
+
+    /** Bit 4 of a door's style entry: the door opens upward (DM's door bit 5), so a short creature fits under it part-open. */
+    public static final int DOOR_VERTICAL = 0x10;
+
+    /** Whether the door at (x, y) slides up rather than sideways. */
+    public boolean doorOpensVertically(int x, int y) {
+        return doorStyles != null && inBounds(x, y) && (doorStyles[x][y] & DOOR_VERTICAL) != 0;
     }
 
     /** Live state of the door at (x, y): 0 open, 1-3 part open, 4 closed, 5 broken. */
@@ -205,18 +213,39 @@ public final class DungeonMap implements Serializable {
      * rattled. As in DM, a door rattles on every step except the last one,
      * where it settles fully open or shut, so a full 4-step move rattles 3 times.
      */
-    public record DoorTick(boolean moved, boolean rattled) {
-        public static final DoorTick NOTHING = new DoorTick(false, false);
+    public record DoorTick(boolean moved, boolean rattled, boolean thud) {
+        public static final DoorTick NOTHING = new DoorTick(false, false, false);
+
+        public DoorTick(boolean moved, boolean rattled) {
+            this(moved, rattled, false);
+        }
     }
 
-    /** Moves every door that isn't at its target one step. */
+    /**
+     * Moves every door that isn't at its target one step. A door closing on
+     * creatures (not ghostly ones) hurts them and bounces back a step once
+     * it is down to their height, with a wooden thud, as DM's door event
+     * does; it keeps trying until they die or move away.
+     */
     public DoorTick tickDoors() {
         boolean moved = false;
         boolean rattled = false;
+        boolean thud = false;
         for (int x = 0; x < width; x++) {
             for (int y = 0; y < height; y++) {
                 int state = doorState[x][y];
                 int target = doorTarget[x][y];
+                Group crushed = target > state && state != DOOR_BROKEN ? groupAt(x, y) : null;
+                if (crushed != null && !crushed.type().nonMaterial()
+                        && state >= (doorOpensVertically(x, y) ? crushed.type().height() : 1)) {
+                    if (party != null && dungeon != null) {
+                        dungeon.creatures().crushedByDoor(party, this, x, y);
+                    }
+                    doorState[x][y] = Math.max(DOOR_OPEN, state - 1);
+                    moved = true;
+                    thud = true;
+                    continue;
+                }
                 if (state != target && state != DOOR_BROKEN) {
                     int next = state + Integer.signum(target - state);
                     doorState[x][y] = next;
@@ -225,7 +254,7 @@ public final class DungeonMap implements Serializable {
                 }
             }
         }
-        return moved ? new DoorTick(true, rattled) : DoorTick.NOTHING;
+        return moved ? new DoorTick(true, rattled, thud) : DoorTick.NOTHING;
     }
 
     // ---- floor sensors -----------------------------------------------------
@@ -299,7 +328,9 @@ public final class DungeonMap implements Serializable {
     private boolean pressedNow(FloorSensor s) {
         boolean partyOn = party != null && party.map() == this && party.x() == s.x() && party.y() == s.y()
                 && s.triggeredBy(party);
-        return partyOn || s.acceptsItems() && hasItems(s.x(), s.y());
+        Group g = groupAt(s.x(), s.y());
+        boolean creatureOn = g != null && !g.type().levitates() && s.acceptsCreatures();
+        return partyOn || creatureOn || s.acceptsItems() && hasItems(s.x(), s.y());
     }
 
     /**
@@ -355,10 +386,11 @@ public final class DungeonMap implements Serializable {
 
     /**
      * Sends a sensor effect to square (x, y): a door opens (SET), closes
-     * (CLEAR) or toggles; a pit or teleporter opens, closes or toggles; on a
-     * wall square every AND/OR gate gets the effect as input {@code cell}.
-     * Other targets (creatures...) don't respond yet. A pit opening under
-     * the party drops it on its next {@link Party#settle()}.
+     * (CLEAR) or toggles; a pit or teleporter opens, closes or toggles (and
+     * a group on it falls or is sent on at once); on a wall square every
+     * AND/OR gate gets the effect as input {@code cell}; a corridor's
+     * creature generators make their creatures. A pit opening under the
+     * party drops it on its next {@link Party#settle()}.
      */
     private void applyEffect(int x, int y, int cell, FloorSensor.Effect effect, Outcome out, int depth) {
         if (!inBounds(x, y) || depth > MAX_CHAIN) {
@@ -370,16 +402,30 @@ public final class DungeonMap implements Serializable {
                 case CLEAR -> moveDoor(x, y, false);
                 case TOGGLE -> toggleDoor(x, y);
             };
-            case PIT -> pitOpen[x][y] = switch (effect) {
-                case SET, HOLD -> true;
-                case CLEAR -> false;
-                case TOGGLE -> !pitOpen[x][y];
-            };
-            case TELEPORTER -> teleporterOpen[x][y] = switch (effect) {
-                case SET, HOLD -> true;
-                case CLEAR -> false;
-                case TOGGLE -> !teleporterOpen[x][y];
-            };
+            case PIT -> {
+                pitOpen[x][y] = switch (effect) {
+                    case SET, HOLD -> true;
+                    case CLEAR -> false;
+                    case TOGGLE -> !pitOpen[x][y];
+                };
+                settleCreatures(x, y);
+            }
+            case TELEPORTER -> {
+                teleporterOpen[x][y] = switch (effect) {
+                    case SET, HOLD -> true;
+                    case CLEAR -> false;
+                    case TOGGLE -> !teleporterOpen[x][y];
+                };
+                settleCreatures(x, y);
+            }
+            case CORRIDOR -> {
+                for (FloorSensor s : new ArrayList<>(sensors)) {
+                    if (s.x() == x && s.y() == y && s.type() == FloorSensor.TYPE_GENERATOR && s.enabled()
+                            && party != null && dungeon != null) {
+                        dungeon.creatures().generate(party, this, s);
+                    }
+                }
+            }
             case WALL -> {
                 for (Direction side : Direction.values()) {
                     for (WallSensor gate : wallSensors(x, y, side)) {
@@ -506,7 +552,7 @@ public final class DungeonMap implements Serializable {
 
     private final List<Group> groups = new ArrayList<>();
     /** The creature types this map allows (its creature list), which decide DM's palette colours 9 and 10. */
-    private List<CreatureType> creatureTypes = List.of();
+    private List<CreatureType> creatureTypes;
 
     public void addGroup(Group g) {
         if (inBounds(g.x(), g.y())) {
@@ -533,42 +579,112 @@ public final class DungeonMap implements Serializable {
         return groupAt(x, y) != null;
     }
 
-    /** How far a group can see the party along a row or column, until creature AI comes. */
-    public static final int CREATURE_SIGHT = 3;
+    // ---- smoke ---------------------------------------------------------------
 
     /**
-     * A stand-in for DM's creature AI: every group that can see the party
-     * along a clear row or column, within {@link #CREATURE_SIGHT} squares,
-     * turns to face it. Returns whether any turned.
+     * DM's smoke explosion (C040), left where a creature dies: on a cell of
+     * the square ({@code cell} 0-3) or its centre ({@link Group#CENTRED}).
+     * It starts at 110, 190 or 255 by the creature's size and fades by 40
+     * a tick while above 55 (F0220), so it lasts 3 to 6 ticks.
      */
-    public boolean faceParty(int px, int py) {
-        boolean turned = false;
-        for (Group g : groups) {
-            int dx = px - g.x();
-            int dy = py - g.y();
-            if ((dx != 0) == (dy != 0) || Math.abs(dx) + Math.abs(dy) > CREATURE_SIGHT) {
-                continue;
-            }
-            Direction toward = dx > 0 ? Direction.EAST : dx < 0 ? Direction.WEST : dy > 0 ? Direction.SOUTH : Direction.NORTH;
-            boolean clear = true;
-            for (int i = 1; i < Math.abs(dx) + Math.abs(dy); i++) {
-                int x = g.x() + toward.dx * i;
-                int y = g.y() + toward.dy * i;
-                if (!isPassable(x, y)) {
-                    clear = false;
-                    break;
-                }
-            }
-            if (clear && g.facing() != toward) {
-                g.face(toward);
-                turned = true;
-            }
+    public static final class Smoke implements Serializable {
+        private static final long serialVersionUID = 1L;
+        private final int x;
+        private final int y;
+        private final int cell;
+        private int attack;
+
+        Smoke(int x, int y, int cell, int attack) {
+            this.x = x;
+            this.y = y;
+            this.cell = cell;
+            this.attack = attack;
         }
-        return turned;
+
+        public int cell() {
+            return cell;
+        }
+
+        public boolean centred() {
+            return cell == Group.CENTRED;
+        }
+
+        /** DM's explosion attack: how big the puff is drawn. */
+        public int attack() {
+            return attack;
+        }
     }
 
+    private final List<Smoke> smoke = new ArrayList<>();
+
+    void addSmoke(int x, int y, int cell, int attack) {
+        smoke.add(new Smoke(x, y, cell, attack));
+    }
+
+    /** The puffs of smoke on (x, y), oldest first. */
+    public List<Smoke> smokeAt(int x, int y) {
+        List<Smoke> here = new ArrayList<>();
+        for (Smoke s : smoke) {
+            if (s.x == x && s.y == y) {
+                here.add(s);
+            }
+        }
+        return here;
+    }
+
+    /** One game tick of DM's smoke event: each puff shrinks by 40, or goes once down to 55. Returns whether any was there. */
+    boolean tickSmoke() {
+        boolean any = !smoke.isEmpty();
+        smoke.removeIf(s -> {
+            if (s.attack > 55) {
+                s.attack -= 40;
+                return false;
+            }
+            return true;
+        });
+        return any;
+    }
+
+    /** A pit or teleporter has just changed under (x, y): a group standing there falls or is teleported. */
+    private void settleCreatures(int x, int y) {
+        if (party != null && dungeon != null && groupAt(x, y) != null) {
+            dungeon.creatures().settle(party, this, x, y);
+        }
+    }
+
+    /** Brings back generators whose rest is over (DM's event 65). */
+    void reenableGenerators(long now) {
+        for (FloorSensor s : sensors) {
+            s.reenable(now);
+        }
+    }
+
+    /** Takes {@code g} off this map (it died, or went to another map). */
+    void removeGroup(Group g) {
+        groups.remove(g);
+    }
+
+    /**
+     * A group has left (x, y) or arrived there: the floor sensors on the
+     * square are checked again, since creatures press DM's "anything",
+     * "party or creature" and "creature" plates (types 1, 2 and 7).
+     */
+    StepResult groupLeft(int x, int y) {
+        Outcome out = new Outcome();
+        updateSensors(x, y, out);
+        return out.result();
+    }
+
+    StepResult groupArrived(int x, int y) {
+        return groupLeft(x, y);
+    }
+
+    /** Whether DM lets {@code type} live on this map (its creature list); a map built without one allows any. */
+    public boolean allowsCreature(CreatureType type) {
+        return creatureTypes == null || creatureTypes.contains(type);
+    }
     public List<CreatureType> creatureTypes() {
-        return creatureTypes;
+        return creatureTypes == null ? List.of() : creatureTypes;
     }
 
     public void setCreatureTypes(List<CreatureType> types) {

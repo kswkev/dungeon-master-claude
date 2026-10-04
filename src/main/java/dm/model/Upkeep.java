@@ -1,5 +1,7 @@
 package dm.model;
 
+import java.util.Random;
+
 /**
  * What time does to a champion, and eating and drinking, ported from
  * ReDMCSB (the DM 1.2+ rules, which the PC version follows):
@@ -8,8 +10,8 @@ package dm.model;
  *   <li>{@link #stepCost}: F366, paid by every living champion on every move attempt;</li>
  *   <li>{@link #consume}: F349, putting the held item in a champion's mouth.</li>
  * </ul>
- * Sleeping, wounds, poison and temporary experience aren't modelled yet, so
- * those branches of DM's code are left out.
+ * Sleeping and temporary experience aren't modelled yet, so those branches
+ * of DM's code are left out. (Poison runs on its own clock, in {@link Party#tick}.)
  */
 public final class Upkeep {
 
@@ -128,6 +130,11 @@ public final class Upkeep {
      * if it can't go in the mouth (or is an empty waterskin).
      */
     public static Item consume(Champion c, Item item) {
+        return consume(c, item, new Random());
+    }
+
+    /** {@link #consume(Champion, Item)}, with the random numbers a VI potion's wound healing uses. */
+    public static Item consume(Champion c, Item item, Random random) {
         if (!ItemCatalog.isConsumable(item)) {
             return item;
         }
@@ -139,7 +146,7 @@ public final class Upkeep {
             c.setWater(c.water() + 800);
             left = item.withCharges(item.charges() - 1);
         } else if (item.category() == Item.Category.POTION) {
-            drinkPotion(c, item);
+            drinkPotion(c, item, random);
             left = ItemCatalog.item(Item.Category.POTION, ItemCatalog.EMPTY_FLASK);
         } else {
             c.setFood(c.food() + ItemCatalog.foodValue(item));
@@ -162,8 +169,12 @@ public final class Upkeep {
         return item;
     }
 
-    /** The potion effects that need nothing not yet modelled (YA's shield and antivenin's cure do nothing yet). */
-    private static void drinkPotion(Champion c, Item potion) {
+    /**
+     * The potion effects that need nothing not yet modelled (YA's shield does
+     * nothing yet). Antivenin (BRO) cures poison; a VI potion also heals wounds, at
+     * least one if any, as DM's F349 does by and-ing them with random bits.
+     */
+    private static void drinkPotion(Champion c, Item potion, Random random) {
         int power = potion.charges();
         int counter = ((511 - power) / (32 + (power + 1) / 8)) >> 1;
         int adjusted = power / 25 + 8;
@@ -173,7 +184,18 @@ public final class Upkeep {
             case "DANE POTION" -> c.raiseStat(Champion.Stat.WISDOM, adjusted);
             case "NETA POTION" -> c.raiseStat(Champion.Stat.VITALITY, adjusted);
             case "MON POTION" -> c.addStamina(c.rawMaxStamina() / counter);
-            case "VI POTION" -> c.addHealth(c.maxHealth() / counter);
+            case "VI POTION" -> {
+                c.addHealth(c.maxHealth() / counter);
+                int wounds = c.wounds();
+                int iterations = Math.max(1, power / 42);
+                for (int tries = 10; wounds != 0 && wounds == c.wounds() && tries > 0; tries--) {
+                    for (int i = 0; i < iterations; i++) {
+                        c.setWounds(c.wounds() & random.nextInt(65536));
+                    }
+                    iterations = 1;
+                }
+            }
+            case "BRO POTION" -> c.unpoison(); // antivenin
             case "EE POTION" -> {
                 int mana = Math.min(900, c.mana() + adjusted + (adjusted - 8));
                 if (mana > c.maxMana()) {

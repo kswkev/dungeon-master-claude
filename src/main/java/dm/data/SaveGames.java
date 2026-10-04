@@ -31,7 +31,7 @@ public final class SaveGames {
     public static final int SLOTS = 4;
     static final String MAGIC = "DMREMAKE-SAVE";
     /** Bump when the saved classes change incompatibly; older saves are then refused. */
-    static final int VERSION = 2; // 2: creature groups (Sprint 14)
+    static final int VERSION = 3; // 2: creature groups (Sprint 14); 3: creature AI, wounds, poison (Sprint 15)
 
     /** What a slot button shows without loading the whole game. */
     public record Header(int level, long gameTime, long savedAt, List<String> champions) implements Serializable {

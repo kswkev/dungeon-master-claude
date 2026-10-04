@@ -45,6 +45,60 @@ public enum CreatureType {
     private static final int ATTACK = 0x0020;
     private static final int SPECIAL_D2_FRONT = 0x0080;
     private static final int SPECIAL_D2_FRONT_IS_FLIPPED = 0x0100;
+    private static final int FLIP_ATTACK = 0x0200;
+    private static final int FLIP_DURING_ATTACK = 0x0400;
+
+    // Attribute bits (G0243 Attributes).
+    private static final int SIDE_ATTACK = 0x0004;
+    private static final int PREFER_BACK_ROW = 0x0008;
+    private static final int ATTACK_ANY_CHAMPION = 0x0010;
+    private static final int LEVITATION = 0x0020;
+    private static final int NON_MATERIAL = 0x0040;
+    private static final int SEE_INVISIBLE = 0x0800;
+    private static final int NIGHT_VISION = 0x1000;
+    private static final int ARCHENEMY = 0x2000;
+
+    /** DM's movement ticks for a creature that never moves (Black Flame). */
+    public static final int IMMOBILE = 255;
+
+    /**
+     * The rest of G0243, per type in enum order: attack sound ordinal,
+     * movement ticks, attack ticks, defense, base health, attack, poison
+     * attack, dexterity, ranges, properties, resistances, animation ticks,
+     * wound probabilities, attack type. The values come from ScummVM's DM engine.
+     */
+    private static final int[][] INFO = {
+            {4, 8, 20, 55, 150, 150, 240, 55, 0x1153, 0x299B, 0x0876, 0x0254, 0xFD40, 4},
+            {0, 15, 32, 20, 110, 80, 15, 20, 0x3132, 0x33A9, 0x0E42, 0x0384, 0xFC41, 3},
+            {6, 3, 5, 50, 10, 10, 0, 110, 0x1376, 0x710A, 0x0235, 0x0222, 0xFD20, 0},
+            {0, 10, 21, 30, 40, 58, 0, 80, 0x320A, 0x96AA, 0x0B3C, 0x0113, 0xF910, 5},
+            {1, 9, 8, 45, 101, 90, 0, 65, 0x1554, 0x58FF, 0x0A34, 0x0143, 0xFE93, 4},
+            {0, 20, 18, 100, 60, 30, 0, 30, 0x1232, 0x4338, 0x0583, 0x0265, 0xFFD6, 3},
+            {3, 120, 10, 5, 165, 5, 0, 5, 0x1111, 0x10F1, 0x0764, 0x02F2, 0xFC84, 6},
+            {7, 185, 15, 170, 50, 40, 5, 10, 0x1463, 0x25C4, 0x06E3, 0x01F4, 0xFD93, 4},
+            {2, 11, 16, 15, 30, 55, 0, 80, 0x1423, 0x4664, 0x0FC8, 0x0116, 0xFB30, 6},
+            {10, 21, 14, 240, 120, 219, 0, 35, 0x1023, 0x3BFF, 0x0FF7, 0x04F3, 0xF920, 3},
+            {2, 17, 12, 25, 33, 20, 0, 40, 0x1224, 0x5497, 0x0F15, 0x0483, 0xFB20, 3},
+            {0, 255, 8, 45, 80, 105, 0, 60, 0x1314, 0x55A5, 0x0FF9, 0x0114, 0xFD95, 1},
+            {11, 7, 7, 22, 20, 22, 0, 80, 0x1013, 0x6596, 0x0F63, 0x0132, 0xFA30, 4},
+            {9, 5, 10, 42, 39, 90, 100, 88, 0x1343, 0x5734, 0x0638, 0x0112, 0xFA30, 4},
+            {0, 10, 20, 47, 44, 75, 0, 90, 0x4335, 0xD952, 0x035B, 0x0664, 0xFD60, 5},
+            {5, 18, 19, 72, 70, 45, 35, 35, 0x1AA1, 0x15AB, 0x0B93, 0x0253, 0xFFC5, 4},
+            {10, 13, 8, 28, 20, 25, 0, 41, 0x1343, 0x2148, 0x0321, 0x0332, 0xFC30, 3},
+            {0, 1, 16, 180, 8, 28, 20, 150, 0x1432, 0x19FD, 0x0004, 0x0112, 0xF710, 4},
+            {11, 14, 6, 140, 60, 105, 0, 70, 0x1005, 0x7AFF, 0x0FFA, 0x0143, 0xFA30, 4},
+            {0, 5, 18, 15, 33, 61, 0, 65, 0x3258, 0xAC77, 0x0F56, 0x0117, 0xFC40, 5},
+            {8, 25, 25, 75, 144, 66, 0, 50, 0x1381, 0x7679, 0x0EA7, 0x0345, 0xFD93, 3},
+            {3, 7, 15, 33, 77, 130, 0, 60, 0x1592, 0x696A, 0x0859, 0x0224, 0xFC30, 4},
+            {0, 10, 14, 68, 100, 100, 0, 75, 0x4344, 0xBDF9, 0x0A5D, 0x0124, 0xF920, 3},
+            {0, 12, 22, 255, 180, 210, 0, 130, 0x6369, 0xFF37, 0x0FBF, 0x0564, 0xFB52, 5},
+            {1, 13, 28, 110, 255, 255, 0, 70, 0x3645, 0xBF7C, 0x06CD, 0x0445, 0xFC30, 4},
+            {0, 12, 22, 255, 180, 210, 0, 130, 0x6369, 0xFF37, 0x0FBF, 0x0564, 0xFB52, 5},
+            {0, 12, 22, 255, 180, 210, 0, 130, 0x6369, 0xFF37, 0x0FBF, 0x0564, 0xFB52, 5},
+    };
+
+    /** DM's sound for each attack sound ordinal (G0244, PC version). */
+    private static final int[] ATTACK_SOUNDS = {3, 7, 14, 15, 19, 21, 29, 30, 31, 4, 16};
 
     private final String displayName;
     private final int attributes;
@@ -177,5 +231,167 @@ public enum CreatureType {
 
     public int attackHeight() {
         return attackHeight;
+    }
+
+    // ---- G0243 creature info: how the creature behaves and fights -----------
+
+    private int info(int field) {
+        return INFO[ordinal()][field];
+    }
+
+    /** Ticks between moves, {@link #IMMOBILE} for a creature that never moves. */
+    public int movementTicks() {
+        return info(1);
+    }
+
+    /** The fewest ticks between two attacks. */
+    public int attackTicks() {
+        return info(2);
+    }
+
+    public int defense() {
+        return info(3);
+    }
+
+    public int baseHealth() {
+        return info(4);
+    }
+
+    public int attack() {
+        return info(5);
+    }
+
+    public int poisonAttack() {
+        return info(6);
+    }
+
+    public int dexterity() {
+        return info(7);
+    }
+
+    public int sightRange() {
+        return info(8) & 15;
+    }
+
+    public int smellRange() {
+        return (info(8) >> 8) & 15;
+    }
+
+    /** 1 for melee; more for creatures that cast spells (which they don't yet). */
+    public int attackRange() {
+        return (info(8) >> 12) & 15;
+    }
+
+    /** Experience a champion earns (in parry) for being attacked by this type. */
+    public int experience() {
+        return (info(9) >> 8) & 15;
+    }
+
+    public int fearResistance() {
+        return (info(9) >> 4) & 15;
+    }
+
+    /** DM's wariness: types of 10 and up won't take a teleporter to a map they aren't allowed on. */
+    public int wariness() {
+        return (info(9) >> 12) & 15;
+    }
+
+    public int poisonResistance() {
+        return (info(10) >> 8) & 15;
+    }
+
+    /** Animation ticks: bits 0-3 between attacks' looks, 4-7 idle, 8-11 attacking. */
+    public int animationTicks() {
+        return info(11);
+    }
+
+    /** Four 4-bit chances to wound the head, legs, torso and feet (bits 15-12, 11-8, 7-4, 3-0). */
+    public int woundProbabilities() {
+        return info(12);
+    }
+
+    /** DM's attack type: 0 normal, 1 fire, 2 self, 3 blunt, 4 sharp, 5 magic, 6 psychic, 7 lightning. */
+    public int attackType() {
+        return info(13);
+    }
+
+    /** DM's sound index for this type's attack, or -1 for none. */
+    public int attackSound() {
+        int ordinal = info(0);
+        return ordinal == 0 ? -1 : ATTACK_SOUNDS[ordinal - 1];
+    }
+
+    /** DM's sound index for this type moving (F0514), or -1 for a silent one. */
+    public int movementSound() {
+        return switch (this) {
+            case GIGGLER, STONE_GOLEM, MUMMY, VEXIRK, DEMON -> 24;
+            case GIANT_SCORPION, PAIN_RAT, RUSTER, SCREAMER, ROCKPILE, MAGENTA_WORM, OITU -> 26;
+            case RED_DRAGON -> 32;
+            case SKELETON -> 33;
+            case ANIMATED_ARMOUR -> 22;
+            case SWAMP_SLIME, WATER_ELEMENTAL -> 27;
+            case COUATL, GIANT_WASP -> 23;
+            default -> -1;
+        };
+    }
+
+    /** Can attack (and see) in every direction, not just the way it faces. */
+    public boolean sideAttack() {
+        return (attributes & SIDE_ATTACK) != 0;
+    }
+
+    public boolean prefersBackRow() {
+        return (attributes & PREFER_BACK_ROW) != 0;
+    }
+
+    public boolean attacksAnyChampion() {
+        return (attributes & ATTACK_ANY_CHAMPION) != 0;
+    }
+
+    /** Flies: crosses open pits. */
+    public boolean levitates() {
+        return (attributes & LEVITATION) != 0;
+    }
+
+    /** Passes through closed doors, and a closing door can't hurt it. */
+    public boolean nonMaterial() {
+        return (attributes & NON_MATERIAL) != 0;
+    }
+
+    public boolean seesInvisible() {
+        return (attributes & SEE_INVISIBLE) != 0;
+    }
+
+    /** Sees as far in the dark as in the light. */
+    public boolean nightVision() {
+        return (attributes & NIGHT_VISION) != 0;
+    }
+
+    /** Lord Chaos: can't be hurt and can jump two squares. */
+    public boolean archenemy() {
+        return (attributes & ARCHENEMY) != 0;
+    }
+
+    /** How tall the creature is (attribute bits 7-8): a door that opens upward must be raised past it. */
+    public int height() {
+        return (attributes >> 7) & 3;
+    }
+
+    public boolean flipsToAttack() {
+        return (graphicInfo & FLIP_ATTACK) != 0;
+    }
+
+    public boolean flipsDuringAttack() {
+        return (graphicInfo & FLIP_DURING_ATTACK) != 0;
+    }
+
+    /** Random sideways jitter of the picture, 0-3 pixels (graphic info bits 12-13). */
+    public int xJitter() {
+        return (graphicInfo >> 12) & 3;
+    }
+
+    /** Random vertical jitter of the picture, 0-3 pixels (graphic info bits 14-15). */
+    public int yJitter() {
+        return (graphicInfo >> 14) & 3;
     }
 }

@@ -16,6 +16,9 @@ import java.util.List;
  *           (1-based into the map's list)
  *   word 3  bits 6-10 target X, bits 11-15 target Y
  * </pre>
+ * A creature generator (type 6) uses the fields differently: word 1's data
+ * is the creature type, word 2 bits 7-10 the count, and word 3 holds the
+ * health multiplier (bits 4-7) and the ticks before it works again (8-15).
  * The layout was checked against the original Level 1 plate at (6,9), which
  * decodes to "party, set, target door (5,9), square pressure plate".
  */
@@ -54,6 +57,9 @@ final class FloorSensorFinder {
                 SensorBits.audible(attributes),
                 (target >>> 6) & 0x1F,
                 target >>> 11,
-                ornament);
+                ornament,
+                (words[1] >>> 7) & 0x1FF,
+                (attributes >>> 7) & 0xF,
+                target);
     }
 }
