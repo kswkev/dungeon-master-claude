@@ -441,58 +441,91 @@ public final class TexturedViewRenderer implements ViewRenderer {
             return;
         }
         CreatureType type = group.type();
-        int delta = Math.floorMod(fwd.ordinal() - group.facing().ordinal(), 4);
-        boolean side = (delta & 1) != 0;
-        CreatureType.View view = side && type.hasSide() ? CreatureType.View.SIDE
-                : delta == 0 && type.hasBack() ? CreatureType.View.BACK : CreatureType.View.FRONT;
-        boolean flip = view == CreatureType.View.SIDE && delta == 1;
-        if (d == 2 && view == CreatureType.View.FRONT && type.specialD2Front() && type.specialD2FrontIsFlipped()) {
-            flip = true;
-        }
-        BufferedImage img = creatureArt.picture(type, view, Math.max(d, 1), flip, map);
-        if (img == null) {
-            return;
-        }
-        List<Integer> back = new ArrayList<>();
-        List<Integer> front = new ArrayList<>();
+        // {coordinate cell, creature} for the back row, then the front row.
+        List<int[]> back = new ArrayList<>();
+        List<int[]> front = new ArrayList<>();
         switch (type.size()) {
-            case FULL -> front.add(4);
+            case FULL -> front.add(new int[] {4, 0});
             case HALF -> {
+                boolean side = (delta(fwd, group, 0) & 1) != 0;
                 if (group.centred()) {
-                    front.add(side ? 3 : 4);
+                    front.add(new int[] {side ? 3 : 4, 0});
                 } else {
                     for (int i = 0; i < group.count(); i++) {
                         int vc = fwd.viewCellOf(group.cellOf(i));
                         if (side) {
-                            (vc <= 1 ? back : front).add(vc <= 1 ? 2 : 4);
+                            (vc <= 1 ? back : front).add(new int[] {vc <= 1 ? 2 : 4, i});
                         } else {
-                            front.add(vc == 0 || vc == 3 ? 0 : 1);
+                            front.add(new int[] {vc == 0 || vc == 3 ? 0 : 1, i});
                         }
                     }
                 }
             }
             case QUARTER -> {
                 if (group.centred()) {
-                    front.add(4);
+                    front.add(new int[] {4, 0});
                 } else {
                     for (int i = 0; i < group.count(); i++) {
                         int vc = fwd.viewCellOf(group.cellOf(i));
-                        (vc <= 1 ? back : front).add(vc);
+                        (vc <= 1 ? back : front).add(new int[] {vc, i});
                     }
                 }
             }
         }
         int[][] coords = CreatureArt.COORDINATES[Math.min(type.coordinateSet(), 2)][square];
-        for (List<Integer> row : List.of(back, front)) {
-            for (int cell : row) {
-                int[] at = coords[cell];
+        int[] shift = SHIFT_SETS[Math.min(Math.max(d, 1), 3) - 1];
+        for (List<int[]> row : List.of(back, front)) {
+            for (int[] placed : row) {
+                int[] at = coords[placed[0]];
                 if (at[0] == 0 && at[1] == 0) {
                     continue; // DM hides this cell from here
                 }
-                int x = at[0] - img.getWidth() / 2 + 1;
-                g.drawImage(img, x, at[1] - img.getHeight() + 1, null);
+                int i = placed[1];
+                BufferedImage img = creaturePicture(map, group, i, fwd, d);
+                if (img == null) {
+                    continue;
+                }
+                int x = at[0] + shift[group.jitterX(i) & 7] - img.getWidth() / 2 + 1;
+                int y = at[1] + shift[group.jitterY(i) & 7] - img.getHeight() + 1;
+                g.drawImage(img, x, y, null);
             }
         }
+    }
+
+    /** DM's G223 shift sets: a creature's jitter (its aspect's offsets) in pixels at D1, D2 and D3. */
+    private static final int[][] SHIFT_SETS = {
+            {0, 1, 2, 3, 0, -3, -2, -1}, {0, 1, 1, 2, 0, -2, -1, -1}, {0, 1, 1, 1, 0, -1, -1, -1}};
+
+    /** How creature {@code i} faces relative to the view: 0 away from it, odd side-on, 2 toward it. */
+    private static int delta(Direction fwd, Group group, int i) {
+        return Math.floorMod(fwd.ordinal() - group.facing(i).ordinal(), 4);
+    }
+
+    /**
+     * Creature {@code i}'s picture, as DM's F115 picks it: the side view
+     * (mirrored seen from the right) when side-on, the back when facing
+     * away, otherwise the attack picture while it strikes or the front;
+     * those two are mirrored when its look says so.
+     */
+    private BufferedImage creaturePicture(DungeonMap map, Group group, int i, Direction fwd, int d) {
+        CreatureType type = group.type();
+        int delta = delta(fwd, group, i);
+        CreatureType.View view;
+        boolean flip;
+        if ((delta & 1) != 0 && type.hasSide()) {
+            view = CreatureType.View.SIDE;
+            flip = delta == 1;
+        } else if (delta == 0 && type.hasBack()) {
+            view = CreatureType.View.BACK;
+            flip = false;
+        } else {
+            view = group.attacking(i) && type.hasAttack() ? CreatureType.View.ATTACK : CreatureType.View.FRONT;
+            flip = group.flipped(i);
+            if (d == 2 && view == CreatureType.View.FRONT && type.specialD2Front() && type.specialD2FrontIsFlipped()) {
+                flip = true;
+            }
+        }
+        return creatureArt.picture(type, view, Math.max(d, 1), flip, map);
     }
 
     /** Stairs seen side-on, beside the view at D2, D1 or D0 (DM draws none at D3 or straight ahead). */
