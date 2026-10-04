@@ -174,6 +174,7 @@ final class Flight {
         CreatureAI creatures = party.dungeon().creatures();
         CreatureType info = g.type();
         int attack = (impactAttack(p, party.random()) << 6) / Math.max(1, info.defense());
+        attack = party.difficulty().partyDamage(attack, party.random());
         Group keeper = null;
         if (attack != 0) {
             int outcome = creatures.hitCreature(party, m, g, creature, attack);

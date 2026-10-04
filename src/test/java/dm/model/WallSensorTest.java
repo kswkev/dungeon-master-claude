@@ -27,6 +27,7 @@ class WallSensorTest {
         case "GOLD KEY" -> 184;
         case "IRON KEY" -> 176;
         case "TORCH" -> 4;
+        case "COPPER COIN" -> 125;
         default -> 0;
     };
     private static final Direction S = Direction.SOUTH;
@@ -103,6 +104,33 @@ class WallSensorTest {
         assertTrue(c.handChanged());
         assertNull(party.held(), "the key is used up");
         assertTrue(doorHeadingOpen());
+    }
+
+    @Test
+    void lockMasterOpensLocksWithoutTheirKey() {
+        party.setLockMaster(true);
+        remote(1, WallSensor.TYPE_CLICK_WITH_ITEM_USED_UP, 184, TOGGLE, false, false, 3, 1, 0, 5);
+        assertTrue(click(1).fired(), "an empty hand opens the gold lock");
+        assertTrue(doorHeadingOpen());
+        party.setHeld(SCROLL);
+        DungeonMap.WallClick c = click(1);
+        assertTrue(c.fired(), "so does anything else");
+        assertFalse(c.handChanged());
+        assertSame(SCROLL, party.held(), "which isn't used up");
+        party.setHeld(GOLD_KEY);
+        click(1);
+        assertNull(party.held(), "the right key still goes in, as it would anyway");
+    }
+
+    @Test
+    void lockMasterFeedsCoinSlotsButNothingElse() {
+        party.setLockMaster(true);
+        remote(1, WallSensor.TYPE_CLICK_WITH_ITEM_USED_UP, 125, TOGGLE, false, false, 3, 1, 0, 6);
+        assertTrue(click(1).fired(), "a coin slot without a coin");
+        remote(2, WallSensor.TYPE_CLICK_WITH_ITEM, 4, SET, false, false, 3, 1, 0, -1);
+        assertFalse(click(2).fired(), "a sensor that wants a torch still wants it");
+        party.setLockMaster(false);
+        assertFalse(click(1).fired(), "and with lock master off the slot wants its coin again");
     }
 
     @Test

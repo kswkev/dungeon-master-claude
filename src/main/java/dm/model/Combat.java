@@ -302,8 +302,10 @@ final class Combat {
                 if (random.nextInt(64) < c.skillLevel(skill)) {
                     damage += damage + 10;
                 }
-                outcome = party.dungeon().creatures().hitCreature(party, party.map(), g, creature, damage);
+                int dealt = party.difficulty().partyDamage(damage, random);
+                outcome = party.dungeon().creatures().hitCreature(party, party.map(), g, creature, dealt);
                 party.addSkillExperience(member, skill, (damage * info.experience() >> 4) + 3);
+                damage = dealt;
                 party.spendStamina(member, random.nextInt(4) + 4);
             }
         }

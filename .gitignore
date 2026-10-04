@@ -12,3 +12,6 @@ data/*.dat
 
 # Saved games hold data parsed from the game files
 saves/
+
+# MCP server config (holds a GitHub token)
+.mcp.json

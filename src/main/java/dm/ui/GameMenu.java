@@ -1,6 +1,9 @@
 package dm.ui;
 
 import dm.data.SaveGames;
+import dm.model.Difficulty;
+import dm.model.Item;
+import dm.model.ItemCatalog;
 
 import java.awt.Color;
 import java.awt.Graphics2D;
@@ -13,7 +16,7 @@ import java.util.function.IntFunction;
 
 /**
  * The game menu behind the disk icon on the character sheet: SAVE, LOAD,
- * QUIT, OPTIONS (not yet used) and CANCEL, with the save slots, the quit
+ * QUIT, OPTIONS and CANCEL, with the save slots, the options, the quit
  * question and short messages. No Swing: like the sheet it is drawn over the
  * viewport and hit-tested in screen coordinates.
  *
@@ -23,14 +26,24 @@ import java.util.function.IntFunction;
  * centred. The game menu needs five choices, so its own screens rearrange
  * those pieces into a title strip and three rows of buttons. The quit
  * question and messages use DM's own three- and one-choice layouts.
+ *
+ * The options (not in DM) are the difficulty, a radio group of EASY,
+ * NORMAL and HARD, and three toggles: god mode, deep sleep and lock master. The green gem's icon marks what
+ * is chosen; an unchosen one shows the gem's shape in black, like an empty
+ * setting.
  */
 public final class GameMenu {
 
     /** Which set of buttons is up. */
-    public enum Screen { MAIN, SAVE_SLOTS, LOAD_SLOTS, QUIT, MESSAGE }
+    public enum Screen { MAIN, SAVE_SLOTS, LOAD_SLOTS, OPTIONS, QUIT, MESSAGE }
 
-    /** What a click picked. SLOT carries the slot number. */
-    public enum Choice { NONE, SAVE, LOAD, QUIT, OPTIONS, CANCEL, SLOT, SAVE_AND_QUIT, QUIT_NOW, OK }
+    /** What a click picked. SLOT carries the slot number, DIFFICULTY the {@link Difficulty} ordinal. */
+    public enum Choice { NONE, SAVE, LOAD, QUIT, OPTIONS, CANCEL, SLOT, SAVE_AND_QUIT, QUIT_NOW, OK,
+        DIFFICULTY, GOD_MODE, DEEP_SLEEP, LOCK_MASTER, BACK }
+
+    /** What the options screen shows. */
+    public record Settings(Difficulty difficulty, boolean godMode, boolean deepSleep, boolean lockMaster) {
+    }
 
     public record Click(Choice choice, int slot) {
         static final Click NONE = new Click(Choice.NONE, 0);
@@ -56,6 +69,17 @@ public final class GameMenu {
     private static final int ROW_2 = 64;
     private static final int ROW_3 = 99;
 
+    // The options screen: the difficulty panel, the toggles' panel (two columns of gems), and a short BACK button.
+    private static final Rectangle DIFFICULTY_PANEL = new Rectangle(10, 27, 204, 36);
+    private static final int GEM_Y = DIFFICULTY_PANEL.y + 15;
+    private static final Rectangle TOGGLES_PANEL = new Rectangle(10, 67, 204, 42);
+    private static final String[] TOGGLES = {"GOD MODE", "DEEP SLEEP", "LOCK MASTER"};
+    private static final Choice[] TOGGLE_CHOICES = {Choice.GOD_MODE, Choice.DEEP_SLEEP, Choice.LOCK_MASTER};
+    private static final int[] TOGGLE_COLUMNS = {TOGGLES_PANEL.x + 16, TOGGLES_PANEL.x + 110};
+    private static final int[] TOGGLE_ROWS = {TOGGLES_PANEL.y + 5, TOGGLES_PANEL.y + 22};
+    private static final Rectangle BACK_BUTTON = new Rectangle(10, 113, 204, 19);
+    private static final int GEM_SIZE = 16;
+
     private static final Color GOLD = Art.PALETTE[9];
     private static final Color YELLOW = Art.PALETTE[11];
     private static final Color GREY = Art.PALETTE[1];
@@ -63,6 +87,8 @@ public final class GameMenu {
             .withZone(ZoneId.systemDefault());
 
     private final Art art;
+    private final Item gem = ItemCatalog.item(Item.Category.JUNK, ItemCatalog.GREEN_GEM);
+    private BufferedImage gemOutline;
     private Screen screen;
     private String message;
     private String detail;
@@ -97,6 +123,14 @@ public final class GameMenu {
 
     public void showSlots(boolean save) {
         screen = save ? Screen.SAVE_SLOTS : Screen.LOAD_SLOTS;
+    }
+
+    public void showOptions() {
+        screen = Screen.OPTIONS;
+    }
+
+    public void showMain() {
+        screen = Screen.MAIN;
     }
 
     public void showQuit() {
@@ -152,6 +186,19 @@ public final class GameMenu {
                 }
                 yield wide(ROW_3).contains(vx, vy) ? Click.of(Choice.CANCEL) : Click.NONE;
             }
+            case OPTIONS -> {
+                for (Difficulty d : Difficulty.values()) {
+                    if (difficultyButton(d).contains(vx, vy)) {
+                        yield new Click(Choice.DIFFICULTY, d.ordinal());
+                    }
+                }
+                for (int i = 0; i < TOGGLES.length; i++) {
+                    if (toggleGem(i).contains(vx, vy)) {
+                        yield Click.of(TOGGLE_CHOICES[i]);
+                    }
+                }
+                yield BACK_BUTTON.contains(vx, vy) ? Click.of(Choice.BACK) : Click.NONE;
+            }
             case QUIT -> wide(WIDE.y).contains(vx, vy) ? Click.of(Choice.SAVE_AND_QUIT)
                     : left(HALVES.y).contains(vx, vy) ? Click.of(Choice.QUIT_NOW)
                     : right(HALVES.y).contains(vx, vy) ? Click.of(Choice.CANCEL) : Click.NONE;
@@ -161,6 +208,25 @@ public final class GameMenu {
 
     private static Rectangle[] slotButtons() {
         return new Rectangle[] {left(ROW_1), right(ROW_1), left(ROW_2), right(ROW_2)};
+    }
+
+    /** Where the gem of a setting labelled {@code label}, centred on {@code centreX}, is drawn. */
+    private static Rectangle gem(String label, int centreX, int y) {
+        int width = GEM_SIZE + 4 + PixelFont.width(label);
+        return new Rectangle(centreX - width / 2, y, GEM_SIZE, GEM_SIZE);
+    }
+
+    /** Toggle {@code i}'s gem, the only part of the panel that switches it (a pixel to spare around it). */
+    private static Rectangle toggleGem(int i) {
+        Rectangle r = new Rectangle(TOGGLE_COLUMNS[i % 2], TOGGLE_ROWS[i / 2], GEM_SIZE, GEM_SIZE);
+        r.grow(1, 1);
+        return r;
+    }
+
+    /** A difficulty's third of the panel, below its label. */
+    private static Rectangle difficultyButton(Difficulty d) {
+        int width = DIFFICULTY_PANEL.width / Difficulty.values().length;
+        return new Rectangle(DIFFICULTY_PANEL.x + d.ordinal() * width, GEM_Y - 2, width, GEM_SIZE + 4);
     }
 
     /** Screen point at the centre of a choice, for tests and scripted clicks. */
@@ -174,6 +240,13 @@ public final class GameMenu {
                 default -> wide(ROW_3);
             };
             case SAVE_SLOTS, LOAD_SLOTS -> choice == Choice.SLOT ? slotButtons()[slot - 1] : wide(ROW_3);
+            case OPTIONS -> switch (choice) {
+                case DIFFICULTY -> difficultyButton(Difficulty.values()[slot]);
+                case GOD_MODE -> toggleGem(0);
+                case DEEP_SLEEP -> toggleGem(1);
+                case LOCK_MASTER -> toggleGem(2);
+                default -> BACK_BUTTON;
+            };
             case QUIT -> switch (choice) {
                 case SAVE_AND_QUIT -> wide(WIDE.y);
                 case QUIT_NOW -> left(HALVES.y);
@@ -186,8 +259,11 @@ public final class GameMenu {
 
     // ---- drawing ------------------------------------------------------------
 
-    /** Draws the current screen over the viewport; {@code headers} gives each slot's saved game, or null. */
-    public void draw(Graphics2D g, IntFunction<SaveGames.Header> headers) {
+    /**
+     * Draws the current screen over the viewport; {@code headers} gives each
+     * slot's saved game, or null, and the options screen shows {@code settings}.
+     */
+    public void draw(Graphics2D g, IntFunction<SaveGames.Header> headers, Settings settings) {
         if (screen == null) {
             return;
         }
@@ -210,6 +286,21 @@ public final class GameMenu {
                         slot(v, i + 1, headers.apply(i + 1), slots[i]);
                     }
                     choice(v, "CANCEL", wide(ROW_3));
+                }
+                case OPTIONS -> {
+                    optionsLayout(v, box);
+                    PixelFont.draw(v, "DIFFICULTY", (VIEW.width - PixelFont.width("DIFFICULTY")) / 2,
+                            DIFFICULTY_PANEL.y + 5, YELLOW);
+                    for (Difficulty d : Difficulty.values()) {
+                        Rectangle r = difficultyButton(d);
+                        setting(v, d.name(), d == settings.difficulty(),
+                                gem(d.name(), r.x + r.width / 2, GEM_Y).x, GEM_Y);
+                    }
+                    boolean[] on = {settings.godMode(), settings.deepSleep(), settings.lockMaster()};
+                    for (int i = 0; i < TOGGLES.length; i++) {
+                        setting(v, TOGGLES[i], on[i], TOGGLE_COLUMNS[i % 2], TOGGLE_ROWS[i / 2]);
+                    }
+                    choice(v, "BACK", BACK_BUTTON);
                 }
                 case QUIT -> {
                     dmLayout(v, box, false);
@@ -274,6 +365,76 @@ public final class GameMenu {
             paste(g, box, WIDE, WIDE.x, ROW_3);
         }
         centred(g, title, TITLE.y + 5, YELLOW);
+    }
+
+    /** The options screen's layout: the title strip, two shortened message panels, and a shortened wide button. */
+    private static void optionsLayout(Graphics2D g, BufferedImage box) {
+        Rectangle panel = DIFFICULTY_PANEL;
+        if (box == null) {
+            plain(g, TITLE);
+            plain(g, panel);
+            plain(g, TOGGLES_PANEL);
+            plain(g, BACK_BUTTON);
+        } else {
+            g.drawImage(box, 0, 0, null);
+            g.setColor(GREY);
+            g.fillRect(1, 1, box.getWidth() - 2, box.getHeight() - 2);
+            paste(g, box, new Rectangle(PANEL.x, PANEL.y, PANEL.width, 7), TITLE.x, TITLE.y);
+            paste(g, box, new Rectangle(PANEL.x, PANEL.y + PANEL.height - 8, PANEL.width, 8), TITLE.x, TITLE.y + 7);
+            shortPanel(g, box, panel);
+            shortPanel(g, box, TOGGLES_PANEL);
+            // BACK: the wide button's top 10 rows and bottom 9, keeping both bevels.
+            paste(g, box, new Rectangle(WIDE.x, WIDE.y, WIDE.width, 10), BACK_BUTTON.x, BACK_BUTTON.y);
+            paste(g, box, new Rectangle(WIDE.x, WIDE.y + WIDE.height - 9, WIDE.width, 9),
+                    BACK_BUTTON.x, BACK_BUTTON.y + 10);
+        }
+        centred(g, "OPTIONS", TITLE.y + 5, YELLOW);
+    }
+
+    /** The message panel cut to {@code to}'s height: its top, then its bottom 8 rows. */
+    private static void shortPanel(Graphics2D g, BufferedImage box, Rectangle to) {
+        int top = to.height - 8;
+        paste(g, box, new Rectangle(PANEL.x, PANEL.y, PANEL.width, top), to.x, to.y);
+        paste(g, box, new Rectangle(PANEL.x, PANEL.y + PANEL.height - 8, PANEL.width, 8), to.x, to.y + top);
+    }
+
+    /**
+     * One setting: the green gem (lit when {@code on}, its shape in black
+     * when not) at ({@code x}, {@code y}) and the label after it.
+     */
+    private void setting(Graphics2D g, String label, boolean on, int x, int y) {
+        BufferedImage picture = on ? art.iconSprite(gem) : outline();
+        if (picture != null) {
+            g.drawImage(picture, x, y, null);
+        } else { // without GRAPHICS.DAT: a ring, filled when on
+            if (on) {
+                g.setColor(Art.PALETTE[7]);
+                g.fillOval(x + 2, y + 2, GEM_SIZE - 4, GEM_SIZE - 4);
+            }
+            g.setColor(Art.PALETTE[0]);
+            g.drawOval(x + 2, y + 2, GEM_SIZE - 5, GEM_SIZE - 5);
+        }
+        PixelFont.draw(g, label, x + GEM_SIZE + 4, y + (GEM_SIZE - PixelFont.HEIGHT) / 2, on ? YELLOW : GOLD);
+    }
+
+    /** The green gem's shape in black, for a setting that is off; null without the art. */
+    private BufferedImage outline() {
+        if (gemOutline == null) {
+            BufferedImage lit = art.iconSprite(gem);
+            if (lit == null) {
+                return null;
+            }
+            gemOutline = new BufferedImage(lit.getWidth(), lit.getHeight(), BufferedImage.TYPE_INT_ARGB);
+            int black = Art.PALETTE[0].getRGB();
+            for (int y = 0; y < lit.getHeight(); y++) {
+                for (int x = 0; x < lit.getWidth(); x++) {
+                    if ((lit.getRGB(x, y) >>> 24) != 0) {
+                        gemOutline.setRGB(x, y, black);
+                    }
+                }
+            }
+        }
+        return gemOutline;
     }
 
     private static void paste(Graphics2D g, BufferedImage box, Rectangle from, int x, int y) {

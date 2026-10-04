@@ -30,6 +30,12 @@ public final class Upkeep {
      * mana, stamina and health twice as fast, and statistics every 64 ticks.
      */
     static int applyTimeEffects(Champion c, long time, long lastMove, boolean sleeping) {
+        return applyTimeEffects(c, time, lastMove, sleeping, Difficulty.NORMAL, null);
+    }
+
+    /** {@link #applyTimeEffects}, with food and water running down as fast as {@code difficulty} says. */
+    static int applyTimeEffects(Champion c, long time, long lastMove, boolean sleeping,
+                                Difficulty difficulty, Random random) {
         int t = (int) time;
         int criteria = (((t & 0x80) + ((t & 0x100) >> 2)) + ((t & 0x40) << 2)) >> 2;
         int damage = 0;
@@ -98,8 +104,8 @@ public final class Upkeep {
             cycles--;
         } while (cycles > 0 && stamina - loss < max);
         damage += c.decrementStamina(loss);
-        c.setFood(food);
-        c.setWater(water);
+        c.setFood(c.food() - difficulty.hunger(c.food() - food, random));
+        c.setWater(c.water() - difficulty.hunger(c.water() - water, random));
 
         // Health: regained while stamina is at least a quarter, as often as vitality allows.
         if (c.health() < c.maxHealth() && c.rawStamina() >= max >> 2
