@@ -28,7 +28,7 @@ import java.util.Random;
  *
  * <p>Not yet: spells and projectiles (creatures that cast fight in melee
  * when adjacent, and approach otherwise), fluxcages, invisibility, freeze
- * life, sleeping, the party's own attacks, and parry experience.
+ * life and sleeping.
  */
 public final class CreatureAI implements Serializable {
 
@@ -1222,6 +1222,7 @@ public final class CreatureAI implements Serializable {
 
     /** DM's F207: creature {@code i} strikes at the party. Returns whether it attacked. */
     private boolean creatureAttacks(Group g, int x, int y, int i) {
+        party.creatureAttacked();
         CreatureType info = g.type();
         int targetCell = g.centred() ? rnd(2) : ((g.cellOf(i) + 5 - primaryDirToParty) & 2) >> 1;
         targetCell = (targetCell + primaryDirToParty) & 3;
@@ -1285,6 +1286,7 @@ public final class CreatureAI implements Serializable {
         Champion c = party.members().get(member);
         CreatureType info = g.type();
         int difficulty = party.map().difficulty() << 1;
+        party.addSkillExperience(member, Champion.PARRY, info.experience());
         if (!((c.dexterity(party.load(c), random) < rnd(32) + info.dexterity() + difficulty - 16 || rnd(4) == 0)
                 && !c.isLucky(60, random))) {
             return; // dodged

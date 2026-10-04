@@ -136,6 +136,11 @@ public final class GameScreen {
         }
         boolean moved = arrived(party.settle()); // a landing item may have opened a pit under the party
         Party.Tick upkeep = party.tick();
+        boolean printed = takeMessages();
+        if (messages.hasText()) {
+            messages.clearExpired(party.time());
+            printed = true;
+        }
         for (int dmSound : upkeep.sounds()) {
             sounds.play(dmSound(dmSound));
         }
@@ -145,8 +150,25 @@ public final class GameScreen {
         if (upkeep.damage() != null) {
             showDamage(upkeep.damage());
         }
-        return doors.moved() || flew.moved() || moved || upkeep.changed();
+        return doors.moved() || flew.moved() || moved || upkeep.changed() || printed;
     }
+
+    /** DM's message area along the bottom of the screen. */
+    private final MessageArea messages = new MessageArea();
+
+    /** Moves the party's new messages (level gains and the like) into the message area. Returns whether there were any. */
+    private boolean takeMessages() {
+        List<Party.Message> taken = party.takeMessages();
+        for (Party.Message m : taken) {
+            Color colour = m.member() >= 0 && m.member() < ChampionBars.COLORS.length
+                    ? ChampionBars.COLORS[m.member()] : MESSAGE_CYAN;
+            messages.print(m.text(), colour, party.time());
+        }
+        return !taken.isEmpty();
+    }
+
+    /** DM's default message colour (palette 4, cyan). */
+    private static final Color MESSAGE_CYAN = new Color(Art.PALETTE[4].getRGB());
 
     /** DM's C04 wooden thud: a door bouncing off a creature. */
     private static final int WOODEN_THUD = 4;
@@ -734,6 +756,8 @@ public final class GameScreen {
             g.drawRect(v.x + 1, v.y + 1, v.width - 2, v.height - 2);
         }
         arrows.draw(g);
+        takeMessages();
+        messages.draw(g);
         if (debug) {
             PixelFont.draw(g, party.x() + "," + party.y() + " " + party.facing(), 236, 190, Color.YELLOW);
         }

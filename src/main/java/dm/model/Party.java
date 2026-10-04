@@ -408,6 +408,118 @@ public final class Party implements Serializable {
         return c == null ? -1 : members.indexOf(c);
     }
 
+    // ---- experience (DM's F304) ------------------------------------------------
+
+    /** When a creature last attacked the party (DM's G361); fighting skills learn faster right after. */
+    private long lastCreatureAttackTime = -200;
+
+    void creatureAttacked() {
+        lastCreatureAttackTime = time;
+    }
+
+    /** A line for DM's message area: text, in member {@code member}'s colour (-1 for the default cyan). */
+    public record Message(String text, int member) {
+    }
+
+    private transient List<Message> messages;
+
+    /** Messages printed since the last call, oldest first; the screen shows them in its message area. */
+    public List<Message> takeMessages() {
+        List<Message> out = messages == null ? List.of() : messages;
+        messages = null;
+        return out;
+    }
+
+    void message(String text, int member) {
+        if (messages == null) {
+            messages = new ArrayList<>();
+        }
+        messages.add(new Message(text, member));
+    }
+
+    /**
+     * DM's F304: member {@code member} earns {@code amount} experience in
+     * {@code skill} (and its base skill, for a hidden one). Fighting skills
+     * (swing to shoot) learn half as fast with no creature attack in the last
+     * 150 ticks and twice as fast within 25; deeper maps multiply it by their
+     * difficulty. A new base skill level raises statistics, health, stamina
+     * and mana as DM does and is announced in the message area.
+     */
+    public void addSkillExperience(int member, int skill, int amount) {
+        Champion c = members.get(member);
+        boolean fighting = skill >= Champion.SWING && skill <= Champion.SHOOT;
+        if (fighting && lastCreatureAttackTime < time - 150) {
+            amount >>= 1;
+        }
+        if (amount == 0) {
+            return;
+        }
+        if (map.difficulty() != 0) {
+            amount *= map.difficulty();
+        }
+        int base = skill >= Champion.SWING ? (skill - Champion.SWING) >> 2 : skill;
+        int before = c.baseLevel(base, false);
+        if (skill >= Champion.SWING && lastCreatureAttackTime > time - 25) {
+            amount <<= 1;
+        }
+        c.addExperience(skill, amount);
+        if (c.temporaryExperience(skill) < 32000) {
+            c.addTemporaryExperience(skill, Math.max(1, Math.min(amount >> 3, 100)));
+        }
+        if (skill >= Champion.SWING) {
+            c.addExperience(base, amount);
+        }
+        int after = c.baseLevel(base, false);
+        if (after > before) {
+            levelUp(c, base, after);
+            message(c.name() + " JUST GAINED A " + Champion.BASE_SKILLS.get(base) + " LEVEL!", member);
+        }
+    }
+
+    /** F304's gains for reaching level {@code level} in base skill {@code base}. */
+    private void levelUp(Champion c, int base, int level) {
+        int minor = random.nextInt(2);
+        int major = 1 + random.nextInt(2);
+        int vitality = random.nextInt(2);
+        if (base != Champion.PRIEST) {
+            vitality &= level; // 0 on even levels
+        }
+        c.raiseMaxStat(Champion.Stat.VITALITY, vitality);
+        int stamina = c.rawMaxStamina();
+        c.raiseMaxStat(Champion.Stat.ANTI_FIRE, random.nextInt(2) & ~level); // 0 on odd levels
+        int health = level;
+        switch (base) {
+            case Champion.FIGHTER -> {
+                stamina >>= 4;
+                health *= 3;
+                c.raiseMaxStat(Champion.Stat.STRENGTH, major);
+                c.raiseMaxStat(Champion.Stat.DEXTERITY, minor);
+            }
+            case Champion.NINJA -> {
+                stamina /= 21;
+                health <<= 1;
+                c.raiseMaxStat(Champion.Stat.STRENGTH, minor);
+                c.raiseMaxStat(Champion.Stat.DEXTERITY, major);
+            }
+            default -> { // wizard and priest
+                if (base == Champion.WIZARD) {
+                    stamina >>= 5;
+                    c.raiseMaxMana(level + (level >> 1));
+                    c.raiseMaxStat(Champion.Stat.WISDOM, major);
+                } else {
+                    stamina /= 25;
+                    c.raiseMaxMana(level);
+                    health += (health + 1) >> 1;
+                    c.raiseMaxStat(Champion.Stat.WISDOM, minor);
+                }
+                c.raiseMaxMana(Math.min(random.nextInt(4), level - 1));
+                c.raiseMaxStat(Champion.Stat.ANTI_MAGIC, random.nextInt(3));
+            }
+        }
+        c.raiseMaxHealth(health + random.nextInt((health >> 1) + 1));
+        c.raiseMaxStamina(stamina + random.nextInt((stamina >> 1) + 1));
+    }
+
     // ---- poison --------------------------------------------------------------
 
     /** DM's poison events come every 36 ticks. */
