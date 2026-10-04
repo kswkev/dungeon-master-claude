@@ -100,7 +100,7 @@ Run with `"-Ddm.debug=true"` to list every decoration on Level 1.
 - **Fixes:** the sensor data was being read two bits off, and teleporters that move only items were treated as moving nothing (#20). Plates, levers, keyholes and gates now follow the original's own data.
 
 **Sprint 13: done.** Save, load and quit:
-- Press Esc, or click the disk icon at the top of a champion's sheet, to open the game menu, built from the original's dialog art: SAVE, LOAD, QUIT, OPTIONS (coming later) and CANCEL.
+- Press Esc, or click the disk icon at the top of a champion's sheet, to open the game menu, built from the original's dialog art: SAVE, LOAD, QUIT, OPTIONS (since Sprint 18) and CANCEL.
 - There are four save slots, each showing its level and when it was saved. Saves go in a `saves/` folder next to the game (`-Ddm.saves` to change it).
 - QUIT asks whether to save first: SAVE AND QUIT, QUIT or CANCEL.
 - The game is paused while the menu is open; CANCEL or Esc goes back. Esc works even after the party has died, to load a saved game.
@@ -133,6 +133,13 @@ Run with `"-Ddm.debug=true"` to list every decoration on Level 1.
 - **Sleeping:** click the ZZZ on a champion's sheet. The view goes dark with WAKE UP, time passes faster, and the champions recover mana, stamina and health twice as fast. Click the view or press Return to wake up; any creature attack wakes the party too, and sleepers defend poorly.
 - **Teleporters:** a visible teleporter now shimmers with the original's sparkling field, shaped like the square it fills, at every distance and to the sides.
 - **Distance colours:** wall decorations and objects two or three squares away take the original's darker, duller colours, as creatures and doors already did.
+
+**Sprint 18: done.** Options (OPTIONS in the game menu), none of them in the original:
+- **Difficulty:** EASY, NORMAL or HARD, picked with green gems. On EASY creatures do 20% less damage, the champions' blows, throws and shots do 20% more, every skill earns 20% more experience, and food and water last 20% longer. HARD is the reverse; NORMAL is the original.
+- **God mode:** the champions' health, stamina, mana, food and water never go down, and they can't be wounded. Eating, drinking and resting still raise them.
+- **Deep sleep:** lying down to sleep (the ZZZ on a sheet) restores every living champion's health, stamina and mana at once.
+- **Lock master:** keyholes, locks and coin slots open without their key or coin. Holding the right one still uses it up, as usual; anything else stays in hand.
+- They take effect at once and are saved with the game.
 
 ## Requirements
 

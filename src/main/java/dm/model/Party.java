@@ -79,6 +79,54 @@ public final class Party implements Serializable {
         dungeon.creatures().partyArrived(this, map);
     }
 
+    // ---- options (the game menu's, not DM's) --------------------------------------
+
+    /** The difficulty; null in games saved before it existed, which play as NORMAL. */
+    private Difficulty difficulty = Difficulty.NORMAL;
+    private boolean godMode;
+
+    public Difficulty difficulty() {
+        return difficulty == null ? Difficulty.NORMAL : difficulty;
+    }
+
+    public void setDifficulty(Difficulty difficulty) {
+        this.difficulty = difficulty;
+    }
+
+    /** God mode: no champion's health, stamina, mana, food or water ever goes down, and nobody is wounded. */
+    public boolean godMode() {
+        return godMode;
+    }
+
+    public void setGodMode(boolean on) {
+        godMode = on;
+        for (Champion c : members) {
+            c.setGodMode(on);
+        }
+    }
+
+    /** Deep sleep: lying down to sleep restores every living champion's health, stamina and mana at once. */
+    private boolean deepSleep;
+
+    public boolean deepSleep() {
+        return deepSleep;
+    }
+
+    public void setDeepSleep(boolean on) {
+        deepSleep = on;
+    }
+
+    /** Lock master: keyholes, locks and coin slots open without their key or coin ({@link DungeonMap#clickWall}). */
+    private boolean lockMaster;
+
+    public boolean lockMaster() {
+        return lockMaster;
+    }
+
+    public void setLockMaster(boolean on) {
+        lockMaster = on;
+    }
+
     /** Replaces the random numbers behind fall damage and the creatures' decisions, for tests. */
     public void setRandom(Random random) {
         this.random = random;
@@ -150,6 +198,7 @@ public final class Party implements Serializable {
         c.face(facing);
         c.setFood(1500 + random.nextInt(256)); // DM's F280
         c.setWater(1500 + random.nextInt(256));
+        c.setGodMode(godMode);
         for (int p = 0; p < MAX_MEMBERS; p++) {
             if (positions[p] == null) {
                 positions[p] = mirror.champion();
@@ -573,11 +622,20 @@ public final class Party implements Serializable {
      * The party lies down to sleep. While asleep time effects come four
      * times as often with mana, stamina and health regained twice as fast,
      * every skill counts as level 1, dexterity and armour are halved, and
-     * creatures walk silently. False with no one alive to sleep.
+     * creatures walk silently. With {@link #deepSleep()} on, every living
+     * champion's health, stamina and mana are full at once. False with no
+     * one alive to sleep.
      */
     public boolean sleep() {
         if (members.stream().noneMatch(c -> c.health() > 0)) {
             return false;
+        }
+        if (deepSleep) {
+            for (Champion c : members) {
+                if (c.health() > 0) {
+                    c.refresh();
+                }
+            }
         }
         setSleeping(true);
         return true;
@@ -622,7 +680,7 @@ public final class Party implements Serializable {
      * {@code skill} (and its base skill, for a hidden one). Fighting skills
      * (swing to shoot) learn half as fast with no creature attack in the last
      * 150 ticks and twice as fast within 25; deeper maps multiply it by their
-     * difficulty. A new base skill level raises statistics, health, stamina
+     * difficulty, and the game's {@link #difficulty()} scales the result. A new base skill level raises statistics, health, stamina
      * and mana as DM does and is announced in the message area.
      */
     public void addSkillExperience(int member, int skill, int amount) {
@@ -642,6 +700,7 @@ public final class Party implements Serializable {
         if (skill >= Champion.SWING && lastCreatureAttackTime > time - 25) {
             amount <<= 1;
         }
+        amount = difficulty().experience(amount, random);
         c.addExperience(skill, amount);
         if (c.temporaryExperience(skill) < 32000) {
             c.addTemporaryExperience(skill, Math.max(1, Math.min(amount >> 3, 100)));
@@ -822,7 +881,7 @@ public final class Party implements Serializable {
             for (int i = 0; i < members.size(); i++) {
                 Champion c = members.get(i);
                 if (c.health() > 0) {
-                    upkeep[i] = c.takeDamage(Upkeep.applyTimeEffects(c, time, lastMove, sleeping));
+                    upkeep[i] = c.takeDamage(Upkeep.applyTimeEffects(c, time, lastMove, sleeping, difficulty(), random));
                     hurt |= upkeep[i] > 0;
                     if (!sleeping && c.facing() != facing && lastCreatureAttackTime < time - 60) {
                         c.face(facing); // F331: with no attack for a while, the champion turns back

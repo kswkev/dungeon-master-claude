@@ -6,6 +6,7 @@ import dm.data.Sound;
 import dm.model.Actions;
 import dm.model.Champion;
 import dm.model.ChampionMirror;
+import dm.model.Difficulty;
 import dm.model.DungeonMap;
 import dm.model.Item;
 import dm.model.Party;
@@ -429,7 +430,8 @@ public final class GameScreen {
 
     /**
      * A click on the game menu. CANCEL goes back to the character sheet the
-     * menu was opened from; OPTIONS does nothing yet.
+     * menu was opened from. Options take effect at once; BACK returns to the
+     * main menu.
      */
     private void clickMenu(GameMenu.Click click) {
         switch (click.choice()) {
@@ -446,7 +448,13 @@ public final class GameScreen {
                     load(click.slot());
                 }
             }
-            case OPTIONS, NONE -> { } // OPTIONS comes in a later sprint
+            case OPTIONS -> menu.showOptions();
+            case DIFFICULTY -> party.setDifficulty(Difficulty.values()[click.slot()]);
+            case GOD_MODE -> party.setGodMode(!party.godMode());
+            case DEEP_SLEEP -> party.setDeepSleep(!party.deepSleep());
+            case LOCK_MASTER -> party.setLockMaster(!party.lockMaster());
+            case BACK -> menu.showMain();
+            case NONE -> { }
         }
     }
 
@@ -837,7 +845,8 @@ public final class GameScreen {
                 clock.getAsLong());
         formation.draw(g, party);
         if (menu.isOpen()) {
-            menu.draw(g, saves::header);
+            menu.draw(g, saves::header,
+                    new GameMenu.Settings(party.difficulty(), party.godMode(), party.deepSleep(), party.lockMaster()));
         } else if (sheet.isOpen()) {
             sheet.draw(g, holding());
         } else if (party.sleeping()) {

@@ -238,6 +238,9 @@ public final class Champion implements Serializable {
      * then drops their things.
      */
     public int takeDamage(int amount) {
+        if (godMode) {
+            return 0;
+        }
         int taken = Math.max(0, Math.min(amount, health));
         health -= taken;
         return taken;
@@ -262,10 +265,16 @@ public final class Champion implements Serializable {
     }
 
     void setFood(int food) {
+        if (godMode && food < this.food) {
+            return;
+        }
         this.food = Math.max(MIN_FOOD, Math.min(food, MAX_FOOD));
     }
 
     void setWater(int water) {
+        if (godMode && water < this.water) {
+            return;
+        }
         this.water = Math.max(MIN_FOOD, Math.min(water, MAX_FOOD));
     }
 
@@ -284,6 +293,9 @@ public final class Champion implements Serializable {
      * shortfall, returned as damage still to be applied.
      */
     int decrementStamina(int amount) {
+        if (godMode && amount > 0) {
+            return 0;
+        }
         stamina -= amount;
         if (stamina <= 0) {
             int damage = -stamina >> 1;
@@ -295,6 +307,9 @@ public final class Champion implements Serializable {
     }
 
     void setMana(int mana) {
+        if (godMode && mana < this.mana) {
+            return;
+        }
         this.mana = mana;
     }
 
@@ -304,6 +319,13 @@ public final class Champion implements Serializable {
 
     void addStamina(int amount) {
         stamina = Math.min(stamina + amount, maxStamina);
+    }
+
+    /** The options' deep sleep: health, stamina and mana back to their maximum (mana a potion raised above it stays). */
+    void refresh() {
+        health = Math.max(health, maxHealth);
+        stamina = Math.max(stamina, maxStamina);
+        mana = Math.max(mana, maxMana);
     }
 
     void setStat(Stat s, int value) {
@@ -454,6 +476,13 @@ public final class Champion implements Serializable {
 
     /** DM's temporary experience per skill: earned with experience, fading by 1 every 64 ticks. */
     private final int[] temporaryExperience = new int[BASE_SKILLS.size() + HIDDEN_SKILL_COUNT];
+
+    /** The game menu's god mode (not in DM): health, stamina, mana, food and water never go down, and no wounds. Set by {@link Party#setGodMode}. */
+    private boolean godMode;
+
+    void setGodMode(boolean on) {
+        godMode = on;
+    }
 
     /** Whether the party is asleep (DM's G300, which F303, F310 and F313 read); set by {@link Party#sleep}. */
     private boolean asleep;
@@ -616,6 +645,9 @@ public final class Champion implements Serializable {
     }
 
     void addWounds(int bits) {
+        if (godMode) {
+            return;
+        }
         wounds |= bits & 0x3F;
     }
 

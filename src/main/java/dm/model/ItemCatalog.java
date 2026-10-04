@@ -1,7 +1,9 @@
 package dm.model;
 
+import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.TreeSet;
@@ -224,6 +226,7 @@ public final class ItemCatalog {
 
     /** Junk type numbers and potion types that eating and drinking care about. */
     public static final int WATERSKIN = 1;
+    public static final int GREEN_GEM = 28;
     public static final int FIRST_FOOD = 29;   // APPLE
     public static final int LAST_FOOD = 36;    // DRAGON STEAK
     public static final int WATER_FLASK = 15;
@@ -352,6 +355,16 @@ public final class ItemCatalog {
 
     private static final int FIRST_KEY = 9;
     private static final int LAST_KEY = 24;
+    private static final int COPPER_COIN = 6;
+
+    /** The junk that opens something: the copper, silver and gold coins, then every key. */
+    public static List<Item> keysAndCoins() {
+        List<Item> out = new ArrayList<>();
+        for (int t = COPPER_COIN; t <= LAST_KEY; t++) {
+            out.add(item(Item.Category.JUNK, t));
+        }
+        return out;
+    }
 
     /**
      * Whether a thrown {@code item} is small enough to pass through a

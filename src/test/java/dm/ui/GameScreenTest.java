@@ -6,6 +6,7 @@ import dm.model.Actions;
 import dm.model.Champion;
 import dm.model.ChampionMirror;
 import dm.model.Decorations;
+import dm.model.Difficulty;
 import dm.model.Direction;
 import dm.model.DungeonMap;
 import dm.model.FloorSensor;
@@ -138,11 +139,59 @@ class GameScreenTest {
         assertEquals(time, party.time(), "the clock stops while the menu is up");
         screen.key(MovementPanel.Action.BACKWARD);
         assertEquals(1, party.y(), "and the party can't move");
-        clickMenu(GameMenu.Choice.OPTIONS);
-        assertEquals(GameMenu.Screen.MAIN, screen.menu().screen(), "OPTIONS does nothing yet");
         clickMenu(GameMenu.Choice.CANCEL);
         assertFalse(screen.menu().isOpen());
         assertTrue(screen.sheet().isOpen(), "back to the sheet");
+    }
+
+    @Test
+    void optionsSetTheDifficultyAndGodMode() {
+        openMenu();
+        clickMenu(GameMenu.Choice.OPTIONS);
+        assertEquals(GameMenu.Screen.OPTIONS, screen.menu().screen());
+        assertEquals(Difficulty.NORMAL, party.difficulty());
+        render();
+        clickMenu(GameMenu.Choice.DIFFICULTY, Difficulty.HARD.ordinal());
+        assertEquals(Difficulty.HARD, party.difficulty());
+        clickMenu(GameMenu.Choice.DIFFICULTY, Difficulty.EASY.ordinal());
+        assertEquals(Difficulty.EASY, party.difficulty(), "one at a time, as a radio group");
+        Point gem = GameMenu.centre(GameMenu.Screen.OPTIONS, GameMenu.Choice.GOD_MODE, 0);
+        screen.press(gem.x + 40, gem.y); // the label, not the gem
+        screen.release();
+        assertFalse(party.godMode(), "only the gem toggles it");
+        clickMenu(GameMenu.Choice.GOD_MODE);
+        assertTrue(party.godMode());
+        render();
+        clickMenu(GameMenu.Choice.GOD_MODE);
+        assertFalse(party.godMode(), "god mode toggles");
+        clickMenu(GameMenu.Choice.DEEP_SLEEP);
+        assertTrue(party.deepSleep());
+        assertFalse(party.godMode(), "each toggle is its own");
+        clickMenu(GameMenu.Choice.DEEP_SLEEP);
+        assertFalse(party.deepSleep());
+        clickMenu(GameMenu.Choice.LOCK_MASTER);
+        assertTrue(party.lockMaster());
+        render();
+        clickMenu(GameMenu.Choice.LOCK_MASTER);
+        assertFalse(party.lockMaster());
+        clickMenu(GameMenu.Choice.BACK);
+        assertEquals(GameMenu.Screen.MAIN, screen.menu().screen());
+    }
+
+    @Test
+    void theOptionsAreSavedWithTheGame() throws Exception {
+        openMenu();
+        party.setDifficulty(Difficulty.HARD);
+        party.setGodMode(true);
+        party.setDeepSleep(true);
+        party.setLockMaster(true);
+        new SaveGames(saveDir).save(1, party);
+        Party loaded = new SaveGames(saveDir).load(1);
+        assertEquals(Difficulty.HARD, loaded.difficulty());
+        assertTrue(loaded.godMode());
+        assertTrue(loaded.deepSleep());
+        assertTrue(loaded.lockMaster());
+        assertEquals(0, loaded.members().get(0).takeDamage(5), "the champions keep it too");
     }
 
     @Test

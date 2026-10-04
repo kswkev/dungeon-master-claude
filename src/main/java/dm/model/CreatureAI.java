@@ -1328,12 +1328,13 @@ public final class CreatureAI implements Serializable {
         if (rnd(2) != 0) {
             attack -= rnd((attack >> 1) + 1) - 1;
         }
+        attack = party.difficulty().creatureDamage(attack, random);
         int damage = hurt(member, attack, allowedWound, info.attackType());
         if (damage > 0) {
             sound(SOUND_CHAMPION_0_DAMAGED + member, party.map(), party.x(), party.y());
             int poison = info.poisonAttack();
             if (poison != 0 && rnd(2) != 0) {
-                poison = c.statisticAdjustedAttack(Champion.Stat.VITALITY, poison);
+                poison = party.difficulty().creatureDamage(c.statisticAdjustedAttack(Champion.Stat.VITALITY, poison), random);
                 if (poison > 0) {
                     addDamage(member, party.poison(member, poison));
                 }

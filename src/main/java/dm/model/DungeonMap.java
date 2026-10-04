@@ -870,6 +870,10 @@ public final class DungeonMap implements Serializable {
      * run. Clicking it with an empty hand lets every living champion drink
      * their fill, which DM itself doesn't do: the user asked for it.
      *
+     * <p>With the options' lock master ({@link Party#lockMaster()}), a sensor
+     * that wants a key or a coin fires whatever the hand holds; only the
+     * right key or coin is used up, as it would be anyway.
+     *
      * @param iconOf an item's inventory icon number, which item sensors compare with their data
      */
     public WallClick clickWall(int x, int y, Direction side, Party party, ToIntFunction<Item> iconOf) {
@@ -898,18 +902,17 @@ public final class DungeonMap implements Serializable {
             // Revert turns the item tests round (DM Encyclopaedia): an empty hand
             // instead of any item, any other item instead of the one named.
             boolean match = held != null && iconOf.applyAsInt(held) == s.data();
-            boolean wanted = s.revert() ? held != null && !match : match;
+            boolean wanted = s.revert() ? held != null && !match : match || picked(s, party, iconOf);
             boolean fires = switch (s.type()) {
                 case WallSensor.TYPE_CLICK -> !alcove;
                 case WallSensor.TYPE_CLICK_WITH_ANY_ITEM -> (held != null) != s.revert();
                 case WallSensor.TYPE_CLICK_WITH_ITEM -> wanted;
                 case WallSensor.TYPE_CLICK_WITH_ITEM_USED_UP -> {
-                    if (wanted) {
+                    if (wanted && (match || s.revert())) { // lock master uses up only the right key or coin
                         party.setHeld(null);
                         out.handChanged = true;
-                        yield true;
                     }
-                    yield false;
+                    yield wanted;
                 }
                 case WallSensor.TYPE_STORAGE_ROTATE -> !alcove && storage(x, y, cell, s.data(), party, iconOf, out);
                 default -> false; // disabled sensors, gates (fed by events) and types not handled yet
@@ -941,6 +944,20 @@ public final class DungeonMap implements Serializable {
             return WallClick.NOTHING;
         }
         return new WallClick(out.fired, out.sound, out.doorStarted, out.handChanged, drank);
+    }
+
+    /** Lock master: an item sensor that wants a key or a coin (not a revert one) opens without it. */
+    private static boolean picked(WallSensor s, Party party, ToIntFunction<Item> iconOf) {
+        if (!party.lockMaster() || s.type() != WallSensor.TYPE_CLICK_WITH_ITEM
+                && s.type() != WallSensor.TYPE_CLICK_WITH_ITEM_USED_UP) {
+            return false;
+        }
+        for (Item key : ItemCatalog.keysAndCoins()) {
+            if (iconOf.applyAsInt(key) == s.data()) {
+                return true;
+            }
+        }
+        return false;
     }
 
     /** A storage sensor: swap the stored item (icon {@code icon}) with an empty hand, or take it back. */
