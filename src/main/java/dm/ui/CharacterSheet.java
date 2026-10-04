@@ -214,6 +214,7 @@ public final class CharacterSheet {
         Graphics2D v = (Graphics2D) g.create(VIEW.x, VIEW.y, VIEW.width, VIEW.height);
         try {
             drawBackground(v);
+            drawStateBoxes(v);
             PixelFont.draw(v, champion.fullName(), 3, 3, HEADING);
             drawItems(v);
             drawVitals(v);
@@ -247,6 +248,54 @@ public final class CharacterSheet {
             g.drawRect(p.x - 1, p.y - 1, 17, 17);
         }
         PixelFont.draw(g, "X", CLOSE_ICON.x + 4, CLOSE_ICON.y + 3, Art.PALETTE[8]);
+    }
+
+    /** DM's red slot box, for a wounded body part, a hungry, thirsty or poisoned mouth, or a weakened eye. */
+    private static final int SLOT_BOX_WOUNDED = 34;
+    /** DM's empty-slot outlines start with the ready hand (212); each body part has a normal and a wounded one. */
+    private static final int EMPTY_SLOT_ICON = 212;
+    /** DM's POISONED label (graphic 32) and its place in the food and water panel (G037). */
+    private static final int POISONED_LABEL = 32;
+    private static final Point POISONED = new Point(112, 105);
+
+    /**
+     * DM's F292: a wounded body part's cell gets the red slot box and, if
+     * empty, the wounded outline (DM's icon after the normal one). The mouth
+     * box is red while the champion is hungry, thirsty or poisoned, and the
+     * eye box while any statistic is below its maximum.
+     */
+    private void drawStateBoxes(Graphics2D g) {
+        for (int part = 0; part < Champion.WOUND_SLOTS.size(); part++) {
+            Slot slot = Champion.WOUND_SLOTS.get(part);
+            if (!champion.isWounded(slot)) {
+                continue;
+            }
+            Point p = SLOT_ICONS.get(slot);
+            drawWoundedBox(g, p.x - 1, p.y - 1);
+            BufferedImage outline = art.icon(EMPTY_SLOT_ICON + part * 2 + 1);
+            if (champion.items().get(slot) == null && outline != null) {
+                g.drawImage(outline, p.x, p.y, null);
+            }
+        }
+        if (champion.food() < 0 || champion.water() < 0 || champion.poisoned()) {
+            drawWoundedBox(g, MOUTH.x - 1, MOUTH.y - 1);
+        }
+        for (Champion.Stat s : Champion.Stat.values()) {
+            if (s != Champion.Stat.LUCK && champion.stat(s) < champion.maxStat(s)) {
+                drawWoundedBox(g, EYE.x - 1, EYE.y - 1);
+                break;
+            }
+        }
+    }
+
+    private void drawWoundedBox(Graphics2D g, int x, int y) {
+        BufferedImage box = art.keyed(SLOT_BOX_WOUNDED, 12);
+        if (box != null) {
+            g.drawImage(box, x, y, null);
+        } else {
+            g.setColor(Art.PALETTE[8]);
+            g.drawRect(x, y, 17, 17);
+        }
     }
 
     private void drawItems(Graphics2D g) {
@@ -324,6 +373,14 @@ public final class CharacterSheet {
         }
         drawFoodOrWaterBar(g, champion.food(), FOOD_BAR_Y, Art.PALETTE[5]);
         drawFoodOrWaterBar(g, champion.water(), WATER_BAR_Y, Art.PALETTE[14]);
+        if (champion.poisoned()) {
+            BufferedImage label = art.keyed(POISONED_LABEL, 12);
+            if (label != null) {
+                g.drawImage(label, POISONED.x, POISONED.y, null);
+            } else {
+                PixelFont.draw(g, "POISONED", POISONED.x, POISONED.y + 4, Art.PALETTE[8]);
+            }
+        }
     }
 
     /** DM's F344: a 7-row bar, (amount + 1024) / 32 + 1 pixels long, with a black shadow; yellow when hungry, red when starving. */
