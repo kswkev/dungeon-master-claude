@@ -340,6 +340,29 @@ public final class ItemCatalog {
         };
     }
 
+    /**
+     * G237's "pouch, passes through doors" flag (allowed-slots bit 8), by
+     * object info index: what a thrown item needs to fly through a portcullis.
+     */
+    private static final Set<Integer> PASSES_DOORS = Set.of(
+            0, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 31, 50, 51,
+            53, 54, 55, 58, 59, 127, 128, 129, 130, 131, 133, 134, 135, 136, 137, 138, 139, 140, 141, 142, 143,
+            144, 145, 146, 147, 148, 149, 150, 151, 153, 154, 155, 156, 157, 158, 159, 162, 163, 164, 165, 166,
+            167, 168, 169, 170, 171, 173, 174, 175, 176, 177);
+
+    private static final int FIRST_KEY = 9;
+    private static final int LAST_KEY = 24;
+
+    /**
+     * Whether a thrown {@code item} is small enough to pass through a
+     * portcullis (F217). Since DM 1.1 keys never do, so a key needed beyond
+     * a door can't be lost through it.
+     */
+    public static boolean passesThroughDoors(Item item) {
+        boolean key = item.category() == Item.Category.JUNK && item.type() >= FIRST_KEY && item.type() <= LAST_KEY;
+        return !key && PASSES_DOORS.contains(objectInfoIndex(item));
+    }
+
     /** The action set of {@code item} in the action hand (G237), or 0 if it has none. */
     public static int actionSet(Item item) {
         int i = objectInfoIndex(item);

@@ -195,10 +195,10 @@ class FloorSensorTest {
     @Test
     void aThrownItemLandingOnThePlateOpensTheDoor() {
         plate(FloorSensor.TYPE_ANY, FloorSensor.Effect.HOLD, false, false);
-        map.throwItem(SWORD, 3, 1, Direction.WEST, false, 4);
-        map.tickProjectiles();
-        DungeonMap.ProjectileTick landed = map.tickProjectiles(); // the closed door stops it on the plate
-        assertTrue(landed.click());
+        Flight.launch(party, SWORD, map, 3, 1, Direction.WEST.ordinal(), Direction.WEST, 7, 50, 5);
+        party.tick(); // onto the plate's square
+        party.tick();
+        assertTrue(party.tick().click(), "spent, it drops on the plate");
         assertFalse(map.itemsAt(2, 1, Direction.WEST.cellOf(0)).isEmpty());
         ticks(4);
         assertTrue(map.isPassable(1, 1));

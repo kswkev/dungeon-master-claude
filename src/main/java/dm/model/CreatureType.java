@@ -365,6 +365,11 @@ public enum CreatureType {
         return (attributes & 0x0200) != 0;
     }
 
+    /** Keeps a dagger, arrow, slayer, poison dart or throwing star that hits it without killing (attribute bit 10). */
+    public boolean keepsThrownSharpWeapons() {
+        return (attributes & 0x0400) != 0;
+    }
+
     /** Can attack (and see) in every direction, not just the way it faces. */
     public boolean sideAttack() {
         return (attributes & SIDE_ATTACK) != 0;

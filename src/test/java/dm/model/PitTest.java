@@ -129,20 +129,20 @@ class PitTest {
     void droppedAndThrownItemsFallToo() {
         DungeonMap upper = level(0, 3, OPEN_PIT, 5, OPEN_PIT);
         DungeonMap lower = level(1);
-        party(List.of(upper, lower), 1, Direction.EAST);
+        Party p = party(List.of(upper, lower), 1, Direction.EAST);
 
         upper.dropItem(3, 1, 2, SWORD);
         assertTrue(upper.itemsAt(3, 1, 2).isEmpty());
         assertEquals(List.of(SWORD), lower.itemsAt(2, 1, 2), "same cell, one level down");
 
-        upper.throwItem(SWORD, 1, 1, Direction.EAST, true, 10);
-        for (int i = 0; i < 5; i++) {
-            upper.tickProjectiles();
+        Flight.launch(p, SWORD, upper, 1, 1, 2, Direction.EAST, 200, 100, 5);
+        for (int i = 0; i < 12; i++) {
+            p.tick();
         }
         assertTrue(upper.projectiles().isEmpty());
         assertFalse(upper.hasItems(3, 1), "it flew over the first pit");
         assertFalse(upper.hasItems(5, 1));
-        assertTrue(lower.hasItems(4, 1), "and fell through the second, where it landed");
+        assertTrue(lower.hasItems(4, 1), "and fell through the second, where it hit the wall");
     }
 
     @Test

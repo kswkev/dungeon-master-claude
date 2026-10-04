@@ -3,6 +3,7 @@ package dm.ui;
 import dm.data.GraphicsFile;
 import dm.data.SaveGames;
 import dm.data.Sound;
+import dm.model.Actions;
 import dm.model.Champion;
 import dm.model.ChampionMirror;
 import dm.model.DungeonMap;
@@ -83,6 +84,7 @@ public final class GameScreen {
         this.formation = new FormationBox(art);
         this.menu = new GameMenu(art);
         this.arrows = new MovementPanel(art);
+        this.actions = new ActionArea(art);
         this.sounds = sounds;
         this.bumpSound = art.sound(GraphicsFile.SOUND_BUMP);
         this.doorSound = art.sound(GraphicsFile.SOUND_DOOR);
@@ -130,12 +132,12 @@ public final class GameScreen {
         if (doors.thud()) {
             sounds.play(dmSound(WOODEN_THUD));
         }
-        DungeonMap.ProjectileTick flew = party.map().tickProjectiles();
-        if (flew.click()) {
-            sounds.play(clickSound);
-        }
-        boolean moved = arrived(party.settle()); // a landing item may have opened a pit under the party
         Party.Tick upkeep = party.tick();
+        boolean moved = arrived(party.settle()); // a landing item may have opened a pit under the party
+        if (actions.acting() >= 0 && party.members().get(actions.acting()).health() == 0) {
+            actions.close();
+        }
+        boolean acted = actions.tick();
         boolean printed = takeMessages();
         if (messages.hasText()) {
             messages.clearExpired(party.time());
@@ -150,7 +152,31 @@ public final class GameScreen {
         if (upkeep.damage() != null) {
             showDamage(upkeep.damage());
         }
-        return doors.moved() || flew.moved() || moved || upkeep.changed() || printed;
+        return doors.moved() || moved || upkeep.changed() || printed || acted;
+    }
+
+    /** DM's action area, under the spell area. */
+    private final ActionArea actions;
+
+    ActionArea actionArea() {
+        return actions;
+    }
+
+    /** A click in the action area: open a champion's menu, pass, or perform the chosen action. */
+    private void clickActionArea(int x, int y) {
+        ActionArea.Click click = actions.click(party, x, y, sheet.candidate() != null);
+        if (click.member() < 0) {
+            return;
+        }
+        Champion c = party.members().get(click.member());
+        int result = party.act(click.member(), click.action());
+        actions.performed(result);
+        if (debug) {
+            System.out.println(c.name() + ": " + Actions.name(click.action())
+                    + (result > 0 ? ", " + result + " damage" : result == Party.CANT_REACH ? ", can't reach"
+                    : result == Party.NEED_AMMO ? ", needs ammunition" : ""));
+        }
+        arrived(party.settle()); // climbing down a pit
     }
 
     /** DM's message area along the bottom of the screen. */
@@ -255,6 +281,10 @@ public final class GameScreen {
             return;
         }
         if (clickHand(x, y)) {
+            return;
+        }
+        if (ActionArea.AREA.contains(x, y)) { // works with the sheet open, as in DM
+            clickActionArea(x, y);
             return;
         }
         if (sheet.isOpen()) {
@@ -418,6 +448,7 @@ public final class GameScreen {
         bars.clearDamage();
         formation.clearPick();
         arrows.setPressed(null);
+        actions.reset();
     }
 
     private void quit() {
@@ -547,9 +578,7 @@ public final class GameScreen {
                     System.out.println("Dropped " + held.name());
                 }
             }
-        } else if (held != null) {
-            map.throwItem(held, party.x(), party.y(), party.facing(), right, Party.THROW_RANGE);
-            party.setHeld(null);
+        } else if (held != null && party.throwHeld(right)) {
             if (debug) {
                 System.out.println("Threw " + held.name() + (right ? " from the right" : " from the left"));
             }
@@ -756,6 +785,7 @@ public final class GameScreen {
             g.drawRect(v.x + 1, v.y + 1, v.width - 2, v.height - 2);
         }
         arrows.draw(g);
+        actions.draw(g, party, sheet.candidate() != null);
         takeMessages();
         messages.draw(g);
         if (debug) {
@@ -811,13 +841,12 @@ public final class GameScreen {
     }
 
     /**
-     * Without GRAPHICS.DAT, outlines the screen regions later sprints will
-     * fill: spells and actions. With it they stay black, as in DM until a
-     * champion can cast or act (#27).
+     * Without GRAPHICS.DAT, outlines the spell area, which the spells sprint
+     * will fill. With it the area stays black, as in DM until a champion can
+     * cast (#27).
      */
     private static void drawPlaceholders(Graphics2D g) {
         g.setColor(new Color(40, 40, 40));
         g.drawRect(233, 42, 86, 34);  // spell casting area
-        g.drawRect(233, 77, 86, 45);  // action area
     }
 }

@@ -540,6 +540,17 @@ public final class Champion implements Serializable {
         enabledAt = tick;
     }
 
+    /** After a throw, the action hand takes the next weapon from the quiver when the champion can act again (F259). */
+    private boolean refillActionHand;
+
+    boolean refillActionHand() {
+        return refillActionHand;
+    }
+
+    void setRefillActionHand(boolean refill) {
+        refillActionHand = refill;
+    }
+
     // ---- wounds and poison (Sprint 15) ----------------------------------------
 
     /** DM's wound bits, one per body part, in DM's slot order. */
@@ -627,6 +638,71 @@ public final class Champion implements Serializable {
         int low = 1 + random.nextInt(8);
         int high = 100 - random.nextInt(8);
         return Math.max(low, Math.min(dexterity >> 1, high));
+    }
+
+    /**
+     * DM's F312: the strength behind what {@code hand} holds, 0-100: strength
+     * plus a little luck, adjusted by the item's weight against what the
+     * champion can carry, plus a weapon's own strength and twice the skill
+     * that wields it (swing for swords and axes, throw for other hand
+     * weapons, shoot for bows and slings). Less when tired, halved by a
+     * wounded hand.
+     */
+    int strength(Slot hand, Random random) {
+        int strength = random.nextInt(16) + stat(Stat.STRENGTH);
+        Item item = items.get(hand);
+        int weight = item == null ? 0 : item.weight();
+        int sixteenth = maxLoad() >> 4;
+        if (weight <= sixteenth) {
+            strength += weight - 12;
+        } else {
+            int threshold = sixteenth + ((sixteenth - 12) >> 1);
+            strength += weight <= threshold ? (weight - sixteenth) >> 1 : -((weight - threshold) << 1);
+        }
+        int weaponClass = ItemCatalog.weaponClass(item);
+        if (weaponClass >= 0) {
+            strength += ItemCatalog.weaponStrength(item);
+            int level = 0;
+            if (weaponClass == ItemCatalog.CLASS_SWING_WEAPON || weaponClass == ItemCatalog.CLASS_DAGGER_AND_AXES) {
+                level = skillLevel(SWING);
+            }
+            if (weaponClass != ItemCatalog.CLASS_SWING_WEAPON && weaponClass < ItemCatalog.CLASS_FIRST_BOW) {
+                level += skillLevel(THROW);
+            }
+            if (weaponClass >= ItemCatalog.CLASS_FIRST_BOW && weaponClass < ItemCatalog.CLASS_FIRST_MAGIC_WEAPON) {
+                level += skillLevel(SHOOT);
+            }
+            strength += level << 1;
+        }
+        strength = staminaAdjusted(strength);
+        if (isWounded(hand)) {
+            strength >>= 1;
+        }
+        return Math.max(0, Math.min(strength >> 1, 100));
+    }
+
+    /** The hardest blow a creature dealt since the last game tick, and the way the champion turns to face it. */
+    private int maxDamageReceived;
+    private Direction maxDamageDirection = Direction.NORTH;
+
+    /** F207: a creature's blow of {@code damage} from {@code from}; the champion turns to the hardest one. */
+    void receivedBlow(int damage, Direction from) {
+        if (damage > maxDamageReceived) {
+            maxDamageReceived = damage;
+            maxDamageDirection = from;
+        }
+    }
+
+    int maxDamageReceived() {
+        return maxDamageReceived;
+    }
+
+    Direction maxDamageDirection() {
+        return maxDamageDirection;
+    }
+
+    void clearMaxDamageReceived() {
+        maxDamageReceived = 0;
     }
 
     /**
