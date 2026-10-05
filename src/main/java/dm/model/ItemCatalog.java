@@ -410,7 +410,7 @@ public final class ItemCatalog {
         return sharp ? defense * ((ARMOUR_ATTRIBUTES[item.type()] & 7) + 4) >> 3 : defense;
     }
 
-    /** DM's F140: a full waterskin weighs 2 more per draught; a chest's contents aren't modelled yet. */
+    /** DM's F140: a full waterskin weighs 2 more per draught, and a chest adds what it holds. */
     static int weight(Item item) {
         int t = item.type();
         return switch (item.category()) {
@@ -419,7 +419,7 @@ public final class ItemCatalog {
             case JUNK -> (t < JUNK_WEIGHTS.length ? JUNK_WEIGHTS[t] : 0) + (t == WATERSKIN ? item.charges() << 1 : 0);
             case POTION -> t == EMPTY_FLASK ? 1 : 3;
             case SCROLL -> 1;
-            case CONTAINER -> 50;
+            case CONTAINER -> 50 + item.contents().stream().mapToInt(ItemCatalog::weight).sum();
         };
     }
 
@@ -440,7 +440,8 @@ public final class ItemCatalog {
             variant = 1;
         }
         return variant == item.nameVariant() ? item
-                : new Item(item.category(), item.type(), item.name(), variant, item.wornOn(), item.charges());
+                : new Item(item.category(), item.type(), item.name(), variant, item.wornOn(), item.charges(),
+                        item.contents(), item.text());
     }
 
     /** How much food eating {@code item} gives, or 0 if it isn't food. */
