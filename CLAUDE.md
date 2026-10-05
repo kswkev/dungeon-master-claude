@@ -32,6 +32,8 @@ A Java/Swing remake of FTL's *Dungeon Master* (1988), built sprint by sprint.
 
 - Sprint 20: the rest of the magic, ported from ReDMCSB: brewing and drinking every potion, invisibility, thieves' eye, magic footprints, ZO KATH RA, item magic in the action menus (with charges), freeze life, fluxcages, creature spells, the party walking into projectiles (F266), and bursting VEN potions and FUL bombs.
 
+- Sprint 21: chests (contents, the open chest's cells) and scrolls (text) from DUNGEON.DAT, DM's item descriptions under the eye, sounds heard by DM's distances (#37), and DM's formation icons (#38).
+
 Not implemented yet: FUSE (the Fluxcage of Chaos endgame, and Lord Chaos's capture by fluxcages), and creatures walking into projectiles (F266 for groups).
 
 ## Commands
@@ -129,6 +131,7 @@ Code lives under `src/main/java/dm/`, in three layers.
   - Word 2: as for floor sensors, plus bit 11 = local.
   - Word 3: remote targets keep X in bits 6-10, Y in bits 11-15 and cell in bits 4-5. Local sensors keep an action in bits 4-15 (10 = add experience, anything else = rotate this side).
   - Handled types: 0 disabled, 1 click, 2 any item, 3 specific item (kept), 4 specific item (used up: keyholes, coin slots), 5 AND/OR gate, 13 single-object storage (torch holders). Others are ignored.
+- **Items with the rest of the file** (`ItemReader`, used by the champion, floor-item and group finders; `ItemReader.BARE` for tests): a container's word 1 links its own thing list (its contents, at most 8; never a chest in a chest); a scroll's word 1 bits 0-9 index a text thing, decoded like inscriptions; a weapon's word 1 has cursed bit 8, poisoned 9, broken 14, an armour's cursed 8, broken 13 (`Item.flags`: `POISONED` 2, `BROKEN` 4, `CURSED` 8, DM's description bits). Verified on the PC file: 13 chests (Level 2 (2,31) holds 8 things) and every scroll reads.
 - **Wall-side objects:** things on a wall square whose cell is the side, such as alcove and torch-holder contents. `FloorItemFinder` loads them into the same piles, except on champion-mirror sides.
   - Word 1: type in bits 0-6.
   - Word 2 (`SensorBits`, from the DM Encyclopaedia): once-only bit 2, effect bits 3-4 (set/clear/toggle/hold), revert bit 5, audible bit 6, delay bits 7-10 (not modelled), local bit 11, ornament ordinal bits 12-15. Bits 0-1 are clear on all 660 sensors. Until #20 everything was read two bits too low.
@@ -207,6 +210,7 @@ Code lives under `src/main/java/dm/`, in three layers.
   - **Invisibility** (event 71, `Party.invisible`): F200 sees nothing unless the creature sees the invisible. **Freeze life** (`Party.freezeLife`, at most 200 ticks, one off each tick): F209 drops reactions and puts other events off 4 ticks, except for Lord Chaos (archenemy). A **fluxcage** (`Explosion.FLUXCAGE`, F224, 100 ticks) blocks only the archenemy (F202).
   - Groups on other maps (after the party has been there) take a random step now and then, as in DM.
   - **Smoke:** a creature that dies (falls, doors, blows, projectiles) leaves a puff of smoke, DM's smoke explosion (`Explosion.SMOKE`, C040, F0190), on its cell or the square's centre. It starts at 110, 190 or 255 by creature size and shrinks by 40 a tick while above 55 (F0220, in `Flight.tickExplosions`), so it lasts 3 to 6 ticks. See **Explosions** for how it is drawn.
+  - **Hearing** (#37, `Sounds`, F064 with G060's loud/soft distances by DM sound): a sound on the party's map, |dx| + |dy| away, is loud under its loud distance, soft under its soft distance, else unheard (footsteps are only ever soft, under 4). `CreatureAI.sound` (so creatures, projectiles and explosions) and `DungeonMap.tickDoors` (rattle C02, thud C04; `DoorTick.rattle`/`thudSound`) use it; `Party.Tick.sounds` is `List<Sounds.Heard>`, and `SoundPlayer.play(sound, soft)` plays soft at -6 dB (`MASTER_GAIN`).
   - Between ticks, `react`, `crushedByDoor`, `settle` and `generate` add to an `Outcome`. The next tick hands it over: damage per member, DM sounds, clicks and whether anything changed.
 - **Scents** (`Party`, DM F267/F315/F316): the last 24 squares walked on, each with a strength.
   - The square left gains the ticks spent on it, up to 80. A new square starts at 24.
@@ -286,6 +290,7 @@ Code lives under `src/main/java/dm/`, in three layers.
   - `Item.fits(slot)` holds DM's slot rules: hands and backpack take anything; body slots only take what `wornOn` names; pouches take potions, scrolls and `ItemCatalog.POUCH_JUNK`; quiver 1 takes any weapon; quivers 2-4 take only missiles.
   - `Champion.take`/`place` move items, and `place` returns the item it displaced.
   - The item on the pointer is `Party.held()` (DM's leader hand), so it survives switching champions and closing the sheet.
+- **Chests, scrolls and descriptions** (Sprint 21): `Item.contents` (a chest's items, immutable; `withContents`), `Item.text` (a scroll's) and `Item.flags`; old saves load with none (the compact constructor turns a null list into an empty one). A chest weighs 50 plus its contents (F140). `ItemCatalog.fitsChest` is G237's chest bit (0x0400) and `describedConsumable` its mouth bit (0x0001), both by object info index. `ItemDescription.of(item, viewer, party)` is F342/F336/F335: the name (bones carry their champion's name; a potion other than water gets its power symbol, '_' + power/40, when the viewer's priest level is above 1, DM's BUG0_49 included for empty flasks), then (BURNT OUT), the waterskin's (EMPTY)...(FULL), PARTY FACING <dir>, "(A, B AND C)" attributes, and WEIGHS n.n KG., each wrapped at 18 characters.
 - **Items are values** with `charges` (weapon bits 10-13: a torch's light power; junk bits 14-15: a waterskin's draughts; a potion's power, bits 0-7). A changed item is a new one (`withCharges`). A waterskin holding water is named WATER, as DM's icon list names it. `ItemCatalog` also holds DM's weights (tenths of a kg) and food values, taken from ScummVM's DM engine because the PC keeps item 559's tables in the program.
 - **Upkeep** (`Upkeep`, ported from ReDMCSB, DM 1.2+ rules):
   - `Party.tick()` advances DM's game clock (one per `GameScreen.TICK_MS`); every 64 ticks F331 runs for each living champion: food and water drain, stamina comes back (faster when rested 80/250 ticks, lost when starving), mana comes back for stamina when a time pattern is below wisdom + priest + wizard levels, health when stamina is at least a quarter, and statistics drift to their maximum every 256 ticks.
@@ -321,7 +326,7 @@ Code lives under `src/main/java/dm/`, in three layers.
 **`ui/`: draws everything at the original 320×200 resolution**
 - `GameScreen` holds all screen state and click routing, with no Swing. `GameWindow` is a thin wrapper that scales the 320×200 buffer with nearest-neighbour filtering and maps mouse positions back. Tests and scratch renders drive `GameScreen.press`/`render` directly.
 - `GameWindow` runs a game tick every `GameScreen.TICK_MS` (170 ms) through `GameScreen.tick()`. That animates doors and repaints only on change. Tests call `tick()` directly.
-- `FormationBox` (top-right, x 276-319) draws champion colours with graphic 28's icons. Click a champion, then a cell, to swap positions. Empty cells, like empty status boxes, stay black as in DM (#27); only the placeholder art (`!art.available()`) outlines them.
+- `FormationBox` (top-right) uses DM's champion icon boxes (x 281-299 and 301-319, y 0-13 and 15-28). As F291 does (#38), each box is filled with the champion's colour and graphic 28 (76×14, four 19-px figures) is drawn over it keyed on colour 12, so the figure is coloured on black; the figure is `iconIndex(champion facing, party facing)` = (dir + 4 - partyDir) & 3. Click a champion, then a cell, to swap positions. Empty cells, like empty status boxes, stay black as in DM (#27); only the placeholder art (`!art.available()`) outlines them.
 - Click order:
   1. a hand box in `ChampionBars` (`handAt`), except on the box of the champion whose sheet is open;
   2. the `ActionArea` (even with a sheet open, as in DM);
@@ -368,6 +373,10 @@ Code lives under `src/main/java/dm/`, in three layers.
   - **Candidates** open only while the party has room and the hand is empty (F280). Resurrect and Reincarnate print "NAME RESURRECTED." / "NAME REINCARNATED." in the member's colour.
   - **Reincarnate** shows the `RenamePanel` (F281): graphic 27 keyed on cyan, the name (7 letters) typed at viewport (177,58) and the title (19) at (105,76), by keys (`GameScreen.type`, while `typing()`) or by clicking DM's keyboard (screen x 107-215, y 116-144, 10 px keys, RETURN two keys tall at the right, BACKSPACE 107-175 × 147-155, OK 197-215 × 147-155). RETURN moves to the title; BACKSPACE at the start of the title returns to the name. OK needs a name, and one no member has (`Party.nameFree`). `Party.reincarnate` then zeroes every skill (`Champion.reincarnate`, as ScummVM's `resetSkillsToZero`) and adds 12 statistic points, each to a random statistic (luck included), current and maximum.
   - An item that doesn't fit stays in hand.
+  - **The panel** (F347/F352, Sprint 21): while the eye is held, the held item's panel (skills and statistics with an empty hand or for a candidate), with the pointer hidden and the looking eye; otherwise a chest or scroll in the action hand opens there; otherwise food and water. Panels go in the panel box (80,52), keyed on red, with F339's arrow (graphic 18) or eye (19) at (83,57).
+    - Open chest: graphic 25, the action hand drawn as icon 145 (OPEN CHEST), the cells' icons at G030's slot boxes 38-45 ((117,59), (106,76), (111,93), (128,98), (145,101), (162,103), (179,104), (196,105)). `Action.CHEST_CELL`/`chestCellAt`/`swapChestCell` swap with the held item; the sheet keeps the cells as shown (gaps included) while the chest stays open, and the chest packs them (DM's F334).
+    - Open scroll: graphic 23; each line centred on x 162 (`162 - 3×length`), the block on y 92 (`92 - 7×lines/2`), 7 rows apart, black on white in `DmFont` with A-Z moved 64 codes down to the font's scroll glyphs (F340).
+    - Description: graphic 20, circle 29 (keyed on colour 12) at (105,53), the icon at (111,59), the name at text point (134,68), the lines from (108,87), light grey on darkest grey (F052).
   - Wounds and poison, as DM's F292 draws them:
     - a wounded body part's cell gets the red slot box (graphic 34, keyed on colour 12) and, if empty, the wounded outline (icon 212 + 2×slot + 1);
     - the mouth box is red while the champion is hungry, thirsty or poisoned, and the eye box while any statistic is below its maximum;
