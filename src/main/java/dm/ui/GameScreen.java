@@ -11,6 +11,7 @@ import dm.model.DungeonMap;
 import dm.model.Item;
 import dm.model.Party;
 import dm.model.Slot;
+import dm.model.Sounds;
 import dm.model.Spells;
 
 import java.awt.BasicStroke;
@@ -146,10 +147,10 @@ public final class GameScreen {
     private boolean step() {
         DungeonMap.DoorTick doors = party.map().tickDoors();
         if (doors.rattled()) {
-            sounds.play(doorSound);
+            sounds.play(doorSound, doors.rattle().soft());
         }
         if (doors.thud()) {
-            sounds.play(dmSound(WOODEN_THUD));
+            sounds.play(dmSound(WOODEN_THUD), doors.thudSound().soft());
         }
         Party.Tick upkeep = party.tick();
         boolean moved = arrived(party.settle()); // a landing item may have opened a pit under the party
@@ -162,8 +163,8 @@ public final class GameScreen {
             messages.clearExpired(party.time());
             printed = true;
         }
-        for (int dmSound : upkeep.sounds()) {
-            sounds.play(dmSound(dmSound));
+        for (Sounds.Heard heard : upkeep.sounds()) {
+            sounds.play(dmSound(heard.dmSound()), heard.soft());
         }
         if (upkeep.click()) {
             sounds.play(clickSound);
@@ -371,6 +372,7 @@ public final class GameScreen {
         if (ViewRenderer.VIEWPORT.contains(x, y)) {
             switch (sheet.click(x, y)) {
                 case SLOT -> clickSlot(sheet.champion(), sheet.slotAt(x, y));
+                case CHEST_CELL -> party.setHeld(sheet.swapChestCell(sheet.chestCellAt(x, y), party.held()));
                 case RESURRECT -> {
                     ChampionMirror mirror = sheet.candidate();
                     if (party.recruit(mirror) && debug) {
@@ -919,7 +921,7 @@ public final class GameScreen {
             menu.draw(g, saves::header,
                     new GameMenu.Settings(party.difficulty(), party.godMode(), party.deepSleep(), party.lockMaster()));
         } else if (sheet.isOpen()) {
-            sheet.draw(g, holding());
+            sheet.draw(g, party);
         } else if (party.sleeping()) {
             drawSleep(g);
         } else {
@@ -987,8 +989,8 @@ public final class GameScreen {
     /** The held item replaces the mouse pointer: its icon centred on the pointer, over everything else. */
     private void drawHeldItem(Graphics2D g) {
         Item held = party.held();
-        if (held == null || pointer == null) {
-            return;
+        if (held == null || pointer == null || sheet.isOpen() && sheet.pressingEye()) {
+            return; // DM's F352 hides the pointer while the eye is held
         }
         int x = pointer.x - 8;
         int y = pointer.y - 8;

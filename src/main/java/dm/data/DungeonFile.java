@@ -171,6 +171,7 @@ public final class DungeonFile {
         int rawStart = r.position();
 
         Thing.Store store = new Thing.Store(things, THING_SIZES, firstThings);
+        ItemReader items = new ItemReader(store, text);
         List<DungeonMap> maps = new ArrayList<>(mapCount);
         int columnBase = 0;
         for (int m = 0; m < mapCount; m++) {
@@ -182,17 +183,17 @@ public final class DungeonFile {
                 }
             }
             List<List<Thing>>[] squareThings = store.listsFor(squares, columnFirstThing, columnBase);
-            DungeonMap map = new DungeonMap(levels[m], squares, ChampionFinder.find(squareThings, text),
+            DungeonMap map = new DungeonMap(levels[m], squares, ChampionFinder.find(squareThings, text, items),
                     doorStyles(squares, squareThings, graphicsSets[m]));
             map.setOffset(offsetX[m], offsetY[m]);
             map.setDifficulty(otherCounts[m] >>> 12);
             OrnamentLists lists = OrnamentLists.read(data, base + widths[m] * heights[m],
                     rawStart + rawMapBytes, ornamentCounts[m], otherCounts[m]);
             FloorSensorFinder.find(squares, squareThings, lists.floor()).forEach(map::addSensor);
-            FloorItemFinder.place(map, squares, squareThings);
+            FloorItemFinder.place(map, squares, squareThings, items);
             WallSensorFinder.find(squares, squareThings, lists.wall()).forEach(map::addWallSensor);
             TeleporterFinder.find(squares, squareThings).forEach(map::addTeleporter);
-            GroupFinder.find(squareThings, store).forEach(map::addGroup);
+            GroupFinder.find(squareThings, store, items).forEach(map::addGroup);
             map.setCreatureTypes(Arrays.stream(lists.creatures()).mapToObj(CreatureType::of)
                     .filter(Objects::nonNull).toList());
             map.initSensors();

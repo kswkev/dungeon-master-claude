@@ -19,12 +19,16 @@ final class GroupFinder {
     }
 
     static List<Group> find(List<List<Thing>>[] squareThings, Thing.Store store) {
+        return find(squareThings, store, ItemReader.BARE);
+    }
+
+    static List<Group> find(List<List<Thing>>[] squareThings, Thing.Store store, ItemReader items) {
         List<Group> groups = new ArrayList<>();
         for (int x = 0; x < squareThings.length; x++) {
             for (int y = 0; y < squareThings[x].size(); y++) {
                 for (Thing t : squareThings[x].get(y)) {
                     if (t.type() == Thing.GROUP) {
-                        Group g = decode(x, y, t.words(), store == null ? List.of() : store.chain(t.words()[1]));
+                        Group g = decode(x, y, t.words(), store == null ? List.of() : store.chain(t.words()[1]), items);
                         if (g != null) {
                             groups.add(g);
                         }
@@ -37,6 +41,10 @@ final class GroupFinder {
 
     /** The group a record describes, or null for an unknown creature type. */
     static Group decode(int x, int y, int[] words, List<Thing> possessionThings) {
+        return decode(x, y, words, possessionThings, ItemReader.BARE);
+    }
+
+    static Group decode(int x, int y, int[] words, List<Thing> possessionThings, ItemReader items) {
         CreatureType type = CreatureType.of(words[2] & 0xFF);
         if (type == null) {
             return null;
@@ -48,7 +56,7 @@ final class GroupFinder {
         int[] health = {words[3], words[4], words[5], words[6]};
         List<Item> possessions = new ArrayList<>();
         for (Thing p : possessionThings) {
-            Item item = ChampionFinder.toItem(p);
+            Item item = items.toItem(p);
             if (item != null) {
                 possessions.add(item);
             }

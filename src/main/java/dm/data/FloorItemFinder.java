@@ -20,6 +20,10 @@ final class FloorItemFinder {
     }
 
     static void place(DungeonMap map, Square[][] squares, List<List<Thing>>[] squareThings) {
+        place(map, squares, squareThings, ItemReader.BARE);
+    }
+
+    static void place(DungeonMap map, Square[][] squares, List<List<Thing>>[] squareThings, ItemReader items) {
         for (int x = 0; x < squares.length; x++) {
             for (int y = 0; y < squares[x].length; y++) {
                 List<Thing> things = squareThings[x].get(y);
@@ -28,7 +32,7 @@ final class FloorItemFinder {
                     if (wall && WallSensorFinder.isMirrorSide(things, t.cell())) {
                         continue;
                     }
-                    Item item = ChampionFinder.toItem(t);
+                    Item item = items.toItem(t);
                     if (item != null) {
                         map.addItem(x, y, t.cell(), item);
                     }

@@ -1,6 +1,7 @@
 package dm.ui;
 
 import dm.model.Champion;
+import dm.model.Direction;
 import dm.model.Party;
 
 import java.awt.Color;
@@ -11,19 +12,21 @@ import java.awt.image.BufferedImage;
 /**
  * DM's party formation box in the top-right corner: a 2x2 grid showing where
  * each champion stands (front row on top, as seen from behind the party).
- * Each champion appears as their colour with DM's champion icon on top.
+ * Each champion is DM's helmeted figure (graphic 28) in their colour on
+ * black, turned the way they face relative to the party (F291, #38).
  *
  * Click a champion to pick them up, then click any cell to move them there,
  * swapping with whoever stands there. Clicking the picked cell again cancels.
  */
 public final class FormationBox {
 
-    public static final Rectangle AREA = new Rectangle(276, 0, 44, 29);
+    /** DM's champion icon boxes (ScummVM's boxChampionIcons): x 281-299 and 301-319, y 0-13 and 15-28. */
+    public static final Rectangle AREA = new Rectangle(281, 0, 39, 29);
 
     static final int CHAMPION_ICONS = 28;
     private static final int ICON_W = 19;
     private static final int ICON_H = 14;
-    private static final int CELL_W = 21;
+    private static final int CELL_W = 20;
     private static final int CELL_H = 15;
 
     private final Art art;
@@ -47,7 +50,16 @@ public final class FormationBox {
     private static Rectangle cell(int position) {
         int col = position == Party.FRONT_LEFT || position == Party.BACK_LEFT ? 0 : 1;
         int row = position == Party.FRONT_LEFT || position == Party.FRONT_RIGHT ? 0 : 1;
-        return new Rectangle(AREA.x + 1 + col * CELL_W, AREA.y + row * CELL_H, ICON_W, ICON_H);
+        return new Rectangle(AREA.x + col * CELL_W, AREA.y + row * CELL_H, ICON_W, ICON_H);
+    }
+
+    /**
+     * DM's M26/getChampionIconIndex: which of graphic 28's four figures shows
+     * a champion facing {@code facing} in a party facing {@code partyFacing}
+     * (0 the same way, then clockwise).
+     */
+    static int iconIndex(Direction facing, Direction partyFacing) {
+        return (facing.ordinal() + 4 - partyFacing.ordinal()) & 3;
     }
 
     /** The position picked up for moving, or -1. */
@@ -84,7 +96,9 @@ public final class FormationBox {
     public void draw(Graphics2D g, Party party) {
         g.setColor(Color.BLACK);
         g.fillRect(AREA.x, AREA.y, AREA.width, AREA.height);
-        BufferedImage icons = art.sprite(CHAMPION_ICONS);
+        // F291: the box in the champion's colour, then the figure keyed on colour 12, so the
+        // figure (colour 12) takes the colour and its black background stays black.
+        BufferedImage icons = art.keyed(CHAMPION_ICONS, 12);
         for (int p = 0; p < Party.MAX_MEMBERS; p++) {
             Rectangle r = cell(p);
             Champion c = party.at(p);
@@ -97,25 +111,13 @@ public final class FormationBox {
             }
             g.setColor(ChampionBars.COLORS[party.members().indexOf(c)]);
             g.fillRect(r.x, r.y, r.width, r.height);
-            if (icons != null) {
-                // Icon 0 faces the same way as the party; black is see-through so the colour shows.
-                drawIcon(g, icons, r);
+            int icon = iconIndex(c.facing(), party.facing());
+            if (icons != null && icons.getWidth() >= (icon + 1) * ICON_W) {
+                g.drawImage(icons.getSubimage(icon * ICON_W, 0, ICON_W, ICON_H), r.x, r.y, null);
             }
             if (p == picked) {
                 g.setColor(Color.WHITE);
                 g.drawRect(r.x - 1, r.y - 1, r.width + 1, r.height + 1);
-            }
-        }
-    }
-
-    private static void drawIcon(Graphics2D g, BufferedImage icons, Rectangle r) {
-        for (int y = 0; y < ICON_H; y++) {
-            for (int x = 0; x < ICON_W; x++) {
-                int argb = icons.getRGB(x, y);
-                if ((argb >>> 24) != 0 && (argb & 0xFFFFFF) != 0) {
-                    g.setColor(new Color(argb, true));
-                    g.fillRect(r.x + x, r.y + y, 1, 1);
-                }
             }
         }
     }

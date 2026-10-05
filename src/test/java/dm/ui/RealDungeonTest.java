@@ -423,6 +423,31 @@ class RealDungeonTest {
         assertEquals(0, outside);
     }
 
+    /** Sprint 21: the chest on Level 2 (2,31) holds its food, a box, a scroll and a flask, and weighs them. */
+    @Test
+    void chestsHoldTheirContents() {
+        Item chest = dungeon.maps().get(1).itemsAt(2, 31, 0).get(0);
+        assertEquals(Item.Category.CONTAINER, chest.category());
+        assertEquals(java.util.List.of("DRUMSTICK", "CORN", "CHEESE", "BREAD", "BREAD", "MAGICAL BOX", "SCROLL",
+                "EMPTY FLASK"), chest.contents().stream().map(Item::name).toList());
+        assertEquals(80, chest.weight());
+    }
+
+    /** Sprint 21: the scroll on Level 1 (4,15) carries its text, a line per row. */
+    @Test
+    void scrollsCarryTheirText() {
+        Item scroll = null;
+        for (int c = 0; c < 4 && scroll == null; c++) {
+            for (Item i : dungeon.maps().get(0).itemsAt(4, 15, c)) {
+                if (i.category() == Item.Category.SCROLL) {
+                    scroll = i;
+                }
+            }
+        }
+        assertNotNull(scroll);
+        assertEquals("INVOKE FUL\nFOR A MAGIC\nTORCH", scroll.text());
+    }
+
     private static ViewRenderer render(Party party) {
         ViewRenderer view = ViewRenderer.forArt(Art.load(GRAPHICS));
         BufferedImage img = new BufferedImage(320, 200, BufferedImage.TYPE_INT_RGB);

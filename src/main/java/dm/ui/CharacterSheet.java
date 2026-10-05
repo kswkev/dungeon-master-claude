@@ -5,6 +5,8 @@ import dm.model.Champion;
 import dm.model.ChampionMirror;
 import dm.model.Item;
 import dm.model.ItemCatalog;
+import dm.model.ItemDescription;
+import dm.model.Party;
 import dm.model.Slot;
 
 import java.awt.Color;
@@ -12,6 +14,8 @@ import java.awt.Graphics2D;
 import java.awt.Point;
 import java.awt.Rectangle;
 import java.awt.image.BufferedImage;
+import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.EnumMap;
 import java.util.List;
 import java.util.Map;
@@ -32,9 +36,10 @@ public final class CharacterSheet {
      * ({@link #slotAt}), MOUTH feeding them the held item, EYE showing
      * their skills and statistics while the button is held, and DISK the
      * game menu (save, load, quit). REINCARNATE starts renaming a candidate,
-     * and RENAMED is the rename panel's OK. SLEEP is the ZZZ icon.
+     * and RENAMED is the rename panel's OK. SLEEP is the ZZZ icon. CHEST_CELL
+     * is a cell of the open chest ({@link #chestCellAt}).
      */
-    public enum Action { NONE, RESURRECT, REINCARNATE, RENAMED, CLOSE, SLOT, MOUTH, EYE, DISK, SLEEP }
+    public enum Action { NONE, RESURRECT, REINCARNATE, RENAMED, CLOSE, SLOT, MOUTH, EYE, DISK, SLEEP, CHEST_CELL }
 
     private static final Rectangle VIEW = ViewRenderer.VIEWPORT;
 
@@ -101,6 +106,29 @@ public final class CharacterSheet {
     private static final int FOOD_LABEL_GRAPHIC = 30;
     private static final int WATER_LABEL_GRAPHIC = 31;
 
+    /** DM's open chest (F333): graphic 25 in the panel box, its 8 cells' icons at G030's slot boxes 38-45. */
+    private static final int PANEL_OPEN_CHEST = 25;
+    private static final Point[] CHEST_CELLS = {
+            new Point(117, 59), new Point(106, 76), new Point(111, 93), new Point(128, 98),
+            new Point(145, 101), new Point(162, 103), new Point(179, 104), new Point(196, 105)};
+    /** The action hand shows the chest open while its panel is (icon 145, F333). */
+    private static final int ICON_OPEN_CHEST = 145;
+    /** DM's open scroll (F341): graphic 23 in the panel box; lines centred on x 162 and y 92, 7 rows apart. */
+    private static final int PANEL_OPEN_SCROLL = 23;
+    private static final int SCROLL_CENTRE_X = 162;
+    private static final int SCROLL_CENTRE_Y = 92;
+    /** F339: the arrow (graphic 18) over a chest or scroll, or the eye (19) while it's looked at, keyed on red. */
+    private static final int ARROW_FOR_CHEST = 18;
+    private static final int EYE_FOR_DESCRIPTION = 19;
+    private static final Point ARROW_OR_EYE = new Point(83, 57);
+    /** F342: the description circle (graphic 29, keyed on darkest grey), the icon in it, the name and the lines. */
+    private static final int DESCRIPTION_CIRCLE = 29;
+    private static final Point CIRCLE = new Point(105, 53);
+    private static final Point DESCRIPTION_ICON = new Point(111, 59);
+    private static final Point DESCRIPTION_NAME = new Point(134, 68);
+    private static final Point DESCRIPTION_LINES = new Point(108, 87);
+    private static final int DESCRIPTION_LINE = 7;
+
     private static final Color TEXT = Art.PALETTE[13];
     private static final Color HEADING = Art.PALETTE[15];
     private static final List<Champion.Stat> SHOWN_STATS = List.of(
@@ -113,6 +141,12 @@ public final class CharacterSheet {
     private RenamePanel renaming;
     private Point hover;
     private boolean pressingEye;
+    /**
+     * The open chest's cells as shown (DM's G425): items keep their cells,
+     * gaps included, while the chest stays open; the chest itself holds them
+     * packed, as DM's F334 leaves them on closing.
+     */
+    private final Item[] chestCells = new Item[Item.CHEST_CELLS];
 
     public CharacterSheet(Art art) {
         this.art = art;
@@ -226,6 +260,9 @@ public final class CharacterSheet {
         if (slotAt(x, y) != null) {
             return Action.SLOT;
         }
+        if (chestCellAt(x, y) >= 0) {
+            return Action.CHEST_CELL;
+        }
         if (MOUTH.contains(vx, vy)) {
             return Action.MOUTH;
         }
@@ -280,10 +317,89 @@ public final class CharacterSheet {
         return null;
     }
 
-    /** Draws the sheet; item name tooltips are left out while an item is on the pointer. */
-    public void draw(Graphics2D g, boolean holding) {
+    /**
+     * The chest in a member's action hand, open in the panel, or null (DM's
+     * F347: not while the eye is held or for a candidate).
+     */
+    public Item openChest() {
+        if (champion == null || candidate != null || renaming != null || pressingEye) {
+            return null;
+        }
+        Item hand = champion.items().get(Slot.ACTION_HAND);
+        return hand != null && hand.category() == Item.Category.CONTAINER ? hand : null;
+    }
+
+    /** The open chest's cell under screen point (x, y), or -1. */
+    public int chestCellAt(int x, int y) {
+        if (openChest() == null) {
+            return -1;
+        }
+        int vx = x - VIEW.x;
+        int vy = y - VIEW.y;
+        for (int i = 0; i < CHEST_CELLS.length; i++) {
+            Point p = CHEST_CELLS[i];
+            if (vx >= p.x && vx < p.x + 16 && vy >= p.y && vy < p.y + 16) {
+                return i;
+            }
+        }
+        return -1;
+    }
+
+    /** Screen point at the centre of chest cell {@code i}, for tests. */
+    static Point chestCellCentre(int i) {
+        return new Point(VIEW.x + CHEST_CELLS[i].x + 8, VIEW.y + CHEST_CELLS[i].y + 8);
+    }
+
+    /**
+     * DM's click on a chest cell (F302): the held item goes into cell
+     * {@code cell} and whatever was there comes out, which is returned. An
+     * item the chest doesn't take (G237's chest bit: never another chest)
+     * stays in hand, so {@code held} comes back.
+     */
+    public Item swapChestCell(int cell, Item held) {
+        Item chest = openChest();
+        if (chest == null || held != null && !ItemCatalog.fitsChest(held)) {
+            return held;
+        }
+        Item[] cells = chestCells(chest);
+        Item out = cells[cell];
+        cells[cell] = held;
+        champion.place(Slot.ACTION_HAND, chest.withContents(packed(cells)));
+        return out;
+    }
+
+    /** The cells of {@code chest} as shown: the ones kept while it stays open, else its contents in order. */
+    private Item[] chestCells(Item chest) {
+        if (!packed(chestCells).equals(chest.contents())) {
+            System.arraycopy(cellsOf(chest.contents()), 0, chestCells, 0, chestCells.length);
+        }
+        return chestCells;
+    }
+
+    private static List<Item> packed(Item[] cells) {
+        List<Item> out = new ArrayList<>();
+        for (Item i : cells) {
+            if (i != null) {
+                out.add(i);
+            }
+        }
+        return out;
+    }
+
+    /**
+     * Draws the sheet. The panel follows DM's F347 and F352: while the eye is
+     * held, the held item's panel (or skills and statistics with an empty
+     * hand); otherwise a chest or scroll in the action hand opens there, and
+     * anything else leaves food and water. Item name tooltips are left out
+     * while an item is on the pointer.
+     */
+    public void draw(Graphics2D g, Party party) {
         if (champion == null) {
             return;
+        }
+        Item held = party.held();
+        if (openChest() == null) {
+            Arrays.fill(chestCells, null); // DM's F334 closes the chest, packing its cells
         }
         Graphics2D v = (Graphics2D) g.create(VIEW.x, VIEW.y, VIEW.width, VIEW.height);
         try {
@@ -292,22 +408,143 @@ public final class CharacterSheet {
             PixelFont.draw(v, champion.fullName(), 3, 3, HEADING);
             drawItems(v);
             drawVitals(v);
+            Item hand = champion.items().get(Slot.ACTION_HAND);
             if (renaming != null) {
                 renaming.draw(v, art);
             } else if (pressingEye) {
-                drawSkillsAndStats(v);
+                if (held == null || candidate != null) {
+                    drawSkillsAndStats(v);
+                } else {
+                    drawObjectPanel(v, held, party, true);
+                }
                 drawLookingEye(v);
             } else if (candidate != null) {
                 drawResurrectPanel(v);
+            } else if (hand != null && !ItemDescription.describes(hand)) {
+                drawObjectPanel(v, hand, party, false);
             } else {
                 drawFoodAndWater(v);
             }
             drawButtons(v);
-            if (!holding) {
+            if (held == null) {
                 drawTooltip(v);
             }
         } finally {
             v.dispose();
+        }
+    }
+
+    /** DM's F342: a scroll's text, a chest's cells, or anything else's description, then F339's arrow or eye. */
+    private void drawObjectPanel(Graphics2D g, Item item, Party party, boolean looking) {
+        switch (item.category()) {
+            case SCROLL -> drawScroll(g, item.text());
+            case CONTAINER -> drawChest(g, item, looking);
+            default -> drawDescription(g, ItemDescription.of(item, champion, party), item);
+        }
+        BufferedImage mark = art.keyed(looking ? EYE_FOR_DESCRIPTION : ARROW_FOR_CHEST, 8);
+        if (mark != null) {
+            g.drawImage(mark, ARROW_OR_EYE.x, ARROW_OR_EYE.y, null);
+        }
+    }
+
+    /** F333: the open chest with an icon in each filled cell; the action hand's chest shows open. */
+    private void drawChest(Graphics2D g, Item chest, boolean looking) {
+        drawPanel(g, PANEL_OPEN_CHEST);
+        Item[] cells = looking ? cellsOf(chest.contents()) : chestCells(chest);
+        for (int i = 0; i < cells.length; i++) {
+            if (cells[i] != null) {
+                drawIcon(g, cells[i], CHEST_CELLS[i].x, CHEST_CELLS[i].y);
+            }
+        }
+        BufferedImage open = looking ? null : art.icon(ICON_OPEN_CHEST);
+        if (open != null) {
+            Point p = SLOT_ICONS.get(Slot.ACTION_HAND);
+            g.drawImage(open, p.x, p.y, null);
+        }
+    }
+
+    private static Item[] cellsOf(List<Item> contents) {
+        Item[] cells = new Item[Item.CHEST_CELLS];
+        for (int i = 0; i < contents.size() && i < cells.length; i++) {
+            cells[i] = contents.get(i);
+        }
+        return cells;
+    }
+
+    /**
+     * F341/F340: the scroll's lines in DM's font, black on white, each centred
+     * on x 162 and the block on y 92. Letters use the font's scroll glyphs,
+     * 64 codes below the plain ones.
+     */
+    private void drawScroll(Graphics2D g, String text) {
+        drawPanel(g, PANEL_OPEN_SCROLL);
+        DmFont font = art.font();
+        if (text == null) {
+            return;
+        }
+        String[] lines = text.split("\n");
+        int y = SCROLL_CENTRE_Y - DESCRIPTION_LINE * lines.length / 2;
+        for (String line : lines) {
+            int x = SCROLL_CENTRE_X - (DmFont.ADVANCE * line.length() >> 1);
+            if (font != null) {
+                font.draw(g, scrollGlyphs(line), x, y, Art.PALETTE[0], Art.PALETTE[15]);
+            } else {
+                PixelFont.draw(g, line, x, y - 4, Art.PALETTE[0]);
+            }
+            y += DESCRIPTION_LINE;
+        }
+    }
+
+    static String scrollGlyphs(String line) {
+        StringBuilder sb = new StringBuilder(line.length());
+        for (char c : line.toCharArray()) {
+            sb.append(c >= 'A' && c <= 'Z' ? (char) (c - 64) : c);
+        }
+        return sb.toString();
+    }
+
+    /** F342: the circle with the icon, the name beside it and the lines under it, light grey on dark grey. */
+    private void drawDescription(Graphics2D g, ItemDescription description, Item item) {
+        drawPanel(g, PANEL_EMPTY);
+        BufferedImage circle = art.keyed(DESCRIPTION_CIRCLE, 12);
+        if (circle != null) {
+            g.drawImage(circle, CIRCLE.x, CIRCLE.y, null);
+        }
+        drawIcon(g, item, DESCRIPTION_ICON.x, DESCRIPTION_ICON.y);
+        printPanelText(g, description.name(), DESCRIPTION_NAME.x, DESCRIPTION_NAME.y);
+        int y = DESCRIPTION_LINES.y;
+        for (String line : description.lines()) {
+            printPanelText(g, line, DESCRIPTION_LINES.x, y);
+            y += DESCRIPTION_LINE;
+        }
+    }
+
+    /** DM's F052: text in the viewport, in a colour on darkest grey. */
+    private void printPanelText(Graphics2D g, String text, int x, int y) {
+        DmFont font = art.font();
+        if (font != null) {
+            font.draw(g, text, x, y, TEXT, Art.PALETTE[12]);
+        } else {
+            PixelFont.draw(g, text, x, y - 4, TEXT);
+        }
+    }
+
+    private void drawPanel(Graphics2D g, int graphic) {
+        BufferedImage panel = art.keyed(graphic, 8);
+        if (panel != null) {
+            g.drawImage(panel, PANEL.x, PANEL.y, null);
+        } else {
+            g.setColor(Art.PALETTE[12]);
+            g.fillRect(PANEL.x, PANEL.y, 144, 73);
+        }
+    }
+
+    private void drawIcon(Graphics2D g, Item item, int x, int y) {
+        BufferedImage icon = art.icon(item);
+        if (icon != null) {
+            g.drawImage(icon, x, y, null);
+        } else {
+            Placeholders.icon(g, item, x, y);
         }
     }
 

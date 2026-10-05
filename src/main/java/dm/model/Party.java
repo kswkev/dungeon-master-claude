@@ -1029,9 +1029,10 @@ public final class Party implements Serializable {
     /**
      * What a game tick did: whether anything visible changed, the damage
      * each member took (indexed like {@link #members()}, or null), the DM
-     * sounds the creatures made, and whether a sensor under one clicked.
+     * sounds the party heard (loud or soft, #37), and whether a sensor under
+     * a creature clicked.
      */
-    public record Tick(boolean changed, int[] damage, List<Integer> sounds, boolean click) {
+    public record Tick(boolean changed, int[] damage, List<Sounds.Heard> sounds, boolean click) {
         public static final Tick NOTHING = new Tick(false, null, List.of(), false);
 
         public Tick(boolean changed, int[] damage) {

@@ -5,6 +5,7 @@ import dm.data.Sound;
 import javax.sound.sampled.AudioFormat;
 import javax.sound.sampled.AudioSystem;
 import javax.sound.sampled.Clip;
+import javax.sound.sampled.FloatControl;
 import java.util.IdentityHashMap;
 import java.util.Map;
 
@@ -12,6 +13,11 @@ import java.util.Map;
 public interface SoundPlayer {
 
     void play(Sound sound);
+
+    /** Plays {@code sound}, quieter when {@code soft} (DM's soft sounds, heard from further away, #37). */
+    default void play(Sound sound, boolean soft) {
+        play(sound);
+    }
 
     static SoundPlayer silent() {
         return sound -> { };
@@ -29,8 +35,16 @@ public interface SoundPlayer {
         private JavaSoundPlayer() {
         }
 
+        /** A soft sound plays at half the volume. */
+        static final float SOFT_GAIN_DB = -6f;
+
         @Override
-        public synchronized void play(Sound sound) {
+        public void play(Sound sound) {
+            play(sound, false);
+        }
+
+        @Override
+        public synchronized void play(Sound sound, boolean soft) {
             if (sound == null || disabled) {
                 return;
             }
@@ -41,6 +55,9 @@ public interface SoundPlayer {
                     clip = AudioSystem.getClip();
                     clip.open(format, sound.pcm(), 0, sound.pcm().length);
                     clips.put(sound, clip);
+                }
+                if (clip.isControlSupported(FloatControl.Type.MASTER_GAIN)) {
+                    ((FloatControl) clip.getControl(FloatControl.Type.MASTER_GAIN)).setValue(soft ? SOFT_GAIN_DB : 0f);
                 }
                 // Restart from the top so repeated bumps each get a full thud.
                 clip.stop();

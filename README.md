@@ -159,6 +159,13 @@ Spells came in Sprint 19; the magic in items' action menus (a staff's fireball a
 - **Projectiles:** walking into a projectile hurts. A thrown VEN potion bursts into a poison cloud and a FUL bomb into a fireball.
 - Not yet: FUSE (the endgame), and creatures walking into projectiles.
 
+**Sprint 21: done.** Chests, scrolls, looking at things, and two fixes (ported from ReDMCSB):
+- **Chests:** chests hold what the dungeon put in them. Put one in a champion's action hand with their sheet open and it opens in the panel: click its cells to take things out or put things in (not another chest). A chest weighs what it holds.
+- **Scrolls:** a scroll in the action hand opens and shows its text in the original's scroll lettering.
+- **Looking at things:** hold the eye with an item in hand to see its name, weight and the original's notes: a burnt-out torch, how full a waterskin is, which way the compass points, what can be eaten or drunk, and poisoned, broken or cursed weapons and armour. Priests above the first level also see a potion's power. A chest or scroll held over the eye shows its contents.
+- **Sounds carry as far as in the original (#37):** creatures, projectiles, explosions and doors are heard only within each sound's own distance, quieter further away.
+- **The formation box (#38)** shows the original's helmeted figures in the champions' colours on black, each turned the way its champion faces.
+
 ## Requirements
 
 - JDK 17 or newer
@@ -215,6 +222,7 @@ The tests cover:
 - wall bumps, the formation box, pressure plates and door animation;
 - decoration placement (including DM's random formula), inscriptions and the screen-layout table;
 - moving items between inventory slots, floor items, picking up, dropping and throwing;
+- chest contents and scroll text, the open chest's cells, item descriptions, and how far sounds carry;
 - wall sensors, alcoves, door buttons and AND/OR gates;
 - stairs between levels;
 - pits, teleporters, levers, alcove clicks and plates pressed by items;

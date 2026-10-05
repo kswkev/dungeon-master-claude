@@ -66,18 +66,27 @@ record Thing(int type, int index, int cell, int[] words) {
             return out;
         }
 
+        /** The record of thing {@code index} of {@code type}, or null if there is no such record. */
+        int[] record(int type, int index) {
+            int words = sizes[type] / 2;
+            if (words == 0 || index < 0 || (index + 1) * words > records[type].length) {
+                return null;
+            }
+            int[] rec = new int[words];
+            System.arraycopy(records[type], index * words, rec, 0, words);
+            return rec;
+        }
+
         /** The things linked from {@code id} (a creature group's possessions, for one). */
         List<Thing> chain(int id) {
             List<Thing> list = new ArrayList<>();
             while (id != END_OF_LIST && id != NONE && list.size() < MAX_LIST_LENGTH) {
                 int type = (id >>> 10) & 15;
                 int index = id & 0x3FF;
-                int words = sizes[type] / 2;
-                if (words == 0 || (index + 1) * words > records[type].length) {
+                int[] rec = record(type, index);
+                if (rec == null) {
                     break; // corrupt link; keep what we have
                 }
-                int[] rec = new int[words];
-                System.arraycopy(records[type], index * words, rec, 0, words);
                 list.add(new Thing(type, index, id >>> 14, rec));
                 id = rec[0];
             }
