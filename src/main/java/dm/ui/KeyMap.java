@@ -11,6 +11,10 @@ import java.awt.event.KeyEvent;
  * With Num Lock off the keypad sends Home, Up, PgUp, Left, Clear and Right,
  * so keys from the keypad are told apart by their location: the keypad's
  * Left is a sidestep while the arrow key's Left is a turn.
+ *
+ * Spells (not in DM, which casts only with the mouse): the top-row digits
+ * 1-6 enter a symbol from the caster's current row, Enter casts and
+ * Backspace takes the last symbol back ({@link GameWindow}).
  */
 public final class KeyMap {
 
@@ -34,6 +38,18 @@ public final class KeyMap {
             case KeyEvent.VK_NUMPAD6, KeyEvent.VK_D -> MovementPanel.Action.STRAFE_RIGHT;
             default -> null;
         };
+    }
+
+    /**
+     * The spell symbol (column 0-5 of the caster's current row) a key enters:
+     * the top-row digits 1-6 (not in DM). The keypad's digits stay movement.
+     * -1 for any other key.
+     */
+    public static int spellSymbol(int keyCode, int location) {
+        if (location == KeyEvent.KEY_LOCATION_NUMPAD || keyCode < KeyEvent.VK_1 || keyCode > KeyEvent.VK_6) {
+            return -1;
+        }
+        return keyCode - KeyEvent.VK_1;
     }
 
     /** The keypad with Num Lock off. */

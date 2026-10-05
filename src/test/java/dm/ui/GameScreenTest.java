@@ -983,4 +983,73 @@ class GameScreenTest {
         screen.press(MovementPanel.AREA.x + 40, MovementPanel.AREA.y + 10); // forward arrow
         assertEquals(1, party.y(), "party must not move");
     }
+
+    // ---- the spell area (Sprint 19) -----------------------------------------------------------
+
+    @Test
+    void clickingSymbolsEntersThemRowByRow() {
+        recruitElija();
+        Champion elija = party.members().get(0);
+        screen.press(235 + 14 * 3 + 5, 56); // EE
+        screen.press(235 + 14 * 3 + 5, 56); // FUL
+        assertEquals("" + (char) 99 + (char) 105, elija.symbols());
+        screen.press(310, 68); // backspace
+        assertEquals("" + (char) 99, elija.symbols());
+        render();
+    }
+
+    @Test
+    void keysEnterSymbolsAndEnterCasts() {
+        recruitElija();
+        party.setGodMode(true);
+        Champion elija = party.members().get(0);
+        screen.spellSymbol(0); // LO FUL IR: a fireball
+        screen.spellSymbol(3);
+        screen.spellSymbol(3);
+        screen.backspace();
+        screen.spellSymbol(3);
+        assertEquals(3, elija.symbols().length());
+        screen.pressReturn();
+        assertEquals("", elija.symbols(), "cast");
+        assertEquals(1, party.map().projectiles().size());
+        render();
+    }
+
+    @Test
+    void theCastBarCastsAndAnEmptySpellDoesNothing() {
+        recruitElija();
+        party.setGodMode(true);
+        screen.press(260, 68);
+        assertTrue(party.takeMessages().isEmpty(), "nothing to cast");
+        screen.spellSymbol(0);
+        screen.spellSymbol(3); // LO FUL: a magic torch
+        screen.press(260, 68);
+        assertTrue(party.magicalLight() > 0);
+    }
+
+    @Test
+    void theTabsChooseTheCaster() {
+        recruitElija();
+        Champion second = Champion.parse(ELIJA.replace("ELIJA", "HALK"), 1);
+        party.recruit(new ChampionMirror(1, 0, Direction.SOUTH, second));
+        assertEquals(0, party.magicCaster());
+        screen.press(285, 45); // the second champion's small tab
+        assertEquals(1, party.magicCaster());
+        screen.spellSymbol(2);
+        assertEquals(1, second.symbols().length());
+        assertEquals("", party.members().get(0).symbols());
+        screen.press(238, 45); // back to the first
+        assertEquals(0, party.magicCaster());
+        render();
+    }
+
+    @Test
+    void nobodyCastsInTheirSleep() {
+        recruitElija();
+        party.sleep();
+        screen.spellSymbol(0);
+        screen.press(240, 56);
+        assertEquals("", party.members().get(0).symbols());
+        render();
+    }
 }

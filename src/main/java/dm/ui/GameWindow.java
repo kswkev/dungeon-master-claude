@@ -146,6 +146,17 @@ public final class GameWindow extends JFrame {
                         repaint();
                         return;
                     }
+                    if (e.getKeyCode() == KeyEvent.VK_BACK_SPACE) {
+                        game.backspace();
+                        repaint();
+                        return;
+                    }
+                    int symbol = KeyMap.spellSymbol(e.getKeyCode(), e.getKeyLocation());
+                    if (symbol >= 0) {
+                        game.spellSymbol(symbol);
+                        repaint();
+                        return;
+                    }
                     MovementPanel.Action action = KeyMap.action(e.getKeyCode(), e.getKeyLocation());
                     if (action != null) {
                         game.key(action);

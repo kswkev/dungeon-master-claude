@@ -1373,10 +1373,10 @@ public final class CreatureAI implements Serializable {
                     scale = false;
                 }
                 case 5 -> { // magic
-                    attack = c.statisticAdjustedAttack(Champion.Stat.ANTI_MAGIC, attack);
+                    attack = c.statisticAdjustedAttack(Champion.Stat.ANTI_MAGIC, attack) - party.spellShieldDefense();
                     scale = false;
                 }
-                case 1 -> attack = c.statisticAdjustedAttack(Champion.Stat.ANTI_FIRE, attack); // fire
+                case 1 -> attack = c.statisticAdjustedAttack(Champion.Stat.ANTI_FIRE, attack) - party.fireShieldDefense(); // fire
                 case 2 -> defense >>= 1; // self
                 default -> { }
             }
@@ -1432,7 +1432,7 @@ public final class CreatureAI implements Serializable {
         if (sharp) {
             defense >>= 1;
         }
-        defense += c.actionDefense() + shields;
+        defense += c.actionDefense() + party.shieldDefense() + shields;
         if (part > 1) {
             defense += ItemCatalog.armourDefense(c.items().get(Champion.WOUND_SLOTS.get(part)), sharp);
         }
@@ -1688,7 +1688,7 @@ public final class CreatureAI implements Serializable {
             case HALF -> 190;
             case FULL -> 255;
         };
-        m.addSmoke(x, y, cell, size);
+        m.explosionList().add(new Explosion(Explosion.SMOKE, x, y, cell, size, now + 1)); // F213, silent for smoke
         if (party != null && m == party.map()) {
             out.changed = true;
         }
@@ -1853,6 +1853,47 @@ public final class CreatureAI implements Serializable {
     int hurtChampion(Party party, int member, int attack, int allowedWounds, int attackType) {
         begin(party);
         return hurt(member, attack, allowedWounds, attackType);
+    }
+
+    /**
+     * DM's F324 for an explosion on the party's square: every champion takes
+     * about {@code attack} (give or take an eighth), through F321.
+     */
+    void hurtParty(Party party, int attack, int allowedWounds, int attackType) {
+        begin(party);
+        int spread = (attack >> 3) + 1;
+        int reduced = attack - spread;
+        spread <<= 1;
+        for (int i = 0; i < party.members().size(); i++) {
+            hurt(i, Math.max(1, reduced + rnd(spread)), allowedWounds, attackType);
+        }
+    }
+
+    /** DM's F322 for a projectile's poison: {@code attack}, lessened by the champion's vitality. */
+    void poisonChampion(Party party, int member, int attack) {
+        begin(party);
+        Champion c = party.members().get(member);
+        attack = c.statisticAdjustedAttack(Champion.Stat.VITALITY, attack);
+        if (attack > 0) {
+            addDamage(member, party.poison(member, attack));
+        }
+    }
+
+    /** DM's F191 for an explosion: about {@code attack} on every creature of group {@code g}. Returns the outcome. */
+    int blastGroup(Party party, DungeonMap m, Group g, int attack) {
+        begin(party);
+        map = m;
+        movingDeathCells = null;
+        return damageAll(g, attack, m, g.x(), g.y(), true);
+    }
+
+    /** DM's F192: a poison attack against a creature type's poison resistance (0 if immune). */
+    static int resistedPoisonAttack(CreatureType type, int attack, Random random) {
+        int resistance = type.poisonResistance();
+        if (attack == 0 || resistance == 15) {
+            return 0;
+        }
+        return ((attack + random.nextInt(4)) << 3) / (resistance + 1);
     }
 
     /** A DM sound made on (x, y) of {@code m}, heard with the next tick if the party is near. */

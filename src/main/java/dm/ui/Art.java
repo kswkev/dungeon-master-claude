@@ -66,6 +66,16 @@ public final class Art {
         return gfx != null;
     }
 
+    private DmFont font;
+
+    /** DM's font from GRAPHICS.DAT (spell symbols included), or null without it. */
+    public DmFont font() {
+        if (font == null && gfx != null) {
+            font = DmFont.from(gfx);
+        }
+        return font;
+    }
+
     /** A point zone from DM's screen layout (viewport coordinates), or null. */
     public Point zone(int id) {
         return gfx == null || gfx.zones() == null ? null : gfx.zones().point(id);

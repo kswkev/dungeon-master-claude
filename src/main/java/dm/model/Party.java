@@ -93,7 +93,10 @@ public final class Party implements Serializable {
         this.difficulty = difficulty;
     }
 
-    /** God mode: no champion's health, stamina, mana, food or water ever goes down, and nobody is wounded. */
+    /**
+     * God mode: no champion's health, stamina, mana, food or water ever goes
+     * down, nobody is wounded, and every spell cast succeeds at no cost.
+     */
     public boolean godMode() {
         return godMode;
     }
@@ -125,6 +128,124 @@ public final class Party implements Serializable {
 
     public void setLockMaster(boolean on) {
         lockMaster = on;
+    }
+
+    // ---- spells (Sprint 19) --------------------------------------------------------
+
+    /** DM's G514: the member whose symbols the spell area shows. */
+    private int magicCaster;
+    /** DM's party magical light (F337 adds it to the torches'): light spells add to it, darkness takes away. */
+    private int magicalLight;
+    /** DM's party shield, fire shield and spell shield defenses. */
+    private int shieldDefense;
+    private int fireShieldDefense;
+    private int spellShieldDefense;
+    /** The light and shield spells' events, waiting to run out (null in games saved before Sprint 19). */
+    private List<Magic.PartySpell> partySpells = new ArrayList<>();
+
+    /**
+     * The member casting spells (DM's magic caster): the one chosen, or the
+     * first living member if they have died; -1 with nobody alive.
+     */
+    public int magicCaster() {
+        if (magicCaster < members.size() && members.get(magicCaster).health() > 0) {
+            return magicCaster;
+        }
+        for (int i = 0; i < members.size(); i++) {
+            if (members.get(i).health() > 0) {
+                magicCaster = i;
+                return i;
+            }
+        }
+        return -1;
+    }
+
+    /** DM's F394: member {@code member} becomes the caster, if alive. */
+    public boolean setMagicCaster(int member) {
+        if (member < 0 || member >= members.size() || members.get(member).health() == 0) {
+            return false;
+        }
+        magicCaster = member;
+        return true;
+    }
+
+    /** DM's F399: the caster enters the symbol in column {@code column} (0-5) of their current row. Returns whether they could pay for it. */
+    public boolean addSymbol(int column) {
+        int caster = magicCaster();
+        return caster >= 0 && Magic.addSymbol(this, caster, column);
+    }
+
+    /** DM's F400: the caster takes back their last symbol. */
+    public boolean deleteSymbol() {
+        int caster = magicCaster();
+        return caster >= 0 && Magic.deleteSymbol(this, caster);
+    }
+
+    /**
+     * DM's F408: the caster casts the spell their symbols make (see
+     * {@link Magic#cast}). Returns whether a spell was cast; messages tell
+     * why not.
+     */
+    public boolean cast() {
+        int caster = magicCaster();
+        return caster >= 0 && Magic.cast(this, caster) == Magic.Result.CAST;
+    }
+
+    /** DM's magical light: what light spells add to the torches' light (darkness makes it negative). */
+    public int magicalLight() {
+        return magicalLight;
+    }
+
+    void addMagicalLight(int amount) {
+        magicalLight += amount;
+    }
+
+    /** DM's party shield: added to every body part's defense (F313). */
+    public int shieldDefense() {
+        return shieldDefense;
+    }
+
+    /** DM's fire shield: taken off every fire attack on a champion (F321). */
+    public int fireShieldDefense() {
+        return fireShieldDefense;
+    }
+
+    /** DM's spell shield: taken off every magic attack on a champion (F321). */
+    public int spellShieldDefense() {
+        return spellShieldDefense;
+    }
+
+    void addShield(int kind, int amount) {
+        switch (kind) {
+            case Magic.PARTY_SHIELD -> shieldDefense += amount;
+            case Magic.FIRE_SHIELD -> fireShieldDefense += amount;
+            case Magic.SPELL_SHIELD -> spellShieldDefense += amount;
+            default -> throw new IllegalArgumentException("not a shield: " + kind);
+        }
+    }
+
+    private List<Magic.PartySpell> partySpells() {
+        if (partySpells == null) {
+            partySpells = new ArrayList<>();
+        }
+        return partySpells;
+    }
+
+    void addPartySpell(Magic.PartySpell e) {
+        partySpells().add(e);
+    }
+
+    /** Runs the party spells' events that are due. Returns whether any did. */
+    private boolean tickPartySpells() {
+        boolean any = false;
+        for (Magic.PartySpell e : new ArrayList<>(partySpells())) {
+            if (e.time() <= time) {
+                partySpells().remove(e);
+                Magic.expire(this, e);
+                any = true;
+            }
+        }
+        return any;
     }
 
     /** Replaces the random numbers behind fall damage and the creatures' decisions, for tests. */
@@ -496,7 +617,7 @@ public final class Party implements Serializable {
      * The actions member {@code member} can take with what is in their
      * action hand, as DM's action menu lists them; empty when they can't act
      * (dead, recovering from their last action, or holding something with no
-     * actions). Spells and item magic aren't offered yet.
+     * actions). Item magic isn't offered yet.
      */
     public List<Integer> actions(int member) {
         return member < 0 || member >= members.size() ? List.of() : Combat.actionsFor(members.get(member));
@@ -863,17 +984,17 @@ public final class Party implements Serializable {
     public Tick tick() {
         time++;
         boolean burnt = time % Light.BURN_PERIOD == 0 && burnTorches();
-        boolean smoked = false;
         for (DungeonMap m : dungeon.maps()) {
             m.reenableGenerators(time);
-            smoked |= m.tickSmoke() && m == map;
         }
+        boolean spells = tickPartySpells();
+        boolean smoked = Flight.tickExplosions(this);
         boolean landed = Flight.tick(this);
         boolean enabled = enableActions();
         CreatureAI.Outcome creatures = dungeon.creatures().tick(this);
         boolean turned = faceAttackers();
         int[] damage = add(creatures.damage(), tickPoison());
-        boolean changed = burnt || smoked || enabled || turned || creatures.changed() || damage != null;
+        boolean changed = burnt || spells || smoked || enabled || turned || creatures.changed() || damage != null;
         if (time % (sleeping ? Upkeep.SLEEPING_PERIOD : Upkeep.PERIOD) == 0 && !members.isEmpty()) {
             fadeScents();
             int[] upkeep = new int[members.size()];
@@ -933,15 +1054,15 @@ public final class Party implements Serializable {
     /**
      * Which of DM's six dungeon palettes the view is drawn with, 0 (bright)
      * to {@link Light#DARKEST}: a difficulty-0 map (Level 1) is always lit;
-     * elsewhere the light comes from torches in the champions' hands and
-     * Illumulets worn on their necks (F337).
+     * elsewhere the light comes from torches in the champions' hands,
+     * Illumulets worn on their necks and light spells (F337).
      */
     public int paletteIndex() {
         if (map.difficulty() == 0) {
             return 0;
         }
         List<Item> hands = new ArrayList<>();
-        int magical = 0;
+        int magical = magicalLight;
         for (Champion c : members) {
             for (Slot hand : HANDS) {
                 hands.add(c.items().get(hand));
@@ -1034,6 +1155,7 @@ public final class Party implements Serializable {
                 }
             }
             map.dropItem(x, y, cell, ItemCatalog.item(Item.Category.JUNK, BONES, members.indexOf(c)));
+            c.setSymbols("", 0, 0); // F319: a dead champion's spell is forgotten
             if (position >= 0) {
                 positions[position] = null;
             }

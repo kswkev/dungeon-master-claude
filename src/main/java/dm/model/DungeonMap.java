@@ -639,70 +639,41 @@ public final class DungeonMap implements Serializable {
         return groupAt(x, y) != null;
     }
 
-    // ---- smoke ---------------------------------------------------------------
+    // ---- explosions -----------------------------------------------------------
 
-    /**
-     * DM's smoke explosion (C040), left where a creature dies: on a cell of
-     * the square ({@code cell} 0-3) or its centre ({@link Group#CENTRED}).
-     * It starts at 110, 190 or 255 by the creature's size and fades by 40
-     * a tick while above 55 (F0220), so it lasts 3 to 6 ticks.
-     */
+    /** Kept only so a game saved before Sprint 19 with a puff of smoke in the air still loads. */
+    @Deprecated
     public static final class Smoke implements Serializable {
         private static final long serialVersionUID = 1L;
-        private final int x;
-        private final int y;
-        private final int cell;
+        private int x;
+        private int y;
+        private int cell;
         private int attack;
-
-        Smoke(int x, int y, int cell, int attack) {
-            this.x = x;
-            this.y = y;
-            this.cell = cell;
-            this.attack = attack;
-        }
-
-        public int cell() {
-            return cell;
-        }
-
-        public boolean centred() {
-            return cell == Group.CENTRED;
-        }
-
-        /** DM's explosion attack: how big the puff is drawn. */
-        public int attack() {
-            return attack;
-        }
     }
 
-    private final List<Smoke> smoke = new ArrayList<>();
+    /** Pre-Sprint 19 smoke, read from old saves and dropped. */
+    @SuppressWarnings("unused")
+    private List<Smoke> smoke;
 
-    void addSmoke(int x, int y, int cell, int attack) {
-        smoke.add(new Smoke(x, y, cell, attack));
+    /** DM's explosions on this map (fire, lightning, poison clouds, smoke...), oldest first. */
+    private List<Explosion> explosions = new ArrayList<>();
+
+    List<Explosion> explosionList() {
+        if (explosions == null) {
+            explosions = new ArrayList<>(); // a game saved before Sprint 19
+        }
+        return explosions;
     }
 
-    /** The puffs of smoke on (x, y), oldest first. */
-    public List<Smoke> smokeAt(int x, int y) {
-        List<Smoke> here = new ArrayList<>();
-        for (Smoke s : smoke) {
-            if (s.x == x && s.y == y) {
-                here.add(s);
+    /** The explosions on (x, y), oldest first. */
+    public List<Explosion> explosionsAt(int x, int y) {
+        List<Explosion> here = new ArrayList<>();
+        for (Explosion e : explosionList()) {
+            if (e.x() == x && e.y() == y) {
+                here.add(e);
             }
         }
         return here;
-    }
-
-    /** One game tick of DM's smoke event: each puff shrinks by 40, or goes once down to 55. Returns whether any was there. */
-    boolean tickSmoke() {
-        boolean any = !smoke.isEmpty();
-        smoke.removeIf(s -> {
-            if (s.attack > 55) {
-                s.attack -= 40;
-                return false;
-            }
-            return true;
-        });
-        return any;
     }
 
     /** A pit or teleporter has just changed under (x, y): a group standing there falls or is teleported. */

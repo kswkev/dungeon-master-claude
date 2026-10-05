@@ -161,7 +161,7 @@ public final class Actions {
         return SETS[set][2 + i];
     }
 
-    /** The actions that are spells or item magic, which wait for the spells sprint. */
+    /** The actions that are spells or item magic, which the menus leave out until item magic comes (Sprint 20). */
     public static boolean isMagic(int action) {
         return switch (action) {
             case FIREBALL, DISPELL, LIGHTNING, INVOKE, SPELLSHIELD, FIRESHIELD, FLUXCAGE, HEAL, LIGHT, WINDOW,

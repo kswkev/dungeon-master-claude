@@ -105,6 +105,20 @@ public final class ChampionBars {
      * @param now       current time in ms, for expiring damage bursts
      */
     public void draw(Graphics2D g, List<Champion> members, Champion shown, Champion candidate, long now) {
+        draw(g, members, shown, candidate, now, 0);
+    }
+
+    /** The party's shields, for {@code shields}: each draws its border round every living champion's box. */
+    public static final int PARTY_SHIELD = 1;
+    public static final int SPELL_SHIELD = 2;
+    public static final int FIRE_SHIELD = 4;
+    /** DM's border graphics (F292): party shield 37, fire shield 38, spell shield 39. */
+    private static final int BORDER_PARTY_SHIELD = 37;
+    private static final int BORDER_FIRE_SHIELD = 38;
+    private static final int BORDER_SPELL_SHIELD = 39;
+
+    /** As {@link #draw(Graphics2D, List, Champion, Champion, long)}, with the party's {@code shields} bits. */
+    public void draw(Graphics2D g, List<Champion> members, Champion shown, Champion candidate, long now, int shields) {
         for (int i = 0; i < Party.MAX_MEMBERS; i++) {
             int x = i * PITCH;
             Champion c = i < members.size() ? members.get(i)
@@ -122,6 +136,7 @@ public final class ChampionBars {
             }
             g.setColor(BOX_BG);
             g.fillRect(x, 0, BOX_W, BOX_H);
+            drawShields(g, x, shields);
             if (c == shown) {
                 BufferedImage portrait = art.portrait(c.portrait());
                 Rectangle r = new Rectangle(x, 0, 32, 29);
@@ -141,6 +156,29 @@ public final class ChampionBars {
             int damage = damageShown(i, now);
             if (damage > 0) {
                 drawDamage(g, x, damage);
+            }
+        }
+    }
+
+    /**
+     * F292's shield borders round a status box: the party shield's, then the
+     * spell shield's, then the fire shield's on top, keyed on colour 10.
+     * Without GRAPHICS.DAT, a coloured outline each.
+     */
+    private void drawShields(Graphics2D g, int x, int shields) {
+        int[][] borders = {
+                {PARTY_SHIELD, BORDER_PARTY_SHIELD, 0x0000FF}, {SPELL_SHIELD, BORDER_SPELL_SHIELD, 0x00DBDB},
+                {FIRE_SHIELD, BORDER_FIRE_SHIELD, 0x00B600}};
+        for (int[] border : borders) {
+            if ((shields & border[0]) == 0) {
+                continue;
+            }
+            BufferedImage img = art.sprite(border[1]);
+            if (img != null) {
+                g.drawImage(img, x, 0, null);
+            } else {
+                g.setColor(new Color(border[2]));
+                g.drawRect(x, 0, BOX_W - 1, BOX_H - 1);
             }
         }
     }

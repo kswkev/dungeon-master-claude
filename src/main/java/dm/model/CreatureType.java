@@ -296,6 +296,11 @@ public enum CreatureType {
         return (info(9) >> 12) & 15;
     }
 
+    /** 15 is immune. */
+    public int fireResistance() {
+        return (info(10) >> 4) & 15;
+    }
+
     public int poisonResistance() {
         return (info(10) >> 8) & 15;
     }

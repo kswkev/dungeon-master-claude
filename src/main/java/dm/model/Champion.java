@@ -484,6 +484,35 @@ public final class Champion implements Serializable {
         godMode = on;
     }
 
+    // ---- spells (Sprint 19) ------------------------------------------------------
+
+    /** DM's champion symbols: the spell symbols entered so far (characters 96-119, {@link Spells}). */
+    private String symbols = "";
+    /** DM's symbol step: the row the next symbol comes from (0 power .. 3 class); after the fourth it wraps to 0. */
+    private int symbolStep;
+    /** The mana spent on {@link #symbols}, given back when a spell this remake can't cast yet is cast. */
+    private int symbolMana;
+
+    /** The spell symbols entered so far, as {@link Spells} characters. */
+    public String symbols() {
+        return symbols == null ? "" : symbols; // null in a game saved before Sprint 19
+    }
+
+    /** The row (0-3) the next symbol comes from. */
+    public int symbolStep() {
+        return symbolStep;
+    }
+
+    int symbolMana() {
+        return symbolMana;
+    }
+
+    void setSymbols(String symbols, int step, int mana) {
+        this.symbols = symbols;
+        this.symbolStep = step;
+        this.symbolMana = mana;
+    }
+
     /** Whether the party is asleep (DM's G300, which F303, F310 and F313 read); set by {@link Party#sleep}. */
     private boolean asleep;
 
