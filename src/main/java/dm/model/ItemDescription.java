@@ -48,7 +48,7 @@ public record ItemDescription(String name, List<String> lines) {
             }
             case POTION -> {
                 potential = CONSUMABLE;
-                actual = ItemCatalog.describedConsumable(item) ? CONSUMABLE : 0;
+                actual = ItemCatalog.isConsumable(item) ? CONSUMABLE : 0;
             }
             case JUNK -> {
                 if (item.type() == WATERSKIN_TYPE) {
@@ -57,7 +57,7 @@ public record ItemDescription(String name, List<String> lines) {
                     add(lines, "PARTY FACING " + DIRECTIONS[party.facing().ordinal()]);
                 } else {
                     potential = CONSUMABLE;
-                    actual = ItemCatalog.describedConsumable(item) ? CONSUMABLE : 0;
+                    actual = ItemCatalog.isConsumable(item) ? CONSUMABLE : 0;
                 }
             }
             default -> { }

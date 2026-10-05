@@ -377,8 +377,13 @@ public final class ItemCatalog {
         return FITS_CHEST.contains(objectInfoIndex(item));
     }
 
-    /** Whether G237 marks {@code item} for the mouth, as F342's CONSUMABLE reads it. */
-    public static boolean describedConsumable(Item item) {
+    /**
+     * G237's mouth bit: whether DM lets {@code item} be eaten or drunk (F349)
+     * and calls it CONSUMABLE (F342). That is food, the waterskin, the ROS to
+     * VI potions and the water flask; not the MON, UM, DES, VEN, SAR or ZO
+     * potions, the bombs or an empty flask.
+     */
+    public static boolean isConsumable(Item item) {
         return MOUTH.contains(objectInfoIndex(item));
     }
 
@@ -473,11 +478,6 @@ public final class ItemCatalog {
                 ? FOOD_AMOUNTS[t - FIRST_FOOD] : 0;
     }
 
-    /** Whether DM lets the item be put in the mouth: food, waterskins and potions. */
-    public static boolean isConsumable(Item item) {
-        return item.category() == Item.Category.POTION
-                || item.category() == Item.Category.JUNK && (item.type() == WATERSKIN || foodValue(item) > 0);
-    }
 
     static boolean isMissileWeapon(int type) {
         return MISSILES.contains(type);
