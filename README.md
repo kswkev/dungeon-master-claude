@@ -157,7 +157,7 @@ Spells came in Sprint 19; the magic in items' action menus (a staff's fireball a
 - **Item magic:** staffs, wands and other magical items offer their spells in the action menu: fireball, lightning, dispell, invoke, spit, spell and fire shields, heal, light, window, freeze life (creatures stand still) and fluxcage. They cost mana and use up charges; the magical boxes are used up.
 - **Creatures cast:** vexirks, wizard eyes, swamp slimes, materializers, demons, red dragons and Lord Chaos throw their spells from afar.
 - **Projectiles:** walking into a projectile hurts. A thrown VEN potion bursts into a poison cloud and a FUL bomb into a fireball.
-- Not yet: FUSE (the endgame), and creatures walking into projectiles.
+- FUSE (the endgame) and creatures walking into projectiles followed in Sprint 22.
 
 **Sprint 21: done.** Chests, scrolls, looking at things, and two fixes (ported from ReDMCSB):
 - **Chests:** chests hold what the dungeon put in them. Put one in a champion's action hand with their sheet open and it opens in the panel: click its cells to take things out or put things in (not another chest). A chest weighs what it holds.
@@ -165,6 +165,13 @@ Spells came in Sprint 19; the magic in items' action menus (a staff's fireball a
 - **Looking at things:** hold the eye with an item in hand to see its name, weight and the original's notes: a burnt-out torch, how full a waterskin is, which way the compass points, what can be eaten or drunk, and poisoned, broken or cursed weapons and armour. Priests above the first level also see a potion's power. A chest or scroll held over the eye shows its contents.
 - **Sounds carry as far as in the original (#37):** creatures, projectiles, explosions and doors are heard only within each sound's own distance, quieter further away.
 - **The formation box (#38)** shows the original's helmeted figures in the champions' colours on black, each turned the way its champion faces.
+
+**Sprint 22: done.** The end of the game, and the last of the original's rules (ported from ReDMCSB):
+- **The Firestaff and the Power Gem:** on Level 14, the Zokathra burns through the amalgam and the Firestaff then takes the Power Gem, as in the original.
+- **FUSE and Lord Chaos:** the complete Firestaff offers FUSE. Lord Chaos slips away through any side not closed by a fluxcage, a wall or stairs. Caught, he is fused: fireballs and spells burst on him, he flickers between Lord Chaos and Lord Order and becomes the Grey Lord, his minions vanish, and his closing words appear. Then the original's end screen shows your champions, each in a mirror with their name, title and skills. Press Esc for the menu.
+- **The VI altar:** put a dead champion's bones in a VI altar (one is in the Hall of Champions) and, after a sparkle, they come back to life with half their health and a little less maximum health.
+- **Creatures walk into projectiles** too, as the party already did.
+- **Drinking:** only what the original lets you drink can be drunk: food, water, and the ROS to VI potions. MON, UM, DES, VEN, SAR and ZO potions, bombs and empty flasks stay in hand.
 
 ## Requirements
 
@@ -201,6 +208,11 @@ Options:
 | `-Ddm.graphics=path/to/GRAPHICS.DAT` | Load the graphics from another location (default: next to DUNGEON.DAT) |
 | `-Ddm.debug=true` | Print Level 1 as an ASCII map and the list of champions, log each move, and show the party's position on screen |
 | `-Ddm.soundtest=all` | Play every sound effect from GRAPHICS.DAT with its index, then exit (or `=<index>` for one) |
+| `-Ddm.start=13,15,2,N` | For testing (not in the original): start on that level (1-based), square and facing |
+| `-Ddm.recruit=all` | For testing: recruit the Hall of Champions' first four champions (or a number) |
+| `-Ddm.give=weapon:45,junk:51` | For testing: give the first champion items, as `category:type[:charges]` (weapon 45 is the Firestaff with the Power Gem, junk 51 a Zokathra) |
+
+To try the ending: `java "-Ddm.start=13,15,2,N" "-Ddm.recruit=all" "-Ddm.give=weapon:45" -jar target/dungeon-master-0.1.0-SNAPSHOT.jar` puts the party two squares south of Lord Chaos with the complete Firestaff (FLUXCAGE and FUSE in its action menu).
 
 In PowerShell, put quotes around `-D` options, e.g. `java "-Ddm.debug=true" -jar target/dungeon-master-0.1.0-SNAPSHOT.jar`. Otherwise PowerShell splits the option at the dot and Java reports `Could not find or load main class`.
 
@@ -223,6 +235,7 @@ The tests cover:
 - decoration placement (including DM's random formula), inscriptions and the screen-layout table;
 - moving items between inventory slots, floor items, picking up, dropping and throwing;
 - chest contents and scroll text, the open chest's cells, item descriptions, and how far sounds carry;
+- FUSE, the fuse sequence and the end screen, the VI altar's rebirth, the object exchanger, creatures walking into projectiles, and which potions can be drunk;
 - wall sensors, alcoves, door buttons and AND/OR gates;
 - stairs between levels;
 - pits, teleporters, levers, alcove clicks and plates pressed by items;
