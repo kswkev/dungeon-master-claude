@@ -54,6 +54,51 @@ class ExplosionTest {
     }
 
     @Test
+    void aThrownFulBombBurstsAgainstTheWall() {
+        Flight.launch(party, ItemCatalog.item(Item.Category.POTION, 19, 120), map, 1, 1, Direction.EAST.ordinal(),
+                Direction.EAST, 200, 90, 2);
+        assertTrue(sawExplosion(Explosion.FIREBALL, 5, 1, 20));
+        for (int x = 1; x <= 5; x++) {
+            for (int cell = 0; cell < 4; cell++) {
+                assertTrue(map.itemsAt(x, 1, cell).isEmpty(), "the bomb is gone");
+            }
+        }
+    }
+
+    @Test
+    void aVenPotionThatRunsOutOfEnergyJustLands() {
+        Flight.launch(party, ItemCatalog.item(Item.Category.POTION, 3, 120), map, 1, 1, Direction.EAST.ordinal(),
+                Direction.EAST, 4, 90, 2);
+        for (int i = 0; i < 20; i++) {
+            party.tick();
+        }
+        assertTrue(map.projectiles().isEmpty());
+        boolean landed = false;
+        for (int x = 1; x <= 5; x++) {
+            for (int cell = 0; cell < 4; cell++) {
+                landed |= !map.itemsAt(x, 1, cell).isEmpty();
+            }
+        }
+        assertTrue(landed);
+    }
+
+    @Test
+    void walkingIntoAProjectileOnTheSquareAheadHurts() {
+        // A dagger hanging in the back left cell of the square ahead, which Elija (front left) walks into.
+        int cell = party.cellOf(elija);
+        Flight.launch(party, ItemCatalog.item(Item.Category.WEAPON, 8), map, 2, 1, 0, Direction.SOUTH, 100, 90, 2);
+        Projectile p = map.projectiles().get(0);
+        p.ignoreImpacts = false;
+        p.nextMove = Long.MAX_VALUE;
+        assertEquals(1, cell, "Elija stands front left: north-east, facing east");
+        int health = elija.health();
+        party.step(Party.Move.FORWARD);
+        assertTrue(map.projectiles().isEmpty(), "it hit");
+        party.tick();
+        assertTrue(elija.health() < health);
+    }
+
+    @Test
     void aFireballIntoTheWallAheadBurnsTheParty() {
         corridor("###", "#.#", "###");
         int health = elija.health();

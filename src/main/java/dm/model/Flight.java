@@ -28,8 +28,10 @@ import java.util.Random;
  * button. A poison bolt poisons what it hits and doesn't burst. A spell whose
  * energy runs out just fizzles.
  *
- * <p>Not yet: bombs and venom potions bursting, the party or creatures
- * walking into projectiles (F266), and poison darts' poison.
+ * <p>A thrown VEN potion or FUL bomb bursts where it hits (a poison cloud or a
+ * fireball, as strong as its power); the other bombs just land, as in DM. The
+ * party walking into projectiles is hit by them (F266). Not yet: creatures
+ * walking into projectiles. As in DM, a poison dart carries no poison.
  */
 final class Flight {
 
@@ -158,6 +160,64 @@ final class Flight {
         return false;
     }
 
+    /**
+     * DM's F266 for the party, as it moves off (sx, sy) of {@code m} toward
+     * (dx, dy): the projectiles on its square hit the champions in their
+     * cells. Stepping to the next square, the back row passes through the
+     * front cells, and the front row through the back cells of the square
+     * ahead, where projectiles hit them too.
+     */
+    static void partyMoves(Party party, DungeonMap m, int sx, int sy, int dx, int dy) {
+        if (party.members().isEmpty()) {
+            return;
+        }
+        int[] cells = new int[4]; // the ordinal of the party cell crossing each cell, 0 for none
+        for (int c = 0; c < 4; c++) {
+            if (party.memberInCell(c) >= 0) {
+                cells[c] = c + 1;
+            }
+        }
+        int[] ahead = null;
+        if (Math.abs(sx - dx) + Math.abs(sy - dy) == 1) {
+            int primary = 0;
+            for (Direction d : Direction.values()) {
+                if (sx + d.dx == dx && sy + d.dy == dy) {
+                    primary = d.ordinal();
+                }
+            }
+            int secondary = (primary + 1) & 3;
+            ahead = new int[4];
+            ahead[(primary + 3) & 3] = cells[primary];
+            ahead[(secondary + 1) & 3] = cells[secondary];
+            if (cells[primary] == 0) {
+                cells[primary] = cells[(primary + 3) & 3];
+            }
+            if (cells[secondary] == 0) {
+                cells[secondary] = cells[(secondary + 1) & 3];
+            }
+        }
+        hitCrossing(party, m, sx, sy, cells);
+        if (ahead != null) {
+            hitCrossing(party, m, dx, dy, ahead);
+        }
+    }
+
+    private static void hitCrossing(Party party, DungeonMap m, int x, int y, int[] cells) {
+        boolean hit;
+        do {
+            hit = false;
+            for (Projectile p : new ArrayList<>(m.projectileList())) {
+                int member = p.x == x && p.y == y && !p.ignoreImpacts && cells[p.cell] != 0
+                        ? party.memberInCell(cells[p.cell] - 1) : -1;
+                if (member >= 0) {
+                    hitChampion(party, m, p, member);
+                    hit = true;
+                    break;
+                }
+            }
+        } while (hit);
+    }
+
     /** F219's walls: a wall, a fake wall that is neither open nor imaginary, or stairs met from stairs. */
     private static boolean blocks(DungeonMap m, int fromX, int fromY, int x, int y) {
         Square sq = m.get(x, y);
@@ -214,6 +274,10 @@ final class Flight {
         }
         return impact(party, m, p, null);
     }
+
+    /** The potions that burst where they hit (DM's C03 VEN potion and C19 FUL bomb). */
+    private static final int VEN_POTION = 3;
+    private static final int FUL_BOMB = 19;
 
     /** Weapons some creatures keep when they're hit but not killed: dagger, arrow, slayer, poison dart, throwing star. */
     private static final int[] KEPT_WEAPONS = {8, 27, 28, 31, 32};
@@ -308,11 +372,25 @@ final class Flight {
      * with a thud.
      */
     private static boolean impact(Party party, DungeonMap m, Projectile p, Group keeper) {
+        CreatureAI creatures = party.dungeon().creatures();
         if (!p.isSpell()) {
-            return land(party, m, p, p.x, p.y, p.cell, keeper, true);
+            Item item = p.item();
+            int burst = item.category() == Item.Category.POTION ? switch (item.type()) {
+                case VEN_POTION -> Explosion.POISON_CLOUD;
+                case FUL_BOMB -> Explosion.FIREBALL;
+                default -> -1;
+            } : -1;
+            if (burst < 0) {
+                return land(party, m, p, p.x, p.y, p.cell, keeper, true);
+            }
+            // F217: a VEN potion or FUL bomb bursts with its power, and is gone
+            m.projectileList().remove(p);
+            creatures.changed(party);
+            explode(party, m, burst, item.charges(), p.x, p.y,
+                    burst == Explosion.POISON_CLOUD ? Group.CENTRED : p.cell);
+            return false;
         }
         m.projectileList().remove(p);
-        CreatureAI creatures = party.dungeon().creatures();
         creatures.changed(party);
         int spell = p.spell();
         if (spell == Explosion.SLIME || spell == Explosion.POISON_BOLT) {

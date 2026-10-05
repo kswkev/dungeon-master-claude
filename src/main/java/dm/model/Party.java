@@ -553,6 +553,7 @@ public final class Party implements Serializable {
         DungeonMap from = map;
         int fromX = x;
         int fromY = y;
+        Flight.partyMoves(this, from, fromX, fromY, to == from ? nx : -10, to == from ? ny : -10); // F266
         x = nx;
         y = ny;
         leaveScent(from, fromX, fromY, to, nx, ny);
