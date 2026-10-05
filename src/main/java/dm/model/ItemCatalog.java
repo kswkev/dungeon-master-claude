@@ -77,14 +77,6 @@ public final class ItemCatalog {
     private static final Set<Integer> NECK_JUNK = Set.of(2, 3, 37, 38, 39, 40, 41, 48);
 
     /**
-     * Small junk that fits a pouch: compass, amulets and jewels, coins, keys,
-     * gems, magical boxes, rabbit's foot, corbamite, lock picks and magnifier.
-     */
-    private static final Set<Integer> POUCH_JUNK = Set.of(
-            0, 2, 3, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24,
-            26, 27, 28, 37, 38, 39, 40, 41, 42, 43, 46, 47, 48, 49, 50);
-
-    /**
      * The GRAPHICS.DAT picture (498-583) of each object lying in the dungeon,
      * by name. DM keeps this mapping in its program, not its data files, so
      * it was rebuilt by matching the floor pictures against the inventory icons.
@@ -483,13 +475,13 @@ public final class ItemCatalog {
         return MISSILES.contains(type);
     }
 
-    /** Potions, scrolls and the small junk in {@link #POUCH_JUNK}. */
+    /**
+     * G237's pouch bit (the same bit as {@link #passesThroughDoors}): scrolls,
+     * potions, small weapons such as daggers and darts, and small junk such as
+     * the waterskin, keys, coins, gems and some food (#45).
+     */
     static boolean fitsPouch(Item item) {
-        return switch (item.category()) {
-            case POTION, SCROLL -> true;
-            case JUNK -> POUCH_JUNK.contains(item.type());
-            default -> false;
-        };
+        return PASSES_DOORS.contains(objectInfoIndex(item));
     }
 
     static boolean isShield(int type) {
