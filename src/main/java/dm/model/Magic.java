@@ -20,10 +20,8 @@ final class Magic {
     enum Result {
         /** The spell worked. */
         CAST,
-        /** It failed: no spell, not enough skill. */
-        FAILED,
-        /** A spell this remake can't cast yet: the mana its symbols cost was given back. */
-        NOT_YET
+        /** It failed: no spell, not enough skill, no flask for a potion. */
+        FAILED
     }
 
     /**
@@ -38,7 +36,10 @@ final class Magic {
     }
 
     static final int LIGHT = 70;
+    static final int INVISIBILITY = 71;
     static final int CHAMPION_SHIELD = 72;
+    static final int THIEVES_EYE = 73;
+    static final int FOOTPRINTS = 79;
     static final int PARTY_SHIELD = 74;
     static final int SPELL_SHIELD = 77;
     static final int FIRE_SHIELD = 78;
@@ -95,12 +96,6 @@ final class Magic {
             return Result.FAILED;
         }
         Spells.Spell spell = Spells.find(symbols);
-        if (spell != null && !spell.castable()) {
-            c.setMana(c.mana() + c.symbolMana());
-            c.setSymbols("", 0, 0);
-            party.message(c.name() + " CAN'T CAST THAT SPELL YET.", -1);
-            return Result.NOT_YET;
-        }
         c.setSymbols("", 0, 0);
         if (spell == null) {
             party.message(c.name() + " MUMBLES A MEANINGLESS SPELL.", -1);
@@ -134,7 +129,7 @@ final class Magic {
                 c.place(flask, ItemCatalog.item(Item.Category.POTION, spell.type(), random.nextInt(16) + power * 40));
             }
             case Spells.KIND_PROJECTILE -> castProjectile(party, member, c, spell, power, skill);
-            case Spells.KIND_OTHER -> castOther(party, spell, power);
+            case Spells.KIND_OTHER -> castOther(party, c, spell, power);
             default -> { }
         }
         party.addSkillExperience(member, spell.skill(), experience);
@@ -177,8 +172,13 @@ final class Magic {
                 90, stepEnergy);
     }
 
-    /** F0412's other spells: light, magic torch, darkness, party shield and fire shield. */
-    private static void castOther(Party party, Spells.Spell spell, int power) {
+    /**
+     * F0412's other spells: light, magic torch, darkness, party shield, fire
+     * shield, thieves' eye, invisibility, magic footprints and ZO KATH RA.
+     * Invisibility lasts only its spell power in ticks: in DM its tick count
+     * shares a register with the power and skips the squaring the others get.
+     */
+    private static void castOther(Party party, Champion c, Spells.Spell spell, int power) {
         int spellPower = (power + 1) << 2;
         switch (spell.type()) {
             case Spells.OTHER_LIGHT -> {
@@ -202,8 +202,33 @@ final class Magic {
                 party.addPartySpell(new PartySpell(party.time() + spellPower * spellPower, PARTY_SHIELD, defense));
             }
             case Spells.OTHER_FIRESHIELD -> shield(party, false, spellPower * spellPower + 100);
+            case Spells.OTHER_THIEVES_EYE -> {
+                int half = spellPower >> 1;
+                countedSpell(party, THIEVES_EYE, half * half);
+            }
+            case Spells.OTHER_INVISIBILITY -> countedSpell(party, INVISIBILITY, spellPower);
+            case Spells.OTHER_FOOTPRINTS -> {
+                party.startFootprints(power);
+                party.addPartySpell(new PartySpell(party.time() + spellPower * spellPower, FOOTPRINTS, 1));
+            }
+            case Spells.OTHER_ZOKATHRA -> {
+                Item zokathra = ItemCatalog.item(Item.Category.JUNK, ItemCatalog.ZOKATHRA);
+                if (c.items().get(Slot.READY_HAND) == null) {
+                    c.place(Slot.READY_HAND, zokathra);
+                } else if (c.items().get(Slot.ACTION_HAND) == null) {
+                    c.place(Slot.ACTION_HAND, zokathra);
+                } else {
+                    party.map().dropItem(party.x(), party.y(), party.cellOf(c), zokathra);
+                }
+            }
             default -> { }
         }
+    }
+
+    /** DM's event counts: one more spell of {@code kind} running, for {@code ticks}. */
+    static void countedSpell(Party party, int kind, int ticks) {
+        party.addSpellCount(kind, 1);
+        party.addPartySpell(new PartySpell(party.time() + ticks, kind, 1));
     }
 
     /**
@@ -248,6 +273,7 @@ final class Magic {
                 }
             }
             case PARTY_SHIELD, SPELL_SHIELD, FIRE_SHIELD -> party.addShield(e.kind(), -e.amount());
+            case INVISIBILITY, THIEVES_EYE, FOOTPRINTS -> party.addSpellCount(e.kind(), -1);
             case CHAMPION_SHIELD -> {
                 if (e.member() < party.members().size()) {
                     party.members().get(e.member()).addShieldDefense(-e.amount());

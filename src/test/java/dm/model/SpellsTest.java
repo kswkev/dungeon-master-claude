@@ -90,16 +90,12 @@ class SpellsTest {
     }
 
     @Test
-    void onlyProjectilesLightAndShieldsCanBeCastYet() {
-        assertTrue(Spells.find(symbols(LO, YA, IR)).castable(), "party shield");
-        assertTrue(Spells.find(symbols(LO, FUL, BRO, NETA)).castable(), "fire shield");
-        assertTrue(Spells.find(symbols(LO, DES, IR, SAR)).castable(), "darkness");
-        assertTrue(Spells.find(symbols(LO, OH, 0)).castable(), "poison cloud");
-        assertTrue(Spells.find(symbols(LO, 1)).castable(), "VI, a health potion");
-        assertFalse(Spells.find(symbols(LO, OH, EW, SAR)).castable(), "invisibility");
-        assertFalse(Spells.find(symbols(LO, YA, BRO, 1)).castable(), "magic footprints");
-        assertFalse(Spells.find(symbols(LO, OH, EW, 4)).castable(), "thieves' eye");
-        assertFalse(Spells.find(symbols(LO, 5, 2, 4)).castable(), "ZO KATH RA");
+    void theSpellsOfSprint20AreInTheTable() {
+        assertEquals(Spells.KIND_POTION, Spells.find(symbols(LO, 1)).kind(), "VI, a health potion");
+        assertEquals(Spells.OTHER_INVISIBILITY, Spells.find(symbols(LO, OH, EW, SAR)).type());
+        assertEquals(Spells.OTHER_FOOTPRINTS, Spells.find(symbols(LO, YA, BRO, 1)).type());
+        assertEquals(Spells.OTHER_THIEVES_EYE, Spells.find(symbols(LO, OH, EW, 4)).type());
+        assertEquals(Spells.OTHER_ZOKATHRA, Spells.find(symbols(LO, 5, 2, 4)).type());
     }
 
     @Test
@@ -198,14 +194,46 @@ class SpellsTest {
     }
 
     @Test
-    void aSpellNotYetInTheGameGivesItsManaBack() {
+    void invisibilityLastsItsSpellPowerInTicks() {
         master();
-        enter(MON, OH, EW, SAR); // invisibility
-        assertTrue(elija.mana() < 500);
-        assertFalse(party.cast());
-        assertEquals(500, elija.mana());
-        assertEquals(List.of("ELIJA CAN'T CAST THAT SPELL YET."), messages());
-        assertEquals("", elija.symbols());
+        enter(MON, OH, EW, SAR); // power 6: (6 + 1) * 4 = 28 ticks
+        assertTrue(party.cast());
+        assertTrue(party.invisible());
+        tick(27);
+        assertTrue(party.invisible());
+        tick(1);
+        assertFalse(party.invisible());
+    }
+
+    @Test
+    void thievesEyeLastsHalfItsPowerSquared() {
+        master();
+        enter(LO, OH, EW, 4); // power 1: 8 >> 1 = 4, 16 ticks
+        assertTrue(party.cast());
+        assertTrue(party.thievesEye());
+        tick(16);
+        assertFalse(party.thievesEye());
+    }
+
+    @Test
+    void zoKathRaPutsAZokathraInAnEmptyHand() {
+        master();
+        enter(LO, 5, 2, 4);
+        assertTrue(party.cast());
+        assertEquals("ZOKATHRA SPELL", elija.items().get(Slot.READY_HAND).name());
+    }
+
+    @Test
+    void footprintsShowWhereThePartyWalksWhileTheSpellRuns() {
+        master();
+        party.step(Party.Move.FORWARD); // (2,1), before the spell
+        enter(LO, YA, BRO, 1);
+        assertTrue(party.cast());
+        party.step(Party.Move.FORWARD); // (3,1)
+        party.step(Party.Move.FORWARD); // (4,1)
+        assertFalse(party.footprintsAt(map, 2, 1), "walked before the spell");
+        assertTrue(party.footprintsAt(map, 3, 1));
+        assertTrue(party.footprintsAt(map, 4, 1));
     }
 
     @Test

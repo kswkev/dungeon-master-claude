@@ -111,18 +111,28 @@ public final class TexturedViewRenderer implements ViewRenderer {
         return fieldDrawn;
     }
 
+    /** The party being drawn for, and whether its view is mirrored, during {@link #draw}. */
+    private Party viewer;
+    private boolean viewFlipped;
+
     @Override
     public void draw(Graphics2D screen, Party party) {
         portraitHit = null;
         wallHit = null;
         doorButtonHit = null;
         fieldDrawn = false;
-        Graphics2D g = (Graphics2D) screen.create(VIEWPORT.x, VIEWPORT.y, VIEWPORT.width, VIEWPORT.height);
+        viewer = party;
+        // With a thieves' eye the view is drawn off-screen, so the wall ahead can show what is behind it.
+        BufferedImage buffer = party.thievesEye()
+                ? new BufferedImage(VIEWPORT.width, VIEWPORT.height, BufferedImage.TYPE_INT_RGB) : null;
+        Graphics2D g = buffer != null ? buffer.createGraphics()
+                : (Graphics2D) screen.create(VIEWPORT.x, VIEWPORT.y, VIEWPORT.width, VIEWPORT.height);
         try {
             DungeonMap map = party.map();
             Direction fwd = party.facing();
             Direction right = fwd.turnRight();
             boolean flipped = ((party.x() + party.y() + fwd.ordinal()) & 1) != 0;
+            viewFlipped = flipped;
 
             paste(g, CEILING, 0, 0, flipped);
             paste(g, FLOOR, 0, FLOOR_Y, flipped);
@@ -133,6 +143,7 @@ public final class TexturedViewRenderer implements ViewRenderer {
                     int my = party.y() + fwd.dy * d + right.dy * l;
                     Square sq = map.get(mx, my);
                     if (sq.looksSolid()) {
+                        int[] behind = buffer != null && d == 1 && l == 0 ? holeArea(buffer) : null;
                         if (WALL[d][l + 2] >= 0) {
                             drawWall(g, d, l, flipped);
                             drawWallDecorations(g, map, d, l, mx, my, fwd);
@@ -142,6 +153,9 @@ public final class TexturedViewRenderer implements ViewRenderer {
                             if (mirror != null) {
                                 drawMirror(g, d, mirror);
                             }
+                        }
+                        if (behind != null) {
+                            drawHoleInWall(buffer, behind);
                         }
                     } else if (Math.abs(l) <= 1) {
                         drawFeature(g, map, sq, d, l, fwd, mx, my);
@@ -156,6 +170,43 @@ public final class TexturedViewRenderer implements ViewRenderer {
             }
         } finally {
             g.dispose();
+        }
+        if (buffer != null) {
+            screen.drawImage(buffer, VIEWPORT.x, VIEWPORT.y, null);
+        }
+    }
+
+    // ---- the thieves' eye (DM's F0124 wall case, BUG0_74 fixed) ---------------
+    //
+    // Before the wall straight ahead at D1 is drawn, the view behind it is
+    // kept (box 64-159 x 19-113); afterwards the hole picture (graphic 41) is
+    // laid over the wall there: its gold shows the wall, its flesh colour the
+    // view behind, and its other colours (the stone rim) themselves.
+
+    static final int HOLE_IN_WALL = 41;
+    private static final Rectangle HOLE_AREA = new Rectangle(64, 19, 96, 95);
+
+    private static int[] holeArea(BufferedImage buffer) {
+        return buffer.getRGB(HOLE_AREA.x, HOLE_AREA.y, HOLE_AREA.width, HOLE_AREA.height, null, 0, HOLE_AREA.width);
+    }
+
+    private void drawHoleInWall(BufferedImage buffer, int[] behind) {
+        BufferedImage hole = art.image(HOLE_IN_WALL);
+        if (hole == null) {
+            return;
+        }
+        int gold = Art.PALETTE[9].getRGB();
+        int flesh = Art.PALETTE[10].getRGB();
+        int w = Math.min(hole.getWidth(), HOLE_AREA.width);
+        int h = Math.min(hole.getHeight(), HOLE_AREA.height);
+        for (int y = 0; y < h; y++) {
+            for (int x = 0; x < w; x++) {
+                int c = hole.getRGB(x, y);
+                if (c == gold) {
+                    continue;
+                }
+                buffer.setRGB(HOLE_AREA.x + x, HOLE_AREA.y + y, c == flesh ? behind[y * HOLE_AREA.width + x] : c);
+            }
         }
     }
 
@@ -367,6 +418,7 @@ public final class TexturedViewRenderer implements ViewRenderer {
     private static final int DOOR_FRAME_TOP_D2 = 92;
     /** The graphic DM cuts a broken door with (door ornament 15). */
     private static final int DOOR_DESTROYED_MASK = 439;
+    private static final int DOOR_THIEVES_EYE_MASK = 440;
 
     /** Floor pits: graphics for the left and centre squares, zones for left, centre, right. */
     private static final int[][] PIT_GRAPHIC = {{56, 57}, {54, 55}, {52, 53}, {50, 51}};
@@ -422,6 +474,11 @@ public final class TexturedViewRenderer implements ViewRenderer {
         int ornament = map.floorOrnament(mx, my);
         if (ornament >= 0 && d > 0) {
             drawFloorOrnament(g, d, l, ornament);
+        }
+        // DM's F172/F108: magic footprints over the floor decoration, not on stairs or open pits
+        if (d > 0 && sq.type() != SquareType.STAIRS && !(sq.type() == SquareType.PIT && map.isPitOpen(mx, my))
+                && viewer.footprintsAt(map, mx, my)) {
+            drawFloorOrnament(g, d, l, FOOTPRINTS);
         }
         if (!doorFront && !stairsSide && CEILING_PIT_GRAPHIC[d] != null && map.ceilingPit(mx, my)) {
             drawZoned(g, CEILING_PIT_GRAPHIC[d][l == 0 ? 1 : 0], CEILING_PIT_ZONE[d][col], l > 0);
@@ -944,8 +1001,12 @@ public final class TexturedViewRenderer implements ViewRenderer {
         if (l > 0) {
             x = VIEWPORT.width - x - img.getWidth();
         }
-        paste(g, l == 0 ? base + 1 : base, x, y, l > 0);
+        // DM flips footprints straight ahead with the walls (G076)
+        paste(g, l == 0 ? base + 1 : base, x, y, l > 0 || (l == 0 && ornament == FOOTPRINTS && viewFlipped));
     }
+
+    /** The magic footprints' pieces (DM's floor ornament 15) come just before the first floor decoration's: 379-384. */
+    private static final int FOOTPRINTS = -1;
 
     /** Door decorations (441 + k); D2 and D3 versions are shrunk with DM's palette changes. */
     static final int FIRST_DOOR_ORNAMENT = 441;
@@ -1020,7 +1081,7 @@ public final class TexturedViewRenderer implements ViewRenderer {
             return;
         }
         BufferedImage panel = doorPanel(map.doorStyle(mx, my), d, map.decorations().door(mx, my),
-                state == DungeonMap.DOOR_BROKEN);
+                state == DungeonMap.DOOR_BROKEN, d == 1 && l == 0 && viewer.thievesEye());
         if (panel == null) {
             return;
         }
@@ -1028,8 +1089,12 @@ public final class TexturedViewRenderer implements ViewRenderer {
         drawZoned(g, panel, zone, false);
     }
 
-    /** A door's panel for depth {@code d}, its decoration (or the broken-door mask) painted on as DM does. */
-    private BufferedImage doorPanel(int style, int d, int ornament, boolean broken) {
+    /**
+     * A door's panel for depth {@code d}, its decoration (or the broken-door
+     * mask) painted on as DM does; straight ahead at D1 a thieves' eye cuts
+     * its hole (mask 440, DM's door ornament 16) before anything else.
+     */
+    private BufferedImage doorPanel(int style, int d, int ornament, boolean broken, boolean thievesEye) {
         IndexedImage door = art.indexed(FIRST_DOOR + style * 3 + (MAX_DEPTH - d));
         if (door == null) {
             return null;
@@ -1037,6 +1102,9 @@ public final class TexturedViewRenderer implements ViewRenderer {
         byte[] pixels = door.pixels().clone();
         if (ornament >= 0 && ornament < DOOR_ORNAMENT_SET.length) {
             paint(pixels, door.width(), art.indexed(FIRST_DOOR_ORNAMENT + ornament), DOOR_ORNAMENT_SET[ornament], d);
+        }
+        if (thievesEye) {
+            paint(pixels, door.width(), art.indexed(DOOR_THIEVES_EYE_MASK), 1, d);
         }
         if (broken) {
             paint(pixels, door.width(), art.indexed(DOOR_DESTROYED_MASK), 1, d);

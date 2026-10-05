@@ -904,6 +904,9 @@ public final class CreatureAI implements Serializable {
     /** DM's F200: how far away the party is if the group (or creature {@code creature}) can see it, else 0. */
     private int distanceToVisibleParty(Group g, int creature, int x, int y) {
         CreatureType info = g.type();
+        if (party.invisible() && !info.seesInvisible()) {
+            return 0;
+        }
         boolean sees = info.sideAttack();
         if (!sees) {
             List<Integer> dirs = new ArrayList<>();
