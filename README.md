@@ -12,7 +12,7 @@ A Java remake of FTL's *Dungeon Master* (1988), built one sprint at a time.
 | ← Strafe left | ↓ Backward | → Strafe right |
 
 - Walls and closed doors block movement. The view gets a red border for a moment when a move is blocked.
-- Pits, stairs and teleporters are drawn but don't do anything yet.
+- Pits, stairs and teleporters are drawn but don't do anything yet (stairs work since Sprint 10, pits and teleporters since Sprint 11).
 
 **Sprint 2: done.** The Hall of Champions has its 24 champions:
 
@@ -27,12 +27,12 @@ A Java remake of FTL's *Dungeon Master* (1988), built one sprint at a time.
 - the two front-row champions (your first two recruits) each take 1 damage, shown by the original red damage burst with the number over their status boxes;
 - the red border flash, as before.
 
-With no party yet, you only get the sound and the flash. Health can't drop below 0; champion death comes later. Sound is always on, and if no audio device is available the game simply stays silent.
+With no party yet, you only get the sound and the flash. Health can't drop below 0; champion death came in Sprint 12. Sound is always on, and if no audio device is available the game simply stays silent.
 
 **Sprint 4: done.** The dungeon view uses the original artwork from GRAPHICS.DAT:
 - **Walls, floor and ceiling:** placed pixel-exact, as in the original. As in DM, the art is mirrored on alternate squares so walking looks like movement.
 - **Doors, stairs and pits:** the original graphics, including the right door design for each door (grate, wood, ...). DM's exact coordinates for these aren't in the data files, so their positions are fitted to the wall geometry and may be a pixel or two off the original.
-- **Not yet:** wall and floor decorations (torch holders, switches, moss...).
+- **Not yet:** wall and floor decorations (torch holders, switches, moss...). They came in Sprint 6.
 
 Without GRAPHICS.DAT the game still uses the flat-shaded view.
 
@@ -50,7 +50,7 @@ Without GRAPHICS.DAT the game still uses the flat-shaded view.
 - **DM's "random" decorations:** iron rings, grates, moss, puddles, cracks and the like, chosen by the same seeded formula as the original.
 - **Inscriptions** such as "HALL OF CHAMPIONS" are carved in DM's inscription font on the wall straight ahead.
 - **Door decorations** (grilles, locks, the black entrance door) and door buttons.
-- **Not yet:** decorations are visual only; clicking switches, buttons, keyholes and alcoves comes later.
+- **Not yet:** decorations are visual only. Clicking switches, buttons, keyholes and alcoves came in Sprint 9.
 - **Accuracy:** screen positions were fitted by hand at first (Sprint 9 moved front-wall decorations onto DM's own coordinates), and the random-placement rules were reconstructed from the ReDMCSB source.
 
 Run with `"-Ddm.debug=true"` to list every decoration on Level 1.
@@ -115,7 +115,7 @@ Run with `"-Ddm.debug=true"` to list every decoration on Level 1.
 - **They hurt:** each blow uses the original's hit roll against the champion's dexterity and luck, is softened by the armour and shields on the body part it lands on, and can wound that part. Wounded hands, head, torso, legs and feet show as red boxes, as in the original. Scorpions, wasps, worms and others poison: poison keeps hurting until it wears off or a BRO potion (antivenin) cures it, and a VI potion heals wounds. Gigglers steal from your hands instead.
 - **They're seen and heard:** each creature shows its attack picture as it strikes, its own way of mirroring and jittering, and the original's attack, footstep and "ouch" sounds play.
 - **The dungeon acts on them:** they can't pass closed doors (ghosts can), stay out of open pits (unless they fly), fall through pits that open under them, are carried by creature teleporters, and press pressure plates. A door shut on a creature hurts it and bounces back. The original's 50 creature generators make new creatures.
-- Creatures that cast spells (Vexirks, Wizard Eyes, Demons and others) only fight hand to hand for now.
+- Creatures that cast spells (Vexirks, Wizard Eyes, Demons and others) only fought hand to hand until Sprint 20, when they began casting from afar.
 
 **Sprint 16: done.** The party fights back, with the original's rules (ported from ReDMCSB):
 - **The action area:** below the spell area, each champion's action-hand item shows as a black icon on cyan (a fist for an empty hand). Click one to open that champion's menu of actions, drawn on the original's panel, and click an action (or PASS). The icon is shaded while the champion recovers. After a blow, the original's starburst shows the damage for a moment, or CAN'T REACH / NEED AMMO.
@@ -126,7 +126,7 @@ Run with `"-Ddm.debug=true"` to list every decoration on Level 1.
 - **Doors:** a strong enough blow breaks a breakable door (wooden ones most easily), and so can thrown things.
 - **Experience:** every action trains its skill, faster in a fight and on deeper levels, and a new level raises the champion's statistics, health, stamina and mana, announced in the message area at the bottom of the screen ("... JUST GAINED A FIGHTER LEVEL!"). Champions turn to face whoever hits them.
 
-**Not yet (after Sprint 16):** the magic in items' action menus (a staff's fireball and the like); exploding bombs. Spells came in Sprint 19.
+Spells came in Sprint 19; the magic in items' action menus (a staff's fireball and the like) and bursting bombs in Sprint 20.
 
 **Sprint 17: done.**
 - **Reincarnate:** a champion in a mirror now shows the original's panel with RESURRECT, REINCARNATE and CANCEL. REINCARNATE opens the original's keyboard: type (or click) a new name and title, then OK. The champion forgets every skill but gains 12 statistic points. Hold the eye to see a candidate's skills and statistics first. As in the original, you can only look at a candidate with room in the party and nothing in your hand.
@@ -149,7 +149,7 @@ Run with `"-Ddm.debug=true"` to list every decoration on Level 1.
 - **Spells that fly:** FUL IR (fireball), OH KATH RA (lightning bolt), OH VEN (poison cloud), DES VEN (poison bolt), DES EW (harm non-material: the only thing that hurts ghosts) and ZO (opens a door that has a button). They fly from the caster's side, stronger with more power and skill, and burst where they hit with the original's explosions. Fireballs and lightning burn everything on that square and can break doors that magic can break. A poison cloud hangs over a square, choking what stands in it. Black flames feed on fireballs.
 - **Careful:** as in the original, a fireball cast into the wall in front of you bursts on your own square and burns the party.
 - **God mode** now also makes every spell succeed at no mana cost.
-- Not castable yet (the runes say so and give the mana back): potions, invisibility, thieves' eye, magic footprints and ZO KATH RA. Item magic and creatures' spells come next.
+- Potions, invisibility, thieves' eye, magic footprints and ZO KATH RA, item magic and creatures' spells followed in Sprint 20.
 
 **Sprint 20: done.** The rest of the magic, with the original's rules (ported from ReDMCSB):
 - **Potions:** cast a potion spell (VI, YA BRO, ZO BRO RA, ...) with an empty flask in hand and it fills, stronger with more power. Every potion now works when drunk; YA shields its drinker for a while, shown by the party shield's border on their box.

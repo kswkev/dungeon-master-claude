@@ -1109,7 +1109,8 @@ public final class TexturedViewRenderer implements ViewRenderer {
             paint(pixels, door.width(), art.indexed(FIRST_DOOR_ORNAMENT + ornament), DOOR_ORNAMENT_SET[ornament], d);
         }
         if (thievesEye) {
-            paint(pixels, door.width(), art.indexed(DOOR_THIEVES_EYE_MASK), 1, d);
+            // the PC's mask (80x74) is smaller than its box, the whole 96x88 door: centre it
+            paint(pixels, door.width(), art.indexed(DOOR_THIEVES_EYE_MASK), 1, d, true);
         }
         if (broken) {
             paint(pixels, door.width(), art.indexed(DOOR_DESTROYED_MASK), 1, d);
@@ -1120,6 +1121,11 @@ public final class TexturedViewRenderer implements ViewRenderer {
 
     /** DM's F0109: a decoration pasted onto a door, its gold (colour 9) see-through; its colour 10 cuts holes. */
     private static void paint(byte[] door, int doorWidth, IndexedImage ornament, int set, int d) {
+        paint(door, doorWidth, ornament, set, d, false);
+    }
+
+    /** {@link #paint}, with a picture smaller than its box centred in it if {@code centred}. */
+    private static void paint(byte[] door, int doorWidth, IndexedImage ornament, int set, int d, boolean centred) {
         if (ornament == null) {
             return;
         }
@@ -1127,11 +1133,13 @@ public final class TexturedViewRenderer implements ViewRenderer {
         IndexedImage img = d == 1 ? ornament
                 : Bitmaps.shrink(ornament, box[2], box[3], d == 2 ? PAL_CHANGES_DOOR_ORNAMENT_D2 : PAL_CHANGES_DOOR_ORNAMENT_D3);
         int height = door.length / doorWidth;
+        int offsetX = centred ? Math.max(0, (box[2] - img.width()) / 2) : 0;
+        int offsetY = centred ? Math.max(0, (box[3] - img.height()) / 2) : 0;
         for (int y = 0; y < Math.min(img.height(), box[3]); y++) {
             for (int x = 0; x < Math.min(img.width(), box[2]); x++) {
                 int c = img.pixel(x, y);
-                int dx = box[0] + x;
-                int dy = box[1] + y;
+                int dx = box[0] + offsetX + x;
+                int dy = box[1] + offsetY + y;
                 if (c != 9 && dx < doorWidth && dy < height) {
                     door[dy * doorWidth + dx] = (byte) c;
                 }
