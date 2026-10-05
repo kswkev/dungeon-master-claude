@@ -495,9 +495,9 @@ final class Flight {
     }
 
     /**
-     * DM's F224 (without Lord Chaos's capture, which comes with FUSE): a
-     * fluxcage on (x, y), unless it is a wall or stairs, for 100 ticks. Only
-     * Lord Chaos is held back by it (F202).
+     * DM's F224: a fluxcage on (x, y), unless it is a wall or stairs, for 100
+     * ticks. Only Lord Chaos is held back by it (F202), and one that makes
+     * three around him puts him to flight ({@link CreatureAI#fluxcaged}).
      */
     static void fluxcage(Party party, DungeonMap m, int x, int y) {
         SquareType type = m.get(x, y).type();
@@ -506,6 +506,7 @@ final class Flight {
         }
         m.explosionList().add(new Explosion(Explosion.FLUXCAGE, x, y, 0, 0, party.time() + 100));
         party.dungeon().creatures().changed(party);
+        party.dungeon().creatures().fluxcaged(party, m, x, y);
     }
 
     /**

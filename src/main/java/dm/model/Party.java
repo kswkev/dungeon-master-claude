@@ -303,6 +303,19 @@ public final class Party implements Serializable {
         partySpells().add(e);
     }
 
+    // ---- the endgame (FUSE, Sprint 22) ----------------------------------------------
+
+    /** The fuse sequence once FUSE has caught Lord Chaos, or null. Not saved: it plays out before any save. */
+    private transient Endgame endgame;
+
+    public Endgame endgame() {
+        return endgame;
+    }
+
+    void startEndgame(DungeonMap m, int x, int y) {
+        endgame = new Endgame(this, m, x, y);
+    }
+
     // ---- VI altar rebirth (DM's event 13) ----------------------------------------
 
     /**
