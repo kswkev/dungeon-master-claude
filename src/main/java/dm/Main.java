@@ -8,6 +8,8 @@ import dm.model.ChampionMirror;
 import dm.model.Decorations;
 import dm.model.Direction;
 import dm.model.DungeonMap;
+import dm.model.Item;
+import dm.model.ItemCatalog;
 import dm.model.Party;
 import dm.ui.Art;
 import dm.ui.GameWindow;
@@ -16,6 +18,7 @@ import dm.ui.SoundPlayer;
 import javax.swing.JOptionPane;
 import javax.swing.SwingUtilities;
 import java.nio.file.Path;
+import java.util.List;
 
 /**
  * Entry point. The DUNGEON.DAT path comes from the first argument, then the
@@ -59,7 +62,7 @@ public final class Main {
         Art art = Art.load(graphicsPath);
 
         DungeonMap level = dungeon.firstLevel();
-        Party party = new Party(dungeon.maps(), 0, dungeon.startX(), dungeon.startY(), dungeon.startFacing());
+        Party party = debugParty(dungeon);
         if (debug) {
             System.out.printf("Loaded %s: %d maps (%s). Level 1 is %dx%d.%n",
                     path, dungeon.maps().size(), dungeon.format(), level.width(), level.height());
@@ -70,6 +73,55 @@ public final class Main {
 
         SoundPlayer sounds = SoundPlayer.javaSound();
         SwingUtilities.invokeLater(() -> new GameWindow(party, art, sounds, debug).setVisible(true));
+    }
+
+    /**
+     * The party at the dungeon's start, or as the testing options (not in
+     * DM) set it up:
+     * <ul>
+     *   <li>{@code -Ddm.start=level,x,y,dir}: starts on that level (1-based) and square, facing N, E, S or W;</li>
+     *   <li>{@code -Ddm.recruit=all} (or a number): recruits the first Level 1 mirrors' champions;</li>
+     *   <li>{@code -Ddm.give=weapon:45,junk:51,potion:6:120}: gives the first champion those items
+     *       (category:type[:charges]), placed as starting items are.</li>
+     * </ul>
+     * A malformed option is reported and ignored.
+     */
+    static Party debugParty(DungeonFile dungeon) {
+        Party party = new Party(dungeon.maps(), 0, dungeon.startX(), dungeon.startY(), dungeon.startFacing());
+        String start = System.getProperty("dm.start");
+        if (start != null) {
+            try {
+                String[] p = start.split(",");
+                int index = Integer.parseInt(p[0].trim()) - 1;
+                Direction facing = Direction.fromIndex("NESW".indexOf(Character.toUpperCase(p[3].trim().charAt(0))));
+                party = new Party(dungeon.maps(), index, Integer.parseInt(p[1].trim()), Integer.parseInt(p[2].trim()),
+                        facing);
+            } catch (RuntimeException e) {
+                System.err.println("Ignoring -Ddm.start=" + start + " (expected level,x,y,N|E|S|W)");
+            }
+        }
+        String recruit = System.getProperty("dm.recruit");
+        if (recruit != null) {
+            List<ChampionMirror> mirrors = dungeon.maps().get(0).mirrors();
+            int count = recruit.equals("all") ? Party.MAX_MEMBERS : Integer.parseInt(recruit.trim());
+            for (int i = 0; i < Math.min(count, mirrors.size()); i++) {
+                party.recruit(mirrors.get(i));
+            }
+        }
+        String give = System.getProperty("dm.give");
+        if (give != null && !party.members().isEmpty()) {
+            for (String spec : give.split(",")) {
+                try {
+                    String[] p = spec.trim().split(":");
+                    Item item = ItemCatalog.item(Item.Category.valueOf(p[0].toUpperCase()), Integer.parseInt(p[1]),
+                            p.length > 2 ? Integer.parseInt(p[2]) : 0);
+                    party.members().get(0).addStartingItem(item);
+                } catch (RuntimeException e) {
+                    System.err.println("Ignoring -Ddm.give item " + spec + " (expected category:type[:charges])");
+                }
+            }
+        }
+        return party;
     }
 
     /**
