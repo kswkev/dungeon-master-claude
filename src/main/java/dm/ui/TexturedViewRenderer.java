@@ -242,6 +242,7 @@ public final class TexturedViewRenderer implements ViewRenderer {
                 Rectangle drawn = drawFrontDecoration(g, ornament, face, d, l);
                 if (DungeonMap.isAlcove(ornament)) {
                     drawAlcoveItems(g, map.itemsAt(mx, my, front.ordinal()), d, l);
+                    drawRebirth(g, map, mx, my, front, d, l);
                 }
                 if (d == 1 && l == 0 && drawn != null) {
                     wallHit = new Rectangle(drawn.x + VIEWPORT.x, drawn.y + VIEWPORT.y, drawn.width, drawn.height);
@@ -591,6 +592,50 @@ public final class TexturedViewRenderer implements ViewRenderer {
             BufferedImage img = explosionImage(explosionAspect(e.type()), scale);
             if (img == null) {
                 return;
+            }
+            int w = img.getWidth();
+            int h = img.getHeight();
+            int x = at[0] - w / 2 + 1;
+            int y = at[1] - (h >> 1) + ((h & 1) == 0 ? 1 : 0);
+            boolean flipX = explosionRandom.nextBoolean();
+            boolean flipY = explosionRandom.nextBoolean();
+            g.drawImage(img, flipX ? x + w : x, flipY ? y + h : y, flipX ? -w : w, flipY ? -h : h, null);
+        }
+    }
+
+    /** DM's G228 and G227: the rebirth sparkle's and burst's centre and scale, D3 C/L/R, D2 C/L/R, D1 C. */
+    private static final int[][] REBIRTH_1_XY = {
+            {112, 53, 15}, {24, 53, 15}, {194, 53, 15}, {112, 59, 20}, {15, 59, 20}, {208, 59, 20}, {112, 70, 32}};
+    private static final int[][] REBIRTH_2_XY = {
+            {113, 57, 12}, {24, 57, 12}, {195, 57, 12}, {111, 63, 16}, {12, 63, 16}, {213, 63, 16}, {112, 76, 24}};
+
+    /**
+     * F0115 for a VI altar's rebirth, seen only on the wall face toward the
+     * party: first the sparkle (the lightning bolt's head-on picture) at
+     * G228's points, then the fire burst at G227's, flipped at random.
+     */
+    private void drawRebirth(Graphics2D g, DungeonMap map, int mx, int my, Direction front, int d, int l) {
+        if (d > MAX_DEPTH || d == 1 && l != 0) {
+            return;
+        }
+        int index = (MAX_DEPTH - d) * 3 + (l == 0 ? 0 : l < 0 ? 1 : 2);
+        for (Explosion e : map.explosionsAt(mx, my)) {
+            if (e.cell() != front.ordinal()
+                    || e.type() != Explosion.REBIRTH_1 && e.type() != Explosion.REBIRTH_2) {
+                continue;
+            }
+            int[] at = e.type() == Explosion.REBIRTH_1 ? REBIRTH_1_XY[index] : REBIRTH_2_XY[index];
+            BufferedImage img;
+            if (e.type() == Explosion.REBIRTH_1) {
+                int graphic = FIRST_PROJECTILE + PROJECTILE_LIGHTNING;
+                IndexedImage src = art.indexed(graphic);
+                img = src == null ? null : distant(graphic, Math.max(1, Bitmaps.scaled(src.width(), at[2])),
+                        Math.max(1, Bitmaps.scaled(src.height(), at[2])), null, false);
+            } else {
+                img = explosionImage(ASPECT_FIRE, at[2]);
+            }
+            if (img == null) {
+                continue;
             }
             int w = img.getWidth();
             int h = img.getHeight();

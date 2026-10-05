@@ -321,6 +321,12 @@ public final class Champion implements Serializable {
         stamina = Math.min(stamina + amount, maxStamina);
     }
 
+    /** DM's F283 at a VI altar: back to life with a slightly lower maximum health (at least 25), and half of it. */
+    void reborn() {
+        maxHealth = Math.max(25, maxHealth - (maxHealth >> 6) - 1);
+        health = maxHealth >> 1;
+    }
+
     /** The options' deep sleep: health, stamina and mana back to their maximum (mana a potion raised above it stays). */
     void refresh() {
         health = Math.max(health, maxHealth);

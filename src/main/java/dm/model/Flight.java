@@ -457,7 +457,8 @@ final class Flight {
     static void explode(Party party, DungeonMap m, int type, int attack, int x, int y, int cell) {
         CreatureAI creatures = party.dungeon().creatures();
         Random random = party.random();
-        m.explosionList().add(new Explosion(type, x, y, cell, attack, party.time() + 1));
+        m.explosionList().add(new Explosion(type, x, y, cell, attack,
+                party.time() + (type == Explosion.REBIRTH_1 ? 5 : 1)));
         if (type < Explosion.HARM_NON_MATERIAL) {
             creatures.soundAt(party, attack > 80 ? SOUND_STRONG_EXPLOSION : SOUND_WEAK_EXPLOSION, m, x, y);
         } else if (type != Explosion.SMOKE) {
@@ -549,6 +550,11 @@ final class Flight {
                         if (g != null && g.type().nonMaterial()) {
                             harmNonMaterial(party, m, g, attack, random);
                         }
+                    }
+                    case Explosion.REBIRTH_1 -> {
+                        e.setType(Explosion.REBIRTH_2);
+                        creatures.soundAt(party, SOUND_STRONG_EXPLOSION, m, e.x(), e.y());
+                        lasts = true;
                     }
                     case Explosion.SMOKE -> {
                         if (e.attack() > 55) {

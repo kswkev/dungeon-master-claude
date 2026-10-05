@@ -941,6 +941,10 @@ public final class DungeonMap implements Serializable {
                 addItem(x, y, cell, held);
                 party.setHeld(null);
                 out.handChanged = true;
+                if (wallOrnament(x, y, side) == VI_ALTAR && held.category() == Item.Category.JUNK
+                        && held.type() == Party.BONES) {
+                    party.startRebirth(this, x, y, cell, held.charges()); // F374: event 13
+                }
             } else {
                 Item taken = takeItem(x, y, cell);
                 if (taken != null) {
@@ -1069,6 +1073,15 @@ public final class DungeonMap implements Serializable {
         List<Item> pile = pile(x, y, cell, false);
         return pile == null || pile.isEmpty() ? null : pile.remove(pile.size() - 1);
     }
+
+    /** Removes one item equal to {@code item} from cell {@code cell} of (x, y). Returns whether there was one. */
+    public boolean removeItem(int x, int y, int cell, Item item) {
+        List<Item> pile = pile(x, y, cell, false);
+        return pile != null && pile.remove(item);
+    }
+
+    /** Global wall ornament 2, DM's VI altar (G266): champion bones put in it bring the champion back. */
+    public static final int VI_ALTAR = 2;
 
     /** Whether any cell of (x, y) holds an item. */
     public boolean hasItems(int x, int y) {
