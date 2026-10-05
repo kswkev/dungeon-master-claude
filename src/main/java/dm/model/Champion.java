@@ -610,6 +610,17 @@ public final class Champion implements Serializable {
         return actionDefense;
     }
 
+    /** DM's champion shield: a YA potion's defense, added to every body part (F313) until event 72 takes it away. */
+    private int shieldDefense;
+
+    public int shieldDefense() {
+        return shieldDefense;
+    }
+
+    void addShieldDefense(int amount) {
+        shieldDefense += amount;
+    }
+
     void addActionDefense(int amount) {
         actionDefense += amount;
     }

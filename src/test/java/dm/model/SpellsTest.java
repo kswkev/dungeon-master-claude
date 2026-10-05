@@ -90,16 +90,12 @@ class SpellsTest {
     }
 
     @Test
-    void onlyProjectilesLightAndShieldsCanBeCastYet() {
-        assertTrue(Spells.find(symbols(LO, YA, IR)).castable(), "party shield");
-        assertTrue(Spells.find(symbols(LO, FUL, BRO, NETA)).castable(), "fire shield");
-        assertTrue(Spells.find(symbols(LO, DES, IR, SAR)).castable(), "darkness");
-        assertTrue(Spells.find(symbols(LO, OH, 0)).castable(), "poison cloud");
-        assertFalse(Spells.find(symbols(LO, 1)).castable(), "VI, a health potion");
-        assertFalse(Spells.find(symbols(LO, OH, EW, SAR)).castable(), "invisibility");
-        assertFalse(Spells.find(symbols(LO, YA, BRO, 1)).castable(), "magic footprints");
-        assertFalse(Spells.find(symbols(LO, OH, EW, 4)).castable(), "thieves' eye");
-        assertFalse(Spells.find(symbols(LO, 5, 2, 4)).castable(), "ZO KATH RA");
+    void theSpellsOfSprint20AreInTheTable() {
+        assertEquals(Spells.KIND_POTION, Spells.find(symbols(LO, 1)).kind(), "VI, a health potion");
+        assertEquals(Spells.OTHER_INVISIBILITY, Spells.find(symbols(LO, OH, EW, SAR)).type());
+        assertEquals(Spells.OTHER_FOOTPRINTS, Spells.find(symbols(LO, YA, BRO, 1)).type());
+        assertEquals(Spells.OTHER_THIEVES_EYE, Spells.find(symbols(LO, OH, EW, 4)).type());
+        assertEquals(Spells.OTHER_ZOKATHRA, Spells.find(symbols(LO, 5, 2, 4)).type());
     }
 
     @Test
@@ -165,14 +161,79 @@ class SpellsTest {
     }
 
     @Test
-    void aSpellNotYetInTheGameGivesItsManaBack() {
+    void aPotionSpellFillsAnEmptyFlaskInHand() {
         master();
-        enter(MON, OH, EW, SAR); // invisibility
-        assertTrue(elija.mana() < 500);
+        enter(UM, 1); // VI
         assertFalse(party.cast());
-        assertEquals(500, elija.mana());
-        assertEquals(List.of("ELIJA CAN'T CAST THAT SPELL YET."), messages());
-        assertEquals("", elija.symbols());
+        assertEquals(List.of("ELIJA NEEDS AN EMPTY FLASK IN HAND FOR POTION."), messages());
+        assertEquals(symbols(UM, 1), elija.symbols(), "kept for another try");
+        elija.place(Slot.READY_HAND, ItemCatalog.item(Item.Category.POTION, ItemCatalog.EMPTY_FLASK));
+        assertTrue(party.cast());
+        Item potion = elija.items().get(Slot.READY_HAND);
+        assertEquals(14, potion.type());
+        assertTrue(potion.charges() >= 80 && potion.charges() < 96, "UM is power 2: 80 + random(16)");
+    }
+
+    @Test
+    void aYaPotionShieldsItsDrinkerForAWhile() {
+        party.setHeld(ItemCatalog.item(Item.Category.POTION, 12, 100));
+        assertTrue(party.feed(elija));
+        assertEquals(18, elija.shieldDefense(), "(100/25 + 8) * 1.5");
+        tick(18 * 18 - 1);
+        assertEquals(18, elija.shieldDefense());
+        tick(1);
+        assertEquals(0, elija.shieldDefense());
+    }
+
+    @Test
+    void typeElevenIsTheStaminaPotion() {
+        elija.decrementStamina(elija.rawMaxStamina() / 2);
+        int before = elija.stamina();
+        Upkeep.consume(elija, ItemCatalog.item(Item.Category.POTION, 11, 100));
+        assertTrue(elija.stamina() > before);
+    }
+
+    @Test
+    void invisibilityLastsItsSpellPowerInTicks() {
+        master();
+        enter(MON, OH, EW, SAR); // power 6: (6 + 1) * 4 = 28 ticks
+        assertTrue(party.cast());
+        assertTrue(party.invisible());
+        tick(27);
+        assertTrue(party.invisible());
+        tick(1);
+        assertFalse(party.invisible());
+    }
+
+    @Test
+    void thievesEyeLastsHalfItsPowerSquared() {
+        master();
+        enter(LO, OH, EW, 4); // power 1: 8 >> 1 = 4, 16 ticks
+        assertTrue(party.cast());
+        assertTrue(party.thievesEye());
+        tick(16);
+        assertFalse(party.thievesEye());
+    }
+
+    @Test
+    void zoKathRaPutsAZokathraInAnEmptyHand() {
+        master();
+        enter(LO, 5, 2, 4);
+        assertTrue(party.cast());
+        assertEquals("ZOKATHRA SPELL", elija.items().get(Slot.READY_HAND).name());
+    }
+
+    @Test
+    void footprintsShowWhereThePartyWalksWhileTheSpellRuns() {
+        master();
+        party.step(Party.Move.FORWARD); // (2,1), before the spell
+        enter(LO, YA, BRO, 1);
+        assertTrue(party.cast());
+        party.step(Party.Move.FORWARD); // (3,1)
+        party.step(Party.Move.FORWARD); // (4,1)
+        assertFalse(party.footprintsAt(map, 2, 1), "walked before the spell");
+        assertTrue(party.footprintsAt(map, 3, 1));
+        assertTrue(party.footprintsAt(map, 4, 1));
     }
 
     @Test

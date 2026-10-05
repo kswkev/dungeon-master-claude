@@ -136,7 +136,7 @@ public final class ChampionBars {
             }
             g.setColor(BOX_BG);
             g.fillRect(x, 0, BOX_W, BOX_H);
-            drawShields(g, x, shields);
+            drawShields(g, x, c.shieldDefense() > 0 ? shields | PARTY_SHIELD : shields); // F292: a YA potion's shield too
             if (c == shown) {
                 BufferedImage portrait = art.portrait(c.portrait());
                 Rectangle r = new Rectangle(x, 0, 32, 29);
@@ -222,9 +222,10 @@ public final class ChampionBars {
         return item == null ? null : ItemCatalog.shownIn(item, hand);
     }
 
-    /** DM's red slot box for a wounded hand, and the wounded hand outline (icons 213 and 215) when it's empty. */
+    /** DM's red slot box for a wounded hand. */
     private static final int SLOT_BOX_WOUNDED = 34;
-    private static final int WOUNDED_HAND_ICON = 213;
+    /** F291's empty hand outlines: 212 ready hand, 214 action hand; one more (213, 215) when wounded. */
+    private static final int EMPTY_HAND_ICON = 212;
 
     private void drawHand(Graphics2D g, Champion c, Slot hand, int x, int y) {
         Item item = shown(c, hand);
@@ -237,7 +238,7 @@ public final class ChampionBars {
             g.drawRect(x, y, 17, 17);
         }
         if (item == null) {
-            BufferedImage outline = wounded ? art.icon(WOUNDED_HAND_ICON + (hand == Slot.ACTION_HAND ? 2 : 0)) : null;
+            BufferedImage outline = art.icon(EMPTY_HAND_ICON + (wounded ? 1 : 0) + (hand == Slot.ACTION_HAND ? 2 : 0));
             if (outline != null) {
                 g.drawImage(outline, x + 1, y + 1, null);
             }

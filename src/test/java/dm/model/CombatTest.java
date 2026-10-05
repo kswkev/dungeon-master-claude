@@ -57,6 +57,69 @@ class CombatTest {
         }
     }
 
+    /** The first weapon whose action set holds {@code action}, with 3 charges. */
+    private static Item weaponWith(int action) {
+        for (int type = 0; type < 64; type++) {
+            Item item = ItemCatalog.item(Item.Category.WEAPON, type, 3);
+            int set = ItemCatalog.actionSet(item);
+            for (int i = 0; i < 3; i++) {
+                if (Actions.setAction(set, i) == action) {
+                    return item;
+                }
+            }
+        }
+        throw new AssertionError("no weapon offers action " + action);
+    }
+
+    @Test
+    void aFireballActionLaunchesTheSpellAndUsesACharge() {
+        Item staff = weaponWith(Actions.FIREBALL);
+        elija.replace(Slot.ACTION_HAND, staff);
+        elija.addExperience(Actions.skill(Actions.FIREBALL), 500L << 12);
+        elija.setMana(100);
+        assertTrue(party.actions(0).contains(Actions.FIREBALL));
+        Combat.act(party, 0, Actions.FIREBALL);
+        assertEquals(1, map.projectiles().size());
+        assertTrue(map.projectiles().get(0).isSpell());
+        assertEquals(2, elija.items().get(Slot.ACTION_HAND).charges());
+        assertTrue(elija.mana() < 100, "it costs mana");
+    }
+
+    @Test
+    void healTurnsManaIntoHealth() {
+        elija.setMana(10);
+        int health = elija.health();
+        elija.takeDamage(30);
+        Combat.act(party, 0, Actions.HEAL);
+        assertTrue(elija.health() > health - 30);
+        assertTrue(elija.mana() < 10);
+    }
+
+    @Test
+    void aFluxcageStandsAheadForAHundredTicks() {
+        Combat.act(party, 0, Actions.FLUXCAGE);
+        assertEquals(Explosion.FLUXCAGE, map.explosionsAt(2, 1).get(0).type());
+        for (int i = 0; i < 99; i++) {
+            party.tick();
+        }
+        assertFalse(map.explosionsAt(2, 1).isEmpty());
+        party.tick();
+        assertTrue(map.explosionsAt(2, 1).isEmpty());
+    }
+
+    @Test
+    void freezeLifeStopsTheCreaturesForItsTicks() {
+        Group g = creature(CreatureType.MUMMY, 3, 1, 1000);
+        party.freezeLife(30);
+        party.step(Party.Move.FORWARD); // next to it: it would attack
+        int health = elija.health();
+        for (int i = 0; i < 25; i++) {
+            party.tick();
+        }
+        assertEquals(health, elija.health(), "frozen, it doesn't attack");
+        assertEquals(3, g.x());
+    }
+
     @Test
     void anEmptyHandPunchesKicksAndShouts() {
         assertEquals(List.of(Actions.PUNCH, Actions.KICK, Actions.WAR_CRY), party.actions(0));
@@ -76,9 +139,10 @@ class CombatTest {
     }
 
     @Test
-    void magicIsLeftForTheSpells() {
+    void theFirestaffInvokesButDoesNotFuseYet() {
         elija.replace(Slot.ACTION_HAND, ItemCatalog.item(Item.Category.WEAPON, 45)); // the complete Firestaff
-        assertTrue(party.actions(0).isEmpty(), "invoke, fuse and fluxcage are all spells");
+        assertEquals(Actions.INVOKE, party.actions(0).get(0));
+        assertFalse(party.actions(0).contains(Actions.FUSE));
     }
 
     @Test

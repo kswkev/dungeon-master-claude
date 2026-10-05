@@ -20,17 +20,26 @@ final class Magic {
     enum Result {
         /** The spell worked. */
         CAST,
-        /** It failed: no spell, not enough skill. */
-        FAILED,
-        /** A spell this remake can't cast yet: the mana its symbols cost was given back. */
-        NOT_YET
+        /** It failed: no spell, not enough skill, no flask for a potion. */
+        FAILED
     }
 
-    /** A party spell running out (DM's events 70 light, 74 party shield, 77 spell shield, 78 fire shield). */
-    record PartySpell(long time, int kind, int amount) implements Serializable {
+    /**
+     * A party spell running out (DM's events 70 light, 72 a champion's shield,
+     * 74 party shield, 77 spell shield, 78 fire shield). {@code member} is the
+     * champion for event 72 (0 in games saved before Sprint 20).
+     */
+    record PartySpell(long time, int kind, int amount, int member) implements Serializable {
+        PartySpell(long time, int kind, int amount) {
+            this(time, kind, amount, 0);
+        }
     }
 
     static final int LIGHT = 70;
+    static final int INVISIBILITY = 71;
+    static final int CHAMPION_SHIELD = 72;
+    static final int THIEVES_EYE = 73;
+    static final int FOOTPRINTS = 79;
     static final int PARTY_SHIELD = 74;
     static final int SPELL_SHIELD = 77;
     static final int FIRE_SHIELD = 78;
@@ -87,12 +96,8 @@ final class Magic {
             return Result.FAILED;
         }
         Spells.Spell spell = Spells.find(symbols);
-        if (spell != null && !spell.castable()) {
-            c.setMana(c.mana() + c.symbolMana());
-            c.setSymbols("", 0, 0);
-            party.message(c.name() + " CAN'T CAST THAT SPELL YET.", -1);
-            return Result.NOT_YET;
-        }
+        int step = c.symbolStep();
+        int symbolMana = c.symbolMana();
         c.setSymbols("", 0, 0);
         if (spell == null) {
             party.message(c.name() + " MUMBLES A MEANINGLESS SPELL.", -1);
@@ -116,13 +121,34 @@ final class Magic {
             }
         }
         switch (spell.kind()) {
+            case Spells.KIND_POTION -> {
+                Slot flask = emptyFlaskInHand(c);
+                if (flask == null) {
+                    party.message(c.name() + " NEEDS AN EMPTY FLASK IN HAND FOR POTION.", -1);
+                    c.setSymbols(symbols, step, symbolMana); // F0408 keeps them, to cast again with a flask
+                    return Result.FAILED;
+                }
+                c.take(flask);
+                c.place(flask, ItemCatalog.item(Item.Category.POTION, spell.type(), random.nextInt(16) + power * 40));
+            }
             case Spells.KIND_PROJECTILE -> castProjectile(party, member, c, spell, power, skill);
-            case Spells.KIND_OTHER -> castOther(party, spell, power);
+            case Spells.KIND_OTHER -> castOther(party, c, spell, power);
             default -> { }
         }
         party.addSkillExperience(member, spell.skill(), experience);
         Combat.disable(party, c, spell.duration());
         return Result.CAST;
+    }
+
+    /** F0411 (DM 1.1 on): the hand holding an empty flask, the action hand first, or null. */
+    private static Slot emptyFlaskInHand(Champion c) {
+        for (Slot slot : new Slot[] {Slot.ACTION_HAND, Slot.READY_HAND}) {
+            Item item = c.items().get(slot);
+            if (item != null && item.category() == Item.Category.POTION && item.type() == ItemCatalog.EMPTY_FLASK) {
+                return slot;
+            }
+        }
+        return null;
     }
 
     /**
@@ -137,7 +163,19 @@ final class Magic {
         if (spell.type() == Explosion.OPEN_DOOR) {
             skill <<= 1;
         }
-        int kineticEnergy = Math.max(21, Math.min((power + 2) * (4 + (skill << 1)), 255));
+        projectileSpell(party, c, spell.type(), Math.max(21, Math.min((power + 2) * (4 + (skill << 1)), 255)), 0);
+    }
+
+    /**
+     * DM's F0327: {@code c} pays {@code mana} (false, and nothing happens,
+     * if they can't) and the spell leaves from their side of the party's
+     * front, with a step energy that is smaller for casters with more mana.
+     */
+    static boolean projectileSpell(Party party, Champion c, int spell, int kineticEnergy, int mana) {
+        if (c.mana() < mana && !party.godMode()) {
+            return false;
+        }
+        c.setMana(c.mana() - mana);
         int stepEnergy = 10 - Math.min(8, c.maxMana() >> 3);
         if (kineticEnergy < (stepEnergy << 2)) {
             kineticEnergy += 3;
@@ -145,12 +183,38 @@ final class Magic {
         }
         int dir = c.facing().ordinal();
         int cell = ((((party.cellOf(c) - dir + 1) & 2) >> 1) + dir) & 3;
-        Flight.launchSpell(party, spell.type(), party.map(), party.x(), party.y(), cell, c.facing(), kineticEnergy,
-                90, stepEnergy);
+        Flight.launchSpell(party, spell, party.map(), party.x(), party.y(), cell, c.facing(), kineticEnergy, 90,
+                stepEnergy);
+        return true;
     }
 
-    /** F0412's other spells: light, magic torch, darkness, party shield and fire shield. */
-    private static void castOther(Party party, Spells.Spell spell, int power) {
+    /**
+     * DM's F0403 with mana, for the spell and fire shield actions: 4 mana;
+     * with less the shield lasts half as long, takes what mana is left and
+     * counts as failed; with none, nothing.
+     */
+    static boolean shieldWithMana(Party party, Champion c, boolean spellShield, int ticks) {
+        if (c.mana() == 0) {
+            return false;
+        }
+        boolean full = c.mana() >= 4;
+        if (full) {
+            c.setMana(c.mana() - 4);
+        } else {
+            ticks >>= 1;
+            c.setMana(0);
+        }
+        shield(party, spellShield, ticks);
+        return full;
+    }
+
+    /**
+     * F0412's other spells: light, magic torch, darkness, party shield, fire
+     * shield, thieves' eye, invisibility, magic footprints and ZO KATH RA.
+     * Invisibility lasts only its spell power in ticks: in DM its tick count
+     * shares a register with the power and skips the squaring the others get.
+     */
+    private static void castOther(Party party, Champion c, Spells.Spell spell, int power) {
         int spellPower = (power + 1) << 2;
         switch (spell.type()) {
             case Spells.OTHER_LIGHT -> {
@@ -174,8 +238,33 @@ final class Magic {
                 party.addPartySpell(new PartySpell(party.time() + spellPower * spellPower, PARTY_SHIELD, defense));
             }
             case Spells.OTHER_FIRESHIELD -> shield(party, false, spellPower * spellPower + 100);
+            case Spells.OTHER_THIEVES_EYE -> {
+                int half = spellPower >> 1;
+                countedSpell(party, THIEVES_EYE, half * half);
+            }
+            case Spells.OTHER_INVISIBILITY -> countedSpell(party, INVISIBILITY, spellPower);
+            case Spells.OTHER_FOOTPRINTS -> {
+                party.startFootprints(power);
+                party.addPartySpell(new PartySpell(party.time() + spellPower * spellPower, FOOTPRINTS, 1));
+            }
+            case Spells.OTHER_ZOKATHRA -> {
+                Item zokathra = ItemCatalog.item(Item.Category.JUNK, ItemCatalog.ZOKATHRA);
+                if (c.items().get(Slot.READY_HAND) == null) {
+                    c.place(Slot.READY_HAND, zokathra);
+                } else if (c.items().get(Slot.ACTION_HAND) == null) {
+                    c.place(Slot.ACTION_HAND, zokathra);
+                } else {
+                    party.map().dropItem(party.x(), party.y(), party.cellOf(c), zokathra);
+                }
+            }
             default -> { }
         }
+    }
+
+    /** DM's event counts: one more spell of {@code kind} running, for {@code ticks}. */
+    static void countedSpell(Party party, int kind, int ticks) {
+        party.addSpellCount(kind, 1);
+        party.addPartySpell(new PartySpell(party.time() + ticks, kind, 1));
     }
 
     /**
@@ -220,6 +309,12 @@ final class Magic {
                 }
             }
             case PARTY_SHIELD, SPELL_SHIELD, FIRE_SHIELD -> party.addShield(e.kind(), -e.amount());
+            case INVISIBILITY, THIEVES_EYE, FOOTPRINTS -> party.addSpellCount(e.kind(), -1);
+            case CHAMPION_SHIELD -> {
+                if (e.member() < party.members().size()) {
+                    party.members().get(e.member()).addShieldDefense(-e.amount());
+                }
+            }
             default -> { }
         }
     }

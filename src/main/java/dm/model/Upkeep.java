@@ -188,21 +188,31 @@ public final class Upkeep {
     }
 
     /**
-     * The potion effects that need nothing not yet modelled (YA's shield does
-     * nothing yet). Antivenin (BRO) cures poison; a VI potion also heals wounds, at
-     * least one if any, as DM's F349 does by and-ing them with random bits.
+     * F349's potions, by DM's type numbers (the names in the icon list don't
+     * follow them: DM's type 11, its "MON" stamina potion, is listed as MA).
+     * Antivenin (BRO) cures poison; a VI potion also heals wounds, at least
+     * one if any, as DM does by and-ing them with random bits; YA raises the
+     * champion's own shield ({@link Party#feed} times it out). The others
+     * (MA/MON 0, UM, DES, VEN, SAR, ZO, the bombs) do nothing when drunk.
      */
     private static void drinkPotion(Champion c, Item potion, Random random) {
         int power = potion.charges();
         int counter = ((511 - power) / (32 + (power + 1) / 8)) >> 1;
         int adjusted = power / 25 + 8;
-        switch (potion.name()) {
-            case "ROS POTION" -> c.raiseStat(Champion.Stat.DEXTERITY, adjusted);
-            case "KU POTION" -> c.raiseStat(Champion.Stat.STRENGTH, power / 35 + 5);
-            case "DANE POTION" -> c.raiseStat(Champion.Stat.WISDOM, adjusted);
-            case "NETA POTION" -> c.raiseStat(Champion.Stat.VITALITY, adjusted);
-            case "MON POTION" -> c.addStamina(c.rawMaxStamina() / counter);
-            case "VI POTION" -> {
+        switch (potion.type()) {
+            case 6 -> c.raiseStat(Champion.Stat.DEXTERITY, adjusted); // ROS
+            case 7 -> c.raiseStat(Champion.Stat.STRENGTH, power / 35 + 5); // KU
+            case 8 -> c.raiseStat(Champion.Stat.WISDOM, adjusted); // DANE
+            case 9 -> c.raiseStat(Champion.Stat.VITALITY, adjusted); // NETA
+            case 11 -> c.addStamina(c.rawMaxStamina() / counter); // DM's MON (stamina), named MA
+            case 12 -> { // YA
+                adjusted += adjusted >> 1;
+                if (c.shieldDefense() > 50) {
+                    adjusted >>= 2;
+                }
+                c.addShieldDefense(adjusted);
+            }
+            case 14 -> { // VI
                 c.addHealth(c.maxHealth() / counter);
                 int wounds = c.wounds();
                 int iterations = Math.max(1, power / 42);
@@ -213,15 +223,15 @@ public final class Upkeep {
                     iterations = 1;
                 }
             }
-            case "BRO POTION" -> c.unpoison(); // antivenin
-            case "EE POTION" -> {
+            case 10 -> c.unpoison(); // BRO, antivenin
+            case 13 -> { // EE
                 int mana = Math.min(900, c.mana() + adjusted + (adjusted - 8));
                 if (mana > c.maxMana()) {
                     mana -= (mana - Math.max(c.mana(), c.maxMana())) >> 1;
                 }
                 c.setMana(mana);
             }
-            case "WATER FLASK" -> c.setWater(c.water() + 1600);
+            case ItemCatalog.WATER_FLASK -> c.setWater(c.water() + 1600);
             default -> { }
         }
     }

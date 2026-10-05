@@ -90,22 +90,6 @@ public final class Spells {
             return (attributes >> 10) & 0x3F;
         }
 
-        /**
-         * Whether this remake can cast it yet: the projectile spells and the
-         * light, darkness and shield spells. Potions, invisibility, thieves'
-         * eye, magic footprints and ZO KATH RA come later.
-         */
-        public boolean castable() {
-            return switch (kind()) {
-                case KIND_PROJECTILE -> true;
-                case KIND_OTHER -> switch (type()) {
-                    case OTHER_LIGHT, OTHER_DARKNESS, OTHER_PARTY_SHIELD, OTHER_MAGIC_TORCH, OTHER_FIRESHIELD -> true;
-                    default -> false;
-                };
-                default -> false;
-            };
-        }
-
         /** The spell's symbols after the power, as DM's characters. */
         public String symbolString() {
             StringBuilder sb = new StringBuilder();

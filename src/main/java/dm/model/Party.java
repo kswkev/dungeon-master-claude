@@ -224,6 +224,72 @@ public final class Party implements Serializable {
         }
     }
 
+    /** DM's event counts (Sprint 20): invisibility (71), thieves' eye (73) and magic footprints (79) spells running. */
+    private int invisibility;
+    private int thievesEye;
+    private int footprints;
+    /** DM's first and last scent index: the scents in [first, last) show footprints. */
+    private int firstFootprint;
+    private int lastFootprint;
+
+    /** DM's freeze life ticks: while above 0, creatures (but Lord Chaos) stand still; one goes each tick. */
+    private int freezeLifeTicks;
+
+    public boolean lifeFrozen() {
+        return freezeLifeTicks > 0;
+    }
+
+    /** F407's freeze life: {@code ticks} more, up to 200 in all. */
+    void freezeLife(int ticks) {
+        freezeLifeTicks = Math.min(200, freezeLifeTicks + ticks);
+    }
+
+    /** True while an invisibility spell runs: only creatures that see the invisible can see the party (F200). */
+    public boolean invisible() {
+        return invisibility > 0;
+    }
+
+    /** True while a thieves' eye runs: the wall (or door) straight ahead has a hole to see through. */
+    public boolean thievesEye() {
+        return thievesEye > 0;
+    }
+
+    void addSpellCount(int kind, int amount) {
+        switch (kind) {
+            case Magic.INVISIBILITY -> invisibility += amount;
+            case Magic.THIEVES_EYE -> thievesEye += amount;
+            case Magic.FOOTPRINTS -> footprints += amount;
+            default -> throw new IllegalArgumentException("not a counted spell: " + kind);
+        }
+    }
+
+    /**
+     * F0412's magic footprints: they start at the next scent and, as the
+     * party walks, take in every scent left while a footprints spell runs.
+     */
+    void startFootprints(int power) {
+        footprints++;
+        firstFootprint = scents.size();
+        lastFootprint = power < 3 ? firstFootprint : 0;
+    }
+
+    /** DM's F316 for the oldest scent: the footprints' indexes move down with the rest. */
+    private void deleteOldestScent() {
+        scents.remove(0);
+        if (firstFootprint > 0) {
+            firstFootprint--;
+        }
+        if (lastFootprint > 0) {
+            lastFootprint--;
+        }
+    }
+
+    /** DM's F172: whether square (sx, sy) of {@code m} shows the party's magic footprints. */
+    public boolean footprintsAt(DungeonMap m, int sx, int sy) {
+        int ordinal = scentOrdinal(m, sx, sy);
+        return ordinal > 0 && ordinal - 1 >= firstFootprint && ordinal - 1 < lastFootprint;
+    }
+
     private List<Magic.PartySpell> partySpells() {
         if (partySpells == null) {
             partySpells = new ArrayList<>();
@@ -487,6 +553,7 @@ public final class Party implements Serializable {
         DungeonMap from = map;
         int fromX = x;
         int fromY = y;
+        Flight.partyMoves(this, from, fromX, fromY, to == from ? nx : -10, to == from ? ny : -10); // F266
         x = nx;
         y = ny;
         leaveScent(from, fromX, fromY, to, nx, ny);
@@ -544,13 +611,16 @@ public final class Party implements Serializable {
             return;
         }
         while (scents.size() >= MAX_SCENTS) {
-            scents.remove(0);
+            deleteOldestScent();
         }
         if (!scents.isEmpty()) {
             addScentStrength(from, fromX, fromY, (int) (time - lastPartyMoveTime), false);
         }
         lastPartyMoveTime = time;
         scents.add(new Scent(to, toX, toY));
+        if (footprints > 0) {
+            lastFootprint = scents.size();
+        }
         addScentStrength(to, toX, toY, 24, true);
     }
 
@@ -575,7 +645,7 @@ public final class Party implements Serializable {
             if (!s.at(map, x, y)) {
                 s.strength = Math.max(0, s.strength - 1);
                 if (s.strength == 0 && i == 0) {
-                    scents.remove(0);
+                    deleteOldestScent();
                 }
             }
         }
@@ -983,6 +1053,9 @@ public final class Party implements Serializable {
      */
     public Tick tick() {
         time++;
+        if (freezeLifeTicks > 0) {
+            freezeLifeTicks--;
+        }
         boolean burnt = time % Light.BURN_PERIOD == 0 && burnTorches();
         for (DungeonMap m : dungeon.maps()) {
             m.reenableGenerators(time);
@@ -1178,11 +1251,17 @@ public final class Party implements Serializable {
             return false;
         }
         Item before = held;
+        int shield = c.shieldDefense();
         Item after = Upkeep.consume(c, before, random);
         if (after == before) {
             return false;
         }
         held = after;
+        int gained = c.shieldDefense() - shield;
+        if (gained > 0) { // a YA potion: DM's event 72 takes it away after its square in ticks
+            addPartySpell(new Magic.PartySpell(time + (long) gained * gained, Magic.CHAMPION_SHIELD, gained,
+                    members.indexOf(c)));
+        }
         return true;
     }
 
