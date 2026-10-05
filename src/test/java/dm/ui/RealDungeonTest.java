@@ -472,6 +472,15 @@ class RealDungeonTest {
         assertEquals(Item.Category.WEAPON, p.held().category());
     }
 
+    /** Sprint 22: Lord Chaos's level (map 12) holds the four closing texts on (0,0), A to D. */
+    @Test
+    void theClosingTextsWaitOnLordChaossLevel() {
+        java.util.List<String> texts = dungeon.maps().get(12).endgameTexts();
+        assertEquals(4, texts.size());
+        assertTrue(texts.stream().anyMatch(t -> t.startsWith("ATHANK YOU MY")));
+        assertTrue(texts.stream().anyMatch(t -> t.startsWith("DYOUR NAMES WILL")));
+    }
+
     private static ViewRenderer render(Party party) {
         ViewRenderer view = ViewRenderer.forArt(Art.load(GRAPHICS));
         BufferedImage img = new BufferedImage(320, 200, BufferedImage.TYPE_INT_RGB);

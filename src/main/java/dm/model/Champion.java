@@ -145,6 +145,11 @@ public final class Champion implements Serializable {
         return level;
     }
 
+    /** The level F444's end screen shows: F303 without item bonuses or temporary experience, at most 16. */
+    public int lastingSkillLevel(int skill) {
+        return Math.min(16, baseLevel(skill, false));
+    }
+
     /** F303 without the item modifiers, and with or without temporary experience. */
     int baseLevel(int skill, boolean temporary) {
         long exp = experience[skill] + (temporary ? temporaryExperience[skill] : 0);

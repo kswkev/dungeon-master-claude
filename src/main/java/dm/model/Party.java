@@ -202,6 +202,12 @@ public final class Party implements Serializable {
         magicalLight += amount;
     }
 
+    /** F446's start: the dungeon lit (magical light 200) and the party shielded (all three shields at 100). */
+    void shineForTheEndgame() {
+        magicalLight = 200;
+        shieldDefense = fireShieldDefense = spellShieldDefense = 100;
+    }
+
     /** DM's party shield: added to every body part's defense (F313). */
     public int shieldDefense() {
         return shieldDefense;
@@ -958,6 +964,10 @@ public final class Party implements Serializable {
     /** A line for DM's message area: text, in member {@code member}'s colour (-1 for the default cyan). */
     public record Message(String text, int member) {
     }
+
+    /** A message's "member" for the endgame's white text, and for clearing the whole message area first. */
+    public static final int MESSAGE_WHITE = -2;
+    public static final int MESSAGE_CLEAR = -3;
 
     private transient List<Message> messages;
 

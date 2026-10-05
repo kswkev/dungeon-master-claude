@@ -89,6 +89,16 @@ final class MessageArea {
     }
 
     /** DM's F052: rows whose time is up go blank. */
+    /** DM's F043: every row cleared, and the next message starts a new row at the bottom. */
+    void clearAll() {
+        for (int r = 0; r < ROWS; r++) {
+            rows.get(r).clear();
+            expires[r] = -1;
+        }
+        row = ROWS - 1;
+        column = 0;
+    }
+
     void clearExpired(long now) {
         for (int r = 0; r < ROWS; r++) {
             if (expires[r] >= 0 && expires[r] <= now) {

@@ -366,6 +366,17 @@ public final class DungeonMap implements Serializable {
         this.decorations = decorations;
     }
 
+    /** The texts on square (0,0), which F446 prints at the end of the game in the order of their first letter. */
+    private List<String> endgameTexts = List.of();
+
+    public List<String> endgameTexts() {
+        return endgameTexts == null ? List.of() : endgameTexts;
+    }
+
+    public void setEndgameTexts(List<String> texts) {
+        endgameTexts = List.copyOf(texts);
+    }
+
     /**
      * Runs the floor sensors for a party that has just moved on this map from
      * (fromX, fromY) to its current square (from out of bounds when it has

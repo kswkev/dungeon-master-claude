@@ -567,7 +567,9 @@ public final class TexturedViewRenderer implements ViewRenderer {
         List<Explosion> here = map.explosionsAt(mx, my);
         // DM's F0115: a fluxcage is no burst; its field is drawn over the square instead
         boolean fluxcage = here.removeIf(e -> e.type() == Explosion.FLUXCAGE);
-        if (fluxcage) {
+        boolean hidden = viewer != null && viewer.endgame() != null && viewer.endgame().fluxcagesHidden();
+        here.removeIf(e -> e.type() >= Explosion.REBIRTH_1); // drawn on the altar's wall face (drawRebirth)
+        if (fluxcage && !hidden) { // DM's G077: not once the Grey Lord stands there
             drawField(g, d, l, FIELD_FLUXCAGE);
         }
         if (here.isEmpty()) {
