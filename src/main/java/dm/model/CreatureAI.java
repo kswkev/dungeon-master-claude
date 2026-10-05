@@ -1545,6 +1545,9 @@ public final class CreatureAI implements Serializable {
      * fresh events (or none).
      */
     private int moveGroup(DungeonMap m, Group g, int fx, int fy, int tx, int ty) {
+        if (m == party.map() && Flight.groupMoves(party, m, g, fx, fy, tx, ty)) {
+            return STOP; // F266: killed by the projectiles it walked into
+        }
         DungeonMap to = m;
         int x = tx;
         int y = ty;

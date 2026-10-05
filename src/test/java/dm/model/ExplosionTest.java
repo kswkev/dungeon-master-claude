@@ -98,6 +98,54 @@ class ExplosionTest {
         assertTrue(elija.health() < health);
     }
 
+    /** A dagger hanging still in the back-left cell (north-west, cell 0) of (3,1). */
+    private Projectile hangingDagger() {
+        Flight.launch(party, ItemCatalog.item(Item.Category.WEAPON, 8), map, 3, 1, 0, Direction.SOUTH, 100, 90, 2);
+        Projectile p = map.projectiles().get(0);
+        p.ignoreImpacts = false;
+        p.nextMove = Long.MAX_VALUE;
+        return p;
+    }
+
+    /** Sprint 22: F266 for groups. A creature walking off a square meets the projectiles in its cells. */
+    @Test
+    void aCreatureWalkingOffItsSquareMeetsAProjectile() {
+        Group mummy = creature(CreatureType.MUMMY, 3, 1, 500);
+        hangingDagger();
+        assertEquals(false, Flight.groupMoves(party, map, mummy, 3, 1, 2, 1));
+        assertTrue(map.projectiles().isEmpty(), "it hit");
+        assertTrue(mummy.health(0) < 500);
+    }
+
+    @Test
+    void aCreatureKilledByAProjectileItWalksIntoDoesNotMove() {
+        Group mummy = creature(CreatureType.MUMMY, 3, 1, 1);
+        hangingDagger();
+        assertTrue(Flight.groupMoves(party, map, mummy, 3, 1, 2, 1));
+        assertNull(map.groupAt(3, 1));
+    }
+
+    @Test
+    void projectilesPassThroughGhostsWalkingIntoThem() {
+        Group ghost = creature(CreatureType.GHOST, 3, 1, 500);
+        hangingDagger();
+        assertEquals(false, Flight.groupMoves(party, map, ghost, 3, 1, 2, 1));
+        assertEquals(1, map.projectiles().size(), "still hanging there");
+        assertEquals(500, ghost.health(0));
+    }
+
+    @Test
+    void aFireballMetByAWalkingCreatureBursts() {
+        Group mummy = creature(CreatureType.MUMMY, 3, 1, 500);
+        Flight.launchSpell(party, Explosion.FIREBALL, map, 3, 1, 0, Direction.SOUTH, 100, 90, 2);
+        Projectile p = map.projectiles().get(0);
+        p.ignoreImpacts = false;
+        p.nextMove = Long.MAX_VALUE;
+        Flight.groupMoves(party, map, mummy, 3, 1, 2, 1);
+        assertTrue(map.projectiles().isEmpty());
+        assertTrue(map.explosionsAt(3, 1).stream().anyMatch(e -> e.type() == Explosion.FIREBALL));
+    }
+
     @Test
     void aFireballIntoTheWallAheadBurnsTheParty() {
         corridor("###", "#.#", "###");

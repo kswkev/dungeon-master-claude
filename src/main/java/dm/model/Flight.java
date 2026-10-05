@@ -177,6 +177,49 @@ final class Flight {
                 cells[c] = c + 1;
             }
         }
+        crossings(m, sx, sy, dx, dy, cells, (p, cell) -> {
+            int member = party.memberInCell(cell);
+            if (member < 0) {
+                return false;
+            }
+            hitChampion(party, m, p, member);
+            return true;
+        });
+    }
+
+    /**
+     * DM's F266 for a group on the party's map, as it moves off (sx, sy)
+     * toward (dx, dy): projectiles meet its creatures as they meet the
+     * party's champions ({@link #partyMoves}), passing through non-material
+     * ones as in flight. Returns whether every creature was killed, so the
+     * group doesn't move.
+     */
+    static boolean groupMoves(Party party, DungeonMap m, Group g, int sx, int sy, int dx, int dy) {
+        int[] cells = new int[4];
+        for (int c = 0; c < 4; c++) {
+            if (CreatureAI.creatureOrdinalInCell(g, c) != 0) {
+                cells[c] = c + 1;
+            }
+        }
+        crossings(m, sx, sy, dx, dy, cells, (p, cell) -> {
+            int ordinal = m.groups().contains(g) ? CreatureAI.creatureOrdinalInCell(g, cell) : 0;
+            if (ordinal == 0 || g.type().nonMaterial() && p.spell() != Explosion.HARM_NON_MATERIAL
+                    && !(p.spell() == Explosion.FIREBALL && g.type() == CreatureType.BLACK_FLAME)) {
+                return false;
+            }
+            hitCreature(party, m, p, g, ordinal - 1);
+            return true;
+        });
+        return !m.groups().contains(g);
+    }
+
+    /** What a projectile meets in a cell: true if it hit something there (it is then gone). */
+    private interface CellHit {
+        boolean hit(Projectile p, int cell);
+    }
+
+    /** F266's two passes: the source square's cells, then the cells crossed into the adjacent destination. */
+    private static void crossings(DungeonMap m, int sx, int sy, int dx, int dy, int[] cells, CellHit hit) {
         int[] ahead = null;
         if (Math.abs(sx - dx) + Math.abs(sy - dy) == 1) {
             int primary = 0;
@@ -196,26 +239,24 @@ final class Flight {
                 cells[secondary] = cells[(secondary + 1) & 3];
             }
         }
-        hitCrossing(party, m, sx, sy, cells);
+        hitCrossing(m, sx, sy, cells, hit);
         if (ahead != null) {
-            hitCrossing(party, m, dx, dy, ahead);
+            hitCrossing(m, dx, dy, ahead, hit);
         }
     }
 
-    private static void hitCrossing(Party party, DungeonMap m, int x, int y, int[] cells) {
-        boolean hit;
+    private static void hitCrossing(DungeonMap m, int x, int y, int[] cells, CellHit hit) {
+        boolean hitSomething;
         do {
-            hit = false;
+            hitSomething = false;
             for (Projectile p : new ArrayList<>(m.projectileList())) {
-                int member = p.x == x && p.y == y && !p.ignoreImpacts && cells[p.cell] != 0
-                        ? party.memberInCell(cells[p.cell] - 1) : -1;
-                if (member >= 0) {
-                    hitChampion(party, m, p, member);
-                    hit = true;
+                if (p.x == x && p.y == y && !p.ignoreImpacts && cells[p.cell] != 0
+                        && hit.hit(p, cells[p.cell] - 1)) {
+                    hitSomething = true;
                     break;
                 }
             }
-        } while (hit);
+        } while (hitSomething);
     }
 
     /** F219's walls: a wall, a fake wall that is neither open nor imaginary, or stairs met from stairs. */
