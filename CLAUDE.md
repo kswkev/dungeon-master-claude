@@ -372,7 +372,7 @@ Code lives under `src/main/java/dm/`, in three layers.
     - a wounded body part's cell gets the red slot box (graphic 34, keyed on colour 12) and, if empty, the wounded outline (icon 212 + 2×slot + 1);
     - the mouth box is red while the champion is hungry, thirsty or poisoned, and the eye box while any statistic is below its maximum;
     - a poisoned champion's food/water panel shows the POISONED label (graphic 32 at (112,105));
-    - in the status boxes a wounded hand gets box 34, and the wounded hand outline (213/215) when it is empty.
+    - in the status boxes an empty hand shows DM's hand outline (icon 212 ready, 214 action); a wounded hand gets box 34, and the wounded outline (213/215) when it is empty.
   - With no sheet open, a click in the bottom of the view (`GameScreen.FLOOR_CLICK_Y` and below) picks up from or drops onto the party square's left or right cell ahead. A click higher up with an item in hand throws it from that side (`Party.throwHeld`, F329: the leader throws, so an empty party can't).
   - While an item is held, `GameWindow` hides the OS cursor and `GameScreen` draws `Art.iconSprite` (the icon with background colour 12 transparent) centred on the pointer, on top of everything. Most text uses `PixelFont`, a hand-made 5×5 font, from before DM's own font (entry 695) was found in Sprint 19; the spell area uses `DmFont`.
 - Blocked moves go through `GameScreen.bump()`:
