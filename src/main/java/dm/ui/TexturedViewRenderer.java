@@ -842,11 +842,19 @@ public final class TexturedViewRenderer implements ViewRenderer {
                 if (img == null) {
                     continue;
                 }
-                int x = at[0] + shift[group.jitterX(i) & 7] - img.getWidth() / 2 + 1;
+                int x = at[0] + laneShift(l) + shift[group.jitterX(i) & 7] - img.getWidth() / 2 + 1;
                 int y = at[1] + shift[group.jitterY(i) & 7] - img.getHeight() + 1;
                 g.drawImage(img, x, y, null);
             }
         }
+    }
+
+    /**
+     * F0115: G0224's side-lane x positions are for a lane 100 pixels over, so
+     * DM takes 100 off in the left lane and adds 100 in the right one (#44).
+     */
+    static int laneShift(int l) {
+        return l < 0 ? -100 : l > 0 ? 100 : 0;
     }
 
     /** DM's G223 shift sets: a creature's jitter (its aspect's offsets) in pixels at D1, D2 and D3. */
@@ -1156,8 +1164,7 @@ public final class TexturedViewRenderer implements ViewRenderer {
             paint(pixels, door.width(), art.indexed(FIRST_DOOR_ORNAMENT + ornament), DOOR_ORNAMENT_SET[ornament], d);
         }
         if (thievesEye) {
-            // the PC's mask (80x74) is smaller than its box, the whole 96x88 door: centre it
-            paint(pixels, door.width(), art.indexed(DOOR_THIEVES_EYE_MASK), 1, d, true);
+            paint(pixels, door.width(), art.indexed(DOOR_THIEVES_EYE_MASK), 1, d);
         }
         if (broken) {
             paint(pixels, door.width(), art.indexed(DOOR_DESTROYED_MASK), 1, d);
@@ -1166,22 +1173,27 @@ public final class TexturedViewRenderer implements ViewRenderer {
                 Bitmaps.palette());
     }
 
-    /** DM's F0109: a decoration pasted onto a door, its gold (colour 9) see-through; its colour 10 cuts holes. */
+    /**
+     * DM's F0109: a decoration pasted onto a door, its gold (colour 9)
+     * see-through; its colour 10 cuts holes. Some PC pictures are smaller than
+     * their G0207 box (the wooden bars are 92x72 in the 96x88 door, the
+     * thieves' eye mask 80x74): the original centres them (#42). D2 and D3
+     * shrink the picture as their box shrinks from D1's, and centre it too.
+     */
     private static void paint(byte[] door, int doorWidth, IndexedImage ornament, int set, int d) {
-        paint(door, doorWidth, ornament, set, d, false);
-    }
-
-    /** {@link #paint}, with a picture smaller than its box centred in it if {@code centred}. */
-    private static void paint(byte[] door, int doorWidth, IndexedImage ornament, int set, int d, boolean centred) {
         if (ornament == null) {
             return;
         }
         int[] box = DOOR_ORNAMENT_BOX[set][MAX_DEPTH - d];
+        int[] d1 = DOOR_ORNAMENT_BOX[set][MAX_DEPTH - 1];
         IndexedImage img = d == 1 ? ornament
-                : Bitmaps.shrink(ornament, box[2], box[3], d == 2 ? PAL_CHANGES_DOOR_ORNAMENT_D2 : PAL_CHANGES_DOOR_ORNAMENT_D3);
+                : Bitmaps.shrink(ornament,
+                        Math.max(1, Math.min(box[2], ornament.width() * box[2] / d1[2])),
+                        Math.max(1, Math.min(box[3], ornament.height() * box[3] / d1[3])),
+                        d == 2 ? PAL_CHANGES_DOOR_ORNAMENT_D2 : PAL_CHANGES_DOOR_ORNAMENT_D3);
         int height = door.length / doorWidth;
-        int offsetX = centred ? Math.max(0, (box[2] - img.width()) / 2) : 0;
-        int offsetY = centred ? Math.max(0, (box[3] - img.height()) / 2) : 0;
+        int offsetX = Math.max(0, (box[2] - img.width()) / 2);
+        int offsetY = Math.max(0, (box[3] - img.height()) / 2);
         for (int y = 0; y < Math.min(img.height(), box[3]); y++) {
             for (int x = 0; x < Math.min(img.width(), box[2]); x++) {
                 int c = img.pixel(x, y);
