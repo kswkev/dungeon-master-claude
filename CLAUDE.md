@@ -2,6 +2,8 @@
 
 This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
+Time and Token is limited
+
 ## Project
 
 A Java/Swing remake of FTL's *Dungeon Master* (1988), built sprint by sprint.
