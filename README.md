@@ -151,6 +151,14 @@ Run with `"-Ddm.debug=true"` to list every decoration on Level 1.
 - **God mode** now also makes every spell succeed at no mana cost.
 - Not castable yet (the runes say so and give the mana back): potions, invisibility, thieves' eye, magic footprints and ZO KATH RA. Item magic and creatures' spells come next.
 
+**Sprint 20: done.** The rest of the magic, with the original's rules (ported from ReDMCSB):
+- **Potions:** cast a potion spell (VI, YA BRO, ZO BRO RA, ...) with an empty flask in hand and it fills, stronger with more power. Every potion now works when drunk; YA shields its drinker for a while, shown by the party shield's border on their box.
+- **Every spell can be cast:** invisibility (creatures that can't see the invisible lose sight of you, briefly), thieves' eye (the wall or door ahead gets a hole to look through), magic footprints (the squares you walk show your footprints) and ZO KATH RA (a Zokathra in hand).
+- **Item magic:** staffs, wands and other magical items offer their spells in the action menu: fireball, lightning, dispell, invoke, spit, spell and fire shields, heal, light, window, freeze life (creatures stand still) and fluxcage. They cost mana and use up charges; the magical boxes are used up.
+- **Creatures cast:** vexirks, wizard eyes, swamp slimes, materializers, demons, red dragons and Lord Chaos throw their spells from afar.
+- **Projectiles:** walking into a projectile hurts. A thrown VEN potion bursts into a poison cloud and a FUL bomb into a fireball.
+- Not yet: FUSE (the endgame), and creatures walking into projectiles.
+
 ## Requirements
 
 - JDK 17 or newer
