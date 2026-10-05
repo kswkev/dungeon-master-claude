@@ -93,7 +93,7 @@ public final class CreatureAI implements Serializable {
     public static final class Outcome {
         boolean changed;
         int[] damage;
-        final List<Integer> sounds = new ArrayList<>();
+        final List<Sounds.Heard> sounds = new ArrayList<>();
         boolean click;
 
         /** Whether anything the player can see may have changed (a creature moved, turned or struck). */
@@ -106,8 +106,8 @@ public final class CreatureAI implements Serializable {
             return damage;
         }
 
-        /** DM sound indexes to play, in order. */
-        public List<Integer> sounds() {
+        /** The DM sounds the party heard, in order, loud or soft. */
+        public List<Sounds.Heard> sounds() {
             return sounds;
         }
 
@@ -1524,9 +1524,11 @@ public final class CreatureAI implements Serializable {
         }
     }
 
+    /** DM's F064: a sound on the party's map is heard loud or soft by its distance (#37), or not at all. */
     private void sound(int dmSound, DungeonMap m, int x, int y) {
-        if (m == party.map() && Math.abs(x - party.x()) <= 12 && Math.abs(y - party.y()) <= 12) {
-            out.sounds.add(dmSound);
+        Sounds.Heard heard = m == party.map() ? Sounds.hear(dmSound, x - party.x(), y - party.y()) : null;
+        if (heard != null) {
+            out.sounds.add(heard);
         }
     }
 

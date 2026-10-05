@@ -258,16 +258,32 @@ public final class DungeonMap implements Serializable {
     }
 
     /**
-     * What a door tick did: whether any door moved, and whether any door
-     * rattled. As in DM, a door rattles on every step except the last one,
-     * where it settles fully open or shut, so a full 4-step move rattles 3 times.
+     * What a door tick did: whether any door moved, and the rattle and thud
+     * the party heard, loud or soft by distance (DM's F064, #37), or null.
+     * As in DM, a door rattles on every step except the last one, where it
+     * settles fully open or shut, so a full 4-step move rattles 3 times.
      */
-    public record DoorTick(boolean moved, boolean rattled, boolean thud) {
-        public static final DoorTick NOTHING = new DoorTick(false, false, false);
+    public record DoorTick(boolean moved, Sounds.Heard rattle, Sounds.Heard thudSound) {
+        public static final DoorTick NOTHING = new DoorTick(false, null, null);
 
-        public DoorTick(boolean moved, boolean rattled) {
-            this(moved, rattled, false);
+        public boolean rattled() {
+            return rattle != null;
         }
+
+        public boolean thud() {
+            return thudSound != null;
+        }
+    }
+
+    /** DM's C02 door rattle and C04 wooden thud. */
+    private static final int SOUND_DOOR_RATTLE = 2;
+    private static final int SOUND_WOODEN_THUD = 4;
+
+    /** How the party hears {@code dmSound} made at (x, y): the party is on this map, or it's a test map without one. */
+    private Sounds.Heard heard(Sounds.Heard sofar, int dmSound, int x, int y) {
+        Sounds.Heard heard = party == null ? Sounds.hear(dmSound, 0, 0)
+                : Sounds.hear(dmSound, x - party.x(), y - party.y());
+        return sofar == null || heard != null && sofar.soft() && !heard.soft() ? heard : sofar;
     }
 
     /**
@@ -278,8 +294,8 @@ public final class DungeonMap implements Serializable {
      */
     public DoorTick tickDoors() {
         boolean moved = false;
-        boolean rattled = false;
-        boolean thud = false;
+        Sounds.Heard rattled = null;
+        Sounds.Heard thud = null;
         for (var it = doorsBreaking.entrySet().iterator(); it.hasNext(); ) {
             var e = it.next();
             e.setValue(e.getValue() - 1);
@@ -303,14 +319,16 @@ public final class DungeonMap implements Serializable {
                     }
                     doorState[x][y] = Math.max(DOOR_OPEN, state - 1);
                     moved = true;
-                    thud = true;
+                    thud = heard(thud, SOUND_WOODEN_THUD, x, y);
                     continue;
                 }
                 if (state != target && state != DOOR_BROKEN) {
                     int next = state + Integer.signum(target - state);
                     doorState[x][y] = next;
                     moved = true;
-                    rattled |= next != target;
+                    if (next != target) {
+                        rattled = heard(rattled, SOUND_DOOR_RATTLE, x, y);
+                    }
                 }
             }
         }

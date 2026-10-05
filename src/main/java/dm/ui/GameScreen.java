@@ -11,6 +11,7 @@ import dm.model.DungeonMap;
 import dm.model.Item;
 import dm.model.Party;
 import dm.model.Slot;
+import dm.model.Sounds;
 import dm.model.Spells;
 
 import java.awt.BasicStroke;
@@ -146,10 +147,10 @@ public final class GameScreen {
     private boolean step() {
         DungeonMap.DoorTick doors = party.map().tickDoors();
         if (doors.rattled()) {
-            sounds.play(doorSound);
+            sounds.play(doorSound, doors.rattle().soft());
         }
         if (doors.thud()) {
-            sounds.play(dmSound(WOODEN_THUD));
+            sounds.play(dmSound(WOODEN_THUD), doors.thudSound().soft());
         }
         Party.Tick upkeep = party.tick();
         boolean moved = arrived(party.settle()); // a landing item may have opened a pit under the party
@@ -162,8 +163,8 @@ public final class GameScreen {
             messages.clearExpired(party.time());
             printed = true;
         }
-        for (int dmSound : upkeep.sounds()) {
-            sounds.play(dmSound(dmSound));
+        for (Sounds.Heard heard : upkeep.sounds()) {
+            sounds.play(dmSound(heard.dmSound()), heard.soft());
         }
         if (upkeep.click()) {
             sounds.play(clickSound);
