@@ -448,6 +448,30 @@ class RealDungeonTest {
         assertEquals("INVOKE FUL\nFOR A MAGIC\nTORCH", scroll.text());
     }
 
+    /**
+     * Sprint 22: on Level 14 (24,3) south the Zokathra burns through the
+     * amalgam (sensor 17), then the Firestaff is exchanged for the Firestaff
+     * with the Power Gem (sensor 16).
+     */
+    @Test
+    void theFirestaffTakesThePowerGem() {
+        assumeTrue(Files.exists(GRAPHICS), "needs the original GRAPHICS.DAT");
+        Art art = Art.load(GRAPHICS);
+        Party p = new Party(dungeon.maps(), 13, 24, 4, Direction.NORTH);
+        DungeonMap map = p.map();
+        Item firestaff = ItemCatalog.item(Item.Category.WEAPON, 7);
+        p.setHeld(firestaff);
+        map.clickWall(24, 3, Direction.SOUTH, p, art::iconIndex);
+        assertSame(firestaff, p.held(), "the amalgam still holds the gem");
+        p.setHeld(ItemCatalog.item(Item.Category.JUNK, 51));
+        map.clickWall(24, 3, Direction.SOUTH, p, art::iconIndex);
+        assertEquals(null, p.held(), "the Zokathra is used up");
+        p.setHeld(firestaff);
+        map.clickWall(24, 3, Direction.SOUTH, p, art::iconIndex);
+        assertEquals(45, p.held().type(), "the Firestaff with the Power Gem");
+        assertEquals(Item.Category.WEAPON, p.held().category());
+    }
+
     private static ViewRenderer render(Party party) {
         ViewRenderer view = ViewRenderer.forArt(Art.load(GRAPHICS));
         BufferedImage img = new BufferedImage(320, 200, BufferedImage.TYPE_INT_RGB);

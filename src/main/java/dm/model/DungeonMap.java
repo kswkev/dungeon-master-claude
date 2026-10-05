@@ -538,7 +538,10 @@ public final class DungeonMap implements Serializable {
         out.fired = true;
         out.sound |= s.audible();
         if (s.local()) {
-            if (s.localAction() != WallSensor.ACTION_ADD_EXPERIENCE && rotate != null) {
+            // F270/F271: the local action is DM's effect; CLEAR and TOGGLE rotate the side, SET doesn't
+            // (Level 14's amalgam sensor). Storage (13) always rotates, through its own TOGGLE in F275.
+            int action = s.localAction();
+            if (rotate != null && (action == 1 || action == 2 || s.type() == WallSensor.TYPE_STORAGE_ROTATE)) {
                 rotate.add(s);
             }
         } else {
@@ -883,9 +886,11 @@ public final class DungeonMap implements Serializable {
                 }
             }
         }
-        for (WallSensor s : new ArrayList<>(wallSensors(x, y, side))) {
-            if (!s.enabled()) {
-                continue;
+        List<WallSensor> sensors = new ArrayList<>(wallSensors(x, y, side));
+        for (int i = 0; i < sensors.size(); i++) {
+            WallSensor s = sensors.get(i);
+            if (!s.enabled() || onlyWhenLast(s) && i < sensors.size() - 1) {
+                continue; // F275: types 11, 12, 16 and 17 work only as the side's last sensor
             }
             Item held = party.held();
             // Revert turns the item tests round (DM Encyclopaedia): an empty hand
@@ -904,6 +909,21 @@ public final class DungeonMap implements Serializable {
                     yield wanted;
                 }
                 case WallSensor.TYPE_STORAGE_ROTATE -> !alcove && storage(x, y, cell, s.data(), party, iconOf, out);
+                case WallSensor.TYPE_CLICK_WITH_ITEM_REMOVE_SENSOR -> {
+                    boolean fire = match != s.revert();
+                    if (fire) {
+                        if (held != null) {
+                            party.setHeld(null);
+                            out.handChanged = true;
+                        }
+                        List<WallSensor> list = sideSensors(x, y, side, false);
+                        if (list != null) {
+                            list.remove(s);
+                        }
+                    }
+                    yield fire;
+                }
+                case WallSensor.TYPE_OBJECT_EXCHANGER -> match && exchange(x, y, cell, party, out);
                 default -> false; // disabled sensors, gates (fed by events) and types not handled yet
             };
             if (fires) {
@@ -943,6 +963,36 @@ public final class DungeonMap implements Serializable {
         }
         for (Item key : ItemCatalog.keysAndCoins()) {
             if (iconOf.applyAsInt(key) == s.data()) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    /**
+     * F275's sensor types (11, 12, 16, 17) that work only as the last sensor
+     * on their side, counting every sensor there. On Level 14 (24,3) the
+     * amalgam's sensor 17 comes last; once the Zokathra removes it, the
+     * exchanger (16) is last and takes the Firestaff.
+     */
+    private static boolean onlyWhenLast(WallSensor s) {
+        return s.type() == 11 || s.type() == 12 || s.type() == WallSensor.TYPE_OBJECT_EXCHANGER
+                || s.type() == WallSensor.TYPE_CLICK_WITH_ITEM_REMOVE_SENSOR;
+    }
+
+    /**
+     * F275's object exchanger: the wall square's first object (DM's
+     * F162; we look at the clicked side first) goes into the hand, and the
+     * held item takes its place on this side. Nothing happens without one.
+     */
+    private boolean exchange(int x, int y, int cell, Party party, Outcome out) {
+        for (int k = 0; k < 4; k++) {
+            List<Item> pile = pile(x, y, (cell + k) & 3, false);
+            if (pile != null && !pile.isEmpty()) {
+                Item object = pile.remove(0);
+                addItem(x, y, cell, party.held());
+                party.setHeld(object);
+                out.handChanged = true;
                 return true;
             }
         }
