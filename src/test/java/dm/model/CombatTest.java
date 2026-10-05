@@ -139,10 +139,10 @@ class CombatTest {
     }
 
     @Test
-    void theFirestaffInvokesButDoesNotFuseYet() {
+    void theCompleteFirestaffInvokesAndFuses() {
         elija.replace(Slot.ACTION_HAND, ItemCatalog.item(Item.Category.WEAPON, 45)); // the complete Firestaff
         assertEquals(Actions.INVOKE, party.actions(0).get(0));
-        assertFalse(party.actions(0).contains(Actions.FUSE));
+        assertTrue(party.actions(0).contains(Actions.FUSE));
     }
 
     @Test

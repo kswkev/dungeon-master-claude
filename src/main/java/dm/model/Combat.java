@@ -59,7 +59,6 @@ final class Combat {
                 list.add(action);
             }
         }
-        list.removeIf(a -> a == Actions.FUSE); // the Fluxcage of Chaos endgame isn't in yet
         return list;
     }
 
@@ -301,7 +300,15 @@ final class Combat {
                 party.addPartySpell(new Magic.PartySpell(party.time() + 2500, Magic.LIGHT, -2));
                 decrementCharges(c);
             }
-            default -> { } // BLOCK and HIT only count for their defense; FUSE isn't offered yet
+            case Actions.FUSE -> {
+                c.face(party.facing()); // F406, then F225 on the square ahead of the party
+                int fx = party.x() + party.facing().dx;
+                int fy = party.y() + party.facing().dy;
+                if (party.dungeon().creatures().fuse(party, m, fx, fy)) {
+                    party.startEndgame(m, fx, fy);
+                }
+            }
+            default -> { } // BLOCK and HIT only count for their defense
         }
         if (disabledTicks != 0) {
             disable(party, c, disabledTicks);

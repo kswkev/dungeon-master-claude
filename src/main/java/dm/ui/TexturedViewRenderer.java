@@ -242,6 +242,7 @@ public final class TexturedViewRenderer implements ViewRenderer {
                 Rectangle drawn = drawFrontDecoration(g, ornament, face, d, l);
                 if (DungeonMap.isAlcove(ornament)) {
                     drawAlcoveItems(g, map.itemsAt(mx, my, front.ordinal()), d, l);
+                    drawRebirth(g, map, mx, my, front, d, l);
                 }
                 if (d == 1 && l == 0 && drawn != null) {
                     wallHit = new Rectangle(drawn.x + VIEWPORT.x, drawn.y + VIEWPORT.y, drawn.width, drawn.height);
@@ -566,7 +567,9 @@ public final class TexturedViewRenderer implements ViewRenderer {
         List<Explosion> here = map.explosionsAt(mx, my);
         // DM's F0115: a fluxcage is no burst; its field is drawn over the square instead
         boolean fluxcage = here.removeIf(e -> e.type() == Explosion.FLUXCAGE);
-        if (fluxcage) {
+        boolean hidden = viewer != null && viewer.endgame() != null && viewer.endgame().fluxcagesHidden();
+        here.removeIf(e -> e.type() >= Explosion.REBIRTH_1); // drawn on the altar's wall face (drawRebirth)
+        if (fluxcage && !hidden) { // DM's G077: not once the Grey Lord stands there
             drawField(g, d, l, FIELD_FLUXCAGE);
         }
         if (here.isEmpty()) {
@@ -591,6 +594,50 @@ public final class TexturedViewRenderer implements ViewRenderer {
             BufferedImage img = explosionImage(explosionAspect(e.type()), scale);
             if (img == null) {
                 return;
+            }
+            int w = img.getWidth();
+            int h = img.getHeight();
+            int x = at[0] - w / 2 + 1;
+            int y = at[1] - (h >> 1) + ((h & 1) == 0 ? 1 : 0);
+            boolean flipX = explosionRandom.nextBoolean();
+            boolean flipY = explosionRandom.nextBoolean();
+            g.drawImage(img, flipX ? x + w : x, flipY ? y + h : y, flipX ? -w : w, flipY ? -h : h, null);
+        }
+    }
+
+    /** DM's G228 and G227: the rebirth sparkle's and burst's centre and scale, D3 C/L/R, D2 C/L/R, D1 C. */
+    private static final int[][] REBIRTH_1_XY = {
+            {112, 53, 15}, {24, 53, 15}, {194, 53, 15}, {112, 59, 20}, {15, 59, 20}, {208, 59, 20}, {112, 70, 32}};
+    private static final int[][] REBIRTH_2_XY = {
+            {113, 57, 12}, {24, 57, 12}, {195, 57, 12}, {111, 63, 16}, {12, 63, 16}, {213, 63, 16}, {112, 76, 24}};
+
+    /**
+     * F0115 for a VI altar's rebirth, seen only on the wall face toward the
+     * party: first the sparkle (the lightning bolt's head-on picture) at
+     * G228's points, then the fire burst at G227's, flipped at random.
+     */
+    private void drawRebirth(Graphics2D g, DungeonMap map, int mx, int my, Direction front, int d, int l) {
+        if (d > MAX_DEPTH || d == 1 && l != 0) {
+            return;
+        }
+        int index = (MAX_DEPTH - d) * 3 + (l == 0 ? 0 : l < 0 ? 1 : 2);
+        for (Explosion e : map.explosionsAt(mx, my)) {
+            if (e.cell() != front.ordinal()
+                    || e.type() != Explosion.REBIRTH_1 && e.type() != Explosion.REBIRTH_2) {
+                continue;
+            }
+            int[] at = e.type() == Explosion.REBIRTH_1 ? REBIRTH_1_XY[index] : REBIRTH_2_XY[index];
+            BufferedImage img;
+            if (e.type() == Explosion.REBIRTH_1) {
+                int graphic = FIRST_PROJECTILE + PROJECTILE_LIGHTNING;
+                IndexedImage src = art.indexed(graphic);
+                img = src == null ? null : distant(graphic, Math.max(1, Bitmaps.scaled(src.width(), at[2])),
+                        Math.max(1, Bitmaps.scaled(src.height(), at[2])), null, false);
+            } else {
+                img = explosionImage(ASPECT_FIRE, at[2]);
+            }
+            if (img == null) {
+                continue;
             }
             int w = img.getWidth();
             int h = img.getHeight();
@@ -795,11 +842,19 @@ public final class TexturedViewRenderer implements ViewRenderer {
                 if (img == null) {
                     continue;
                 }
-                int x = at[0] + shift[group.jitterX(i) & 7] - img.getWidth() / 2 + 1;
+                int x = at[0] + laneShift(l) + shift[group.jitterX(i) & 7] - img.getWidth() / 2 + 1;
                 int y = at[1] + shift[group.jitterY(i) & 7] - img.getHeight() + 1;
                 g.drawImage(img, x, y, null);
             }
         }
+    }
+
+    /**
+     * F0115: G0224's side-lane x positions are for a lane 100 pixels over, so
+     * DM takes 100 off in the left lane and adds 100 in the right one (#44).
+     */
+    static int laneShift(int l) {
+        return l < 0 ? -100 : l > 0 ? 100 : 0;
     }
 
     /** DM's G223 shift sets: a creature's jitter (its aspect's offsets) in pixels at D1, D2 and D3. */
@@ -1109,8 +1164,7 @@ public final class TexturedViewRenderer implements ViewRenderer {
             paint(pixels, door.width(), art.indexed(FIRST_DOOR_ORNAMENT + ornament), DOOR_ORNAMENT_SET[ornament], d);
         }
         if (thievesEye) {
-            // the PC's mask (80x74) is smaller than its box, the whole 96x88 door: centre it
-            paint(pixels, door.width(), art.indexed(DOOR_THIEVES_EYE_MASK), 1, d, true);
+            paint(pixels, door.width(), art.indexed(DOOR_THIEVES_EYE_MASK), 1, d);
         }
         if (broken) {
             paint(pixels, door.width(), art.indexed(DOOR_DESTROYED_MASK), 1, d);
@@ -1119,22 +1173,27 @@ public final class TexturedViewRenderer implements ViewRenderer {
                 Bitmaps.palette());
     }
 
-    /** DM's F0109: a decoration pasted onto a door, its gold (colour 9) see-through; its colour 10 cuts holes. */
+    /**
+     * DM's F0109: a decoration pasted onto a door, its gold (colour 9)
+     * see-through; its colour 10 cuts holes. Some PC pictures are smaller than
+     * their G0207 box (the wooden bars are 92x72 in the 96x88 door, the
+     * thieves' eye mask 80x74): the original centres them (#42). D2 and D3
+     * shrink the picture as their box shrinks from D1's, and centre it too.
+     */
     private static void paint(byte[] door, int doorWidth, IndexedImage ornament, int set, int d) {
-        paint(door, doorWidth, ornament, set, d, false);
-    }
-
-    /** {@link #paint}, with a picture smaller than its box centred in it if {@code centred}. */
-    private static void paint(byte[] door, int doorWidth, IndexedImage ornament, int set, int d, boolean centred) {
         if (ornament == null) {
             return;
         }
         int[] box = DOOR_ORNAMENT_BOX[set][MAX_DEPTH - d];
+        int[] d1 = DOOR_ORNAMENT_BOX[set][MAX_DEPTH - 1];
         IndexedImage img = d == 1 ? ornament
-                : Bitmaps.shrink(ornament, box[2], box[3], d == 2 ? PAL_CHANGES_DOOR_ORNAMENT_D2 : PAL_CHANGES_DOOR_ORNAMENT_D3);
+                : Bitmaps.shrink(ornament,
+                        Math.max(1, Math.min(box[2], ornament.width() * box[2] / d1[2])),
+                        Math.max(1, Math.min(box[3], ornament.height() * box[3] / d1[3])),
+                        d == 2 ? PAL_CHANGES_DOOR_ORNAMENT_D2 : PAL_CHANGES_DOOR_ORNAMENT_D3);
         int height = door.length / doorWidth;
-        int offsetX = centred ? Math.max(0, (box[2] - img.width()) / 2) : 0;
-        int offsetY = centred ? Math.max(0, (box[3] - img.height()) / 2) : 0;
+        int offsetX = Math.max(0, (box[2] - img.width()) / 2);
+        int offsetY = Math.max(0, (box[3] - img.height()) / 2);
         for (int y = 0; y < Math.min(img.height(), box[3]); y++) {
             for (int x = 0; x < Math.min(img.width(), box[2]); x++) {
                 int c = img.pixel(x, y);

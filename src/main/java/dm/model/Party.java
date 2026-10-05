@@ -3,7 +3,9 @@ package dm.model;
 import java.io.Serializable;
 import java.util.ArrayList;
 import java.util.Collections;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.Random;
 
 /** The party: its champions, and its position and facing on the current map. */
@@ -200,6 +202,12 @@ public final class Party implements Serializable {
         magicalLight += amount;
     }
 
+    /** F446's start: the dungeon lit (magical light 200) and the party shielded (all three shields at 100). */
+    void shineForTheEndgame() {
+        magicalLight = 200;
+        shieldDefense = fireShieldDefense = spellShieldDefense = 100;
+    }
+
     /** DM's party shield: added to every body part's defense (F313). */
     public int shieldDefense() {
         return shieldDefense;
@@ -299,6 +307,113 @@ public final class Party implements Serializable {
 
     void addPartySpell(Magic.PartySpell e) {
         partySpells().add(e);
+    }
+
+    // ---- the endgame (FUSE, Sprint 22) ----------------------------------------------
+
+    /** The fuse sequence once FUSE has caught Lord Chaos, or null. Not saved: it plays out before any save. */
+    private transient Endgame endgame;
+
+    public Endgame endgame() {
+        return endgame;
+    }
+
+    void startEndgame(DungeonMap m, int x, int y) {
+        endgame = new Endgame(this, m, x, y);
+    }
+
+    // ---- VI altar rebirth (DM's event 13) ----------------------------------------
+
+    /**
+     * DM's event 13 (TIMELINE.C F255): member {@code member}'s bones were put
+     * in the VI altar on {@code cell} (the wall side) of (x, y) on
+     * {@code map}. Step 2 makes the rebirth sparkle, step 1 takes the bones,
+     * step 0 brings the champion back.
+     */
+    private record Rebirth(DungeonMap map, int x, int y, int cell, int member, int step, long time)
+            implements Serializable {
+    }
+
+    private List<Rebirth> rebirths = new ArrayList<>();
+    /**
+     * The formation position each dead champion had: DM keeps a dead
+     * champion's cell and turns it with the party (F284). Saves from before
+     * Sprint 22 have none.
+     */
+    private Map<Champion, Integer> deathCells = new HashMap<>();
+
+    private List<Rebirth> rebirths() {
+        if (rebirths == null) {
+            rebirths = new ArrayList<>();
+        }
+        return rebirths;
+    }
+
+    private Map<Champion, Integer> deathCells() {
+        if (deathCells == null) {
+            deathCells = new HashMap<>();
+        }
+        return deathCells;
+    }
+
+    /** DM's F374: champion bones dropped into a VI altar start event 13 on the next tick. */
+    void startRebirth(DungeonMap m, int x, int y, int cell, int member) {
+        if (member >= 0 && member < members.size() && members.get(member).health() == 0) {
+            rebirths().add(new Rebirth(m, x, y, cell, member, 2, time + 1));
+        }
+    }
+
+    /** Runs the rebirth events that are due (F255). Returns whether any did. */
+    private boolean tickRebirths() {
+        boolean any = false;
+        for (Rebirth r : new ArrayList<>(rebirths())) {
+            if (r.time() > time) {
+                continue;
+            }
+            any = true;
+            rebirths().remove(r);
+            switch (r.step()) {
+                case 2 -> {
+                    Flight.explode(this, r.map(), Explosion.REBIRTH_1, 0, r.x(), r.y(), r.cell());
+                    rebirths().add(new Rebirth(r.map(), r.x(), r.y(), r.cell(), r.member(), 1, r.time() + 5));
+                }
+                case 1 -> {
+                    Item bones = ItemCatalog.item(Item.Category.JUNK, BONES, r.member());
+                    if (r.map().removeItem(r.x(), r.y(), r.cell(), bones)) {
+                        rebirths().add(new Rebirth(r.map(), r.x(), r.y(), r.cell(), r.member(), 0, r.time() + 1));
+                    }
+                }
+                default -> rebirth(r.member());
+            }
+        }
+        return any;
+    }
+
+    /**
+     * DM's F283: dead member {@code member} lives again, in the cell they
+     * fell on or, if someone stands there now, the first free one, facing
+     * the party's way, with a little less maximum health and half of it.
+     * Returns false if they aren't dead.
+     */
+    public boolean rebirth(int member) {
+        Champion c = member >= 0 && member < members.size() ? members.get(member) : null;
+        if (c == null || c.health() > 0) {
+            return false;
+        }
+        int position = deathCells().getOrDefault(c, 0);
+        if (positions[position] != null) {
+            int cell = 0;
+            while (cell < 3 && memberInCell(cell) >= 0) {
+                cell++; // F283: the first free cell from the north-west
+            }
+            position = (cell - facing.ordinal()) & 3;
+        }
+        positions[position] = c;
+        deathCells().remove(c);
+        buried.remove(c);
+        c.reborn();
+        c.face(facing);
+        return true;
     }
 
     /** Runs the party spells' events that are due. Returns whether any did. */
@@ -850,6 +965,10 @@ public final class Party implements Serializable {
     public record Message(String text, int member) {
     }
 
+    /** A message's "member" for the endgame's white text, and for clearing the whole message area first. */
+    public static final int MESSAGE_WHITE = -2;
+    public static final int MESSAGE_CLEAR = -3;
+
     private transient List<Message> messages;
 
     /** Messages printed since the last call, oldest first; the screen shows them in its message area. */
@@ -1061,7 +1180,7 @@ public final class Party implements Serializable {
         for (DungeonMap m : dungeon.maps()) {
             m.reenableGenerators(time);
         }
-        boolean spells = tickPartySpells();
+        boolean spells = tickPartySpells() | tickRebirths();
         boolean smoked = Flight.tickExplosions(this);
         boolean landed = Flight.tick(this);
         boolean enabled = enableActions();
@@ -1229,6 +1348,7 @@ public final class Party implements Serializable {
                 }
             }
             map.dropItem(x, y, cell, ItemCatalog.item(Item.Category.JUNK, BONES, members.indexOf(c)));
+            deathCells().put(c, Math.max(position, 0));
             c.setSymbols("", 0, 0); // F319: a dead champion's spell is forgotten
             if (position >= 0) {
                 positions[position] = null;

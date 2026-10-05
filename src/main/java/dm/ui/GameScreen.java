@@ -130,6 +130,9 @@ public final class GameScreen {
         if (menu.isOpen()) {
             return false;
         }
+        if (party.endgame() != null) {
+            return endgameTick();
+        }
         boolean changed = step();
         for (int i = 1; i < SLEEP_TICKS && party.sleeping() && !gameOver; i++) {
             changed |= step();
@@ -208,9 +211,15 @@ public final class GameScreen {
     private boolean takeMessages() {
         List<Party.Message> taken = party.takeMessages();
         for (Party.Message m : taken) {
+            if (m.member() == Party.MESSAGE_CLEAR) {
+                messages.clearAll(); // DM's F043, before each closing message
+                continue;
+            }
             Color colour = m.member() >= 0 && m.member() < ChampionBars.COLORS.length
-                    ? ChampionBars.COLORS[m.member()] : MESSAGE_CYAN;
-            messages.print(m.text(), colour, party.time());
+                    ? ChampionBars.COLORS[m.member()] : m.member() == Party.MESSAGE_WHITE ? Color.WHITE : MESSAGE_CYAN;
+            for (String line : m.text().split("\n")) { // DM's F047 starts a new row at each line break
+                messages.print(line, colour, party.time());
+            }
         }
         return !taken.isEmpty();
     }
@@ -299,7 +308,7 @@ public final class GameScreen {
             clickMenu(menu.click(x, y));
             return;
         }
-        if (gameOver) {
+        if (inputBlocked()) {
             return;
         }
         if (party.sleeping()) {
@@ -527,6 +536,9 @@ public final class GameScreen {
      * does.
      */
     public void escape() {
+        if (party.endgame() != null && !gameWon()) {
+            return; // the fuse sequence plays out first
+        }
         if (menu.isOpen()) {
             menu.close();
         } else {
@@ -658,7 +670,7 @@ public final class GameScreen {
      * the game is over, like the arrows.
      */
     public void key(MovementPanel.Action action) {
-        if (action == null || gameOver || sheet.isOpen() || menu.isOpen() || party.sleeping()) {
+        if (action == null || inputBlocked() || sheet.isOpen() || menu.isOpen() || party.sleeping()) {
             return;
         }
         arrows.setPressed(action);
@@ -679,7 +691,7 @@ public final class GameScreen {
 
     /** Return: wakes a sleeping party (DM's G460); otherwise casts the caster's spell (not in DM). */
     public void pressReturn() {
-        if (menu.isOpen() || gameOver) {
+        if (menu.isOpen() || inputBlocked()) {
             return;
         }
         if (party.sleeping()) {
@@ -705,7 +717,7 @@ public final class GameScreen {
 
     /** Whether the spell area takes input: not asleep, not over, no menu, and no mirror candidate shown (DM's F0377). */
     private boolean spellsUsable() {
-        return !menu.isOpen() && !gameOver && !party.sleeping() && sheet.candidate() == null
+        return !menu.isOpen() && !inputBlocked() && !party.sleeping() && sheet.candidate() == null
                 && party.magicCaster() >= 0;
     }
 
@@ -853,6 +865,37 @@ public final class GameScreen {
         return gameOver;
     }
 
+    /** True once the fuse sequence is over: the end screen shows and ignores input (Esc still opens the menu). */
+    public boolean gameWon() {
+        return party.endgame() != null && party.endgame().won();
+    }
+
+    /** The game takes no input once it is over, and none during the fuse sequence (DM's F446 clears the inputs). */
+    private boolean inputBlocked() {
+        return gameOver || party.endgame() != null;
+    }
+
+    /**
+     * One window tick of the fuse sequence: its next step, then a game tick
+     * if the step asks for one (DM's F445). The sheet and menus close as it
+     * starts.
+     */
+    private boolean endgameTick() {
+        if (sheet.isOpen()) {
+            sheet.close();
+            actions.close();
+        }
+        if (gameWon()) {
+            return false;
+        }
+        if (party.endgame().next()) {
+            step();
+        } else {
+            takeMessages();
+        }
+        return true;
+    }
+
     /** DM's F319 for whoever just died: their things fall, the scream, their sheet closes; all dead ends the game. */
     private void buryTheDead() {
         List<Champion> dead = party.bury();
@@ -903,9 +946,85 @@ public final class GameScreen {
     /** DM fades every colour but white to dark blue for the ending (ST 0x002). */
     private static final int END_BLUE = 0x000044;
 
+    /** DM's G428 skill level names; the masters' first word is a power symbol of the font (characters 96-101). */
+    private static final String[] LEVEL_NAMES = {
+            "NEOPHYTE", "NOVICE", "APPRENTICE", "JOURNEYMAN", "CRAFTSMAN", "ARTISAN", "ADEPT", "EXPERT",
+            "` MASTER", "a MASTER", "b MASTER", "c MASTER", "d MASTER", "e MASTER", "ARCHMASTER"};
+    /** The champion mirror's frame (wall decoration 43's front picture), as F444 draws it. */
+    private static final int MIRROR_FRAME = 346;
+
+    /**
+     * DM's F444 for a won game: on darkest grey, each champion in a mirror
+     * frame (48 rows apart), their name and title in gold and each base
+     * skill above level 1 in light grey, in the font's scroll lettering.
+     */
+    private void drawEndScreen(Graphics2D g) {
+        g.setColor(Art.PALETTE[12]);
+        g.fillRect(0, 0, WIDTH, HEIGHT);
+        BufferedImage frame = art.keyed(MIRROR_FRAME, 10);
+        for (int i = 0; i < party.members().size(); i++) {
+            Champion c = party.members().get(i);
+            int y = i * 48;
+            if (frame != null) {
+                g.drawImage(frame, 11, 7 + y, null);
+            }
+            BufferedImage portrait = keyedPortrait(c.portrait());
+            if (portrait != null) {
+                g.drawImage(portrait, 27, 13 + y, null);
+            }
+            y += 14;
+            endgameText(g, c.name(), 87, y, Art.PALETTE[9]);
+            int x = 87 + 6 * c.name().length();
+            char first = c.title().isEmpty() ? ' ' : c.title().charAt(0);
+            if (first != ',' && first != ';' && first != '-') {
+                x += 6;
+            }
+            endgameText(g, c.title(), x, y++, Art.PALETTE[9]);
+            for (int skill = 0; skill < Champion.BASE_SKILLS.size(); skill++) {
+                int level = c.lastingSkillLevel(skill);
+                if (level > 1) {
+                    y += 8;
+                    endgameText(g, LEVEL_NAMES[level - 2] + " " + Champion.BASE_SKILLS.get(skill), 105, y,
+                            Art.PALETTE[13]);
+                }
+            }
+        }
+    }
+
+    /** DM's F443: text in the scroll lettering (A-Z moved 64 codes down), on darkest grey. */
+    private void endgameText(Graphics2D g, String text, int x, int y, Color colour) {
+        DmFont font = art.font();
+        if (font != null) {
+            font.draw(g, CharacterSheet.scrollGlyphs(text), x, y, colour, Art.PALETTE[12]);
+        } else {
+            PixelFont.draw(g, text, x, y - 4, colour);
+        }
+    }
+
+    /** A portrait with its dark grey (colour 1) see-through, as F444 blits it. */
+    private BufferedImage keyedPortrait(int n) {
+        BufferedImage src = art.portrait(n);
+        if (src == null) {
+            return null;
+        }
+        BufferedImage out = new BufferedImage(src.getWidth(), src.getHeight(), BufferedImage.TYPE_INT_ARGB);
+        int clear = Art.PALETTE[1].getRGB();
+        for (int y = 0; y < src.getHeight(); y++) {
+            for (int x = 0; x < src.getWidth(); x++) {
+                int argb = src.getRGB(x, y);
+                out.setRGB(x, y, argb == clear ? 0 : argb);
+            }
+        }
+        return out;
+    }
+
     public void render(Graphics2D g) {
         if (gameOver && !menu.isOpen()) {
             drawTheEnd(g);
+            return;
+        }
+        if (gameWon() && !menu.isOpen()) {
+            drawEndScreen(g);
             return;
         }
         g.setColor(Color.BLACK);

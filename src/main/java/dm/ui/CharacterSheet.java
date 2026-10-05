@@ -567,27 +567,37 @@ public final class CharacterSheet {
     private static final int SLOT_BOX_WOUNDED = 34;
     /** DM's empty-slot outlines start with the ready hand (212); each body part has a normal and a wounded one. */
     private static final int EMPTY_SLOT_ICON = 212;
+    /** F291's other empty-slot outlines: neck 208, pouch 1 209, quiver 1 210, the first backpack cell 211 (#43). */
+    private static final List<Slot> OUTLINED_SLOTS = List.of(Slot.NECK, Slot.POUCH_1, Slot.QUIVER_1, Slot.BACKPACK_1);
+    private static final int EMPTY_NECK_ICON = 208;
     /** DM's POISONED label (graphic 32) and its place in the food and water panel (G037). */
     private static final int POISONED_LABEL = 32;
     private static final Point POISONED = new Point(112, 105);
 
     /**
-     * DM's F292: a wounded body part's cell gets the red slot box and, if
-     * empty, the wounded outline (DM's icon after the normal one). The mouth
+     * DM's F291/F292: an empty body part's cell shows its outline; a wounded
+     * one gets the red slot box and, if empty, the wounded outline (DM's icon
+     * after the normal one). The neck, the first pouch, the first quiver cell
+     * and the first backpack cell show their own outlines when empty. The mouth
      * box is red while the champion is hungry, thirsty or poisoned, and the
      * eye box while any statistic is below its maximum.
      */
     private void drawStateBoxes(Graphics2D g) {
         for (int part = 0; part < Champion.WOUND_SLOTS.size(); part++) {
             Slot slot = Champion.WOUND_SLOTS.get(part);
-            if (!champion.isWounded(slot)) {
-                continue;
-            }
+            boolean wounded = champion.isWounded(slot);
             Point p = SLOT_ICONS.get(slot);
-            drawWoundedBox(g, p.x - 1, p.y - 1);
-            BufferedImage outline = art.icon(EMPTY_SLOT_ICON + part * 2 + 1);
-            if (champion.items().get(slot) == null && outline != null) {
-                g.drawImage(outline, p.x, p.y, null);
+            if (wounded) {
+                drawWoundedBox(g, p.x - 1, p.y - 1);
+            }
+            if (champion.items().get(slot) == null) {
+                drawOutline(g, EMPTY_SLOT_ICON + part * 2 + (wounded ? 1 : 0), p);
+            }
+        }
+        for (int i = 0; i < OUTLINED_SLOTS.size(); i++) {
+            Slot slot = OUTLINED_SLOTS.get(i);
+            if (champion.items().get(slot) == null) {
+                drawOutline(g, EMPTY_NECK_ICON + i, SLOT_ICONS.get(slot));
             }
         }
         if (champion.food() < 0 || champion.water() < 0 || champion.poisoned()) {
@@ -598,6 +608,13 @@ public final class CharacterSheet {
                 drawWoundedBox(g, EYE.x - 1, EYE.y - 1);
                 break;
             }
+        }
+    }
+
+    private void drawOutline(Graphics2D g, int icon, Point p) {
+        BufferedImage outline = art.icon(icon);
+        if (outline != null) {
+            g.drawImage(outline, p.x, p.y, null);
         }
     }
 

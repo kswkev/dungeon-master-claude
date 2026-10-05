@@ -136,8 +136,11 @@ class ChampionTest {
 
         assertTrue(potion.fits(Slot.POUCH_1));
         assertTrue(key.fits(Slot.POUCH_2));
-        assertFalse(apple.fits(Slot.POUCH_1));
+        assertTrue(apple.fits(Slot.POUCH_1), "G237 lets small food into a pouch");
+        assertTrue(ItemCatalog.item(Item.Category.JUNK, ItemCatalog.WATERSKIN).fits(Slot.POUCH_1), "#45");
+        assertTrue(ItemCatalog.item(Item.Category.JUNK, ItemCatalog.WATERSKIN, 3).fits(Slot.POUCH_2), "#45");
         assertFalse(sword.fits(Slot.POUCH_1));
+        assertFalse(chest.fits(Slot.POUCH_1));
 
         assertTrue(sword.fits(Slot.QUIVER_1), "the first quiver cell takes any weapon");
         assertFalse(sword.fits(Slot.QUIVER_2));

@@ -24,6 +24,10 @@ public final class WallSensor implements Serializable {
     public static final int TYPE_CLICK_WITH_ITEM_USED_UP = 4;
     public static final int TYPE_AND_OR_GATE = 5;
     public static final int TYPE_STORAGE_ROTATE = 13;
+    /** F275's C016: swaps the held item (the one named) for the object on the wall square. */
+    public static final int TYPE_OBJECT_EXCHANGER = 16;
+    /** F275's C017: like type 4 (the item is used up), and the sensor removes itself. */
+    public static final int TYPE_CLICK_WITH_ITEM_REMOVE_SENSOR = 17;
 
     /** Local actions: anything but adding experience rotates the side's sensors. */
     public static final int ACTION_ADD_EXPERIENCE = 10;

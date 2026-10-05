@@ -72,6 +72,44 @@ class WallSensorTest {
         return map.isPassable(3, 1);
     }
 
+    /**
+     * Sprint 22, Level 14's Power Gem in small: a disabled sensor, an
+     * exchanger wanting a torch, and last a remove-sensor wanting a gold key
+     * (local, SET: no rotation). The exchanger only works once the key has
+     * removed the sensor after it.
+     */
+    @Test
+    void anExchangerWorksOnceTheSensorAfterItIsRemoved() {
+        map.addWallSensor(new WallSensor(1, 0, S, WallSensor.TYPE_DISABLED, 0, SET, true, false, false, false, 0,
+                0, 0, 0, -1));
+        map.addWallSensor(new WallSensor(1, 0, S, WallSensor.TYPE_OBJECT_EXCHANGER, 4, SET, true, false, false, true,
+                1, 0, 0, 0, 20));
+        map.addWallSensor(new WallSensor(1, 0, S, WallSensor.TYPE_CLICK_WITH_ITEM_REMOVE_SENSOR, 184, SET, false,
+                false, false, true, 0, 0, 0, 0, 21));
+        map.addItem(1, 0, S.ordinal(), SCROLL);
+        party.setHeld(TORCH);
+        click(1);
+        assertSame(TORCH, party.held(), "the exchanger isn't last yet");
+        party.setHeld(GOLD_KEY);
+        click(1);
+        assertNull(party.held(), "the key is used up");
+        assertEquals(2, map.wallSensors(1, 0, S).size(), "and the sensor is gone");
+        assertEquals(20, map.wallOrnament(1, 0, S));
+        party.setHeld(TORCH);
+        click(1);
+        assertSame(SCROLL, party.held(), "the torch was exchanged");
+        assertEquals(List.of(TORCH), map.itemsAt(1, 0, S.ordinal()));
+    }
+
+    @Test
+    void anExchangerWithNothingToGiveDoesNothing() {
+        map.addWallSensor(new WallSensor(1, 0, S, WallSensor.TYPE_OBJECT_EXCHANGER, 4, SET, false, false, false,
+                true, 1, 0, 0, 0, 20));
+        party.setHeld(TORCH);
+        assertFalse(click(1).fired());
+        assertSame(TORCH, party.held());
+    }
+
     @Test
     void aSwitchTogglesTheDoorAndFlipsItsLever() {
         local(1, WallSensor.TYPE_CLICK, 0, 10);

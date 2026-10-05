@@ -177,6 +177,49 @@ final class Flight {
                 cells[c] = c + 1;
             }
         }
+        crossings(m, sx, sy, dx, dy, cells, (p, cell) -> {
+            int member = party.memberInCell(cell);
+            if (member < 0) {
+                return false;
+            }
+            hitChampion(party, m, p, member);
+            return true;
+        });
+    }
+
+    /**
+     * DM's F266 for a group on the party's map, as it moves off (sx, sy)
+     * toward (dx, dy): projectiles meet its creatures as they meet the
+     * party's champions ({@link #partyMoves}), passing through non-material
+     * ones as in flight. Returns whether every creature was killed, so the
+     * group doesn't move.
+     */
+    static boolean groupMoves(Party party, DungeonMap m, Group g, int sx, int sy, int dx, int dy) {
+        int[] cells = new int[4];
+        for (int c = 0; c < 4; c++) {
+            if (CreatureAI.creatureOrdinalInCell(g, c) != 0) {
+                cells[c] = c + 1;
+            }
+        }
+        crossings(m, sx, sy, dx, dy, cells, (p, cell) -> {
+            int ordinal = m.groups().contains(g) ? CreatureAI.creatureOrdinalInCell(g, cell) : 0;
+            if (ordinal == 0 || g.type().nonMaterial() && p.spell() != Explosion.HARM_NON_MATERIAL
+                    && !(p.spell() == Explosion.FIREBALL && g.type() == CreatureType.BLACK_FLAME)) {
+                return false;
+            }
+            hitCreature(party, m, p, g, ordinal - 1);
+            return true;
+        });
+        return !m.groups().contains(g);
+    }
+
+    /** What a projectile meets in a cell: true if it hit something there (it is then gone). */
+    private interface CellHit {
+        boolean hit(Projectile p, int cell);
+    }
+
+    /** F266's two passes: the source square's cells, then the cells crossed into the adjacent destination. */
+    private static void crossings(DungeonMap m, int sx, int sy, int dx, int dy, int[] cells, CellHit hit) {
         int[] ahead = null;
         if (Math.abs(sx - dx) + Math.abs(sy - dy) == 1) {
             int primary = 0;
@@ -196,26 +239,24 @@ final class Flight {
                 cells[secondary] = cells[(secondary + 1) & 3];
             }
         }
-        hitCrossing(party, m, sx, sy, cells);
+        hitCrossing(m, sx, sy, cells, hit);
         if (ahead != null) {
-            hitCrossing(party, m, dx, dy, ahead);
+            hitCrossing(m, dx, dy, ahead, hit);
         }
     }
 
-    private static void hitCrossing(Party party, DungeonMap m, int x, int y, int[] cells) {
-        boolean hit;
+    private static void hitCrossing(DungeonMap m, int x, int y, int[] cells, CellHit hit) {
+        boolean hitSomething;
         do {
-            hit = false;
+            hitSomething = false;
             for (Projectile p : new ArrayList<>(m.projectileList())) {
-                int member = p.x == x && p.y == y && !p.ignoreImpacts && cells[p.cell] != 0
-                        ? party.memberInCell(cells[p.cell] - 1) : -1;
-                if (member >= 0) {
-                    hitChampion(party, m, p, member);
-                    hit = true;
+                if (p.x == x && p.y == y && !p.ignoreImpacts && cells[p.cell] != 0
+                        && hit.hit(p, cells[p.cell] - 1)) {
+                    hitSomething = true;
                     break;
                 }
             }
-        } while (hit);
+        } while (hitSomething);
     }
 
     /** F219's walls: a wall, a fake wall that is neither open nor imaginary, or stairs met from stairs. */
@@ -416,7 +457,8 @@ final class Flight {
     static void explode(Party party, DungeonMap m, int type, int attack, int x, int y, int cell) {
         CreatureAI creatures = party.dungeon().creatures();
         Random random = party.random();
-        m.explosionList().add(new Explosion(type, x, y, cell, attack, party.time() + 1));
+        m.explosionList().add(new Explosion(type, x, y, cell, attack,
+                party.time() + (type == Explosion.REBIRTH_1 ? 5 : 1)));
         if (type < Explosion.HARM_NON_MATERIAL) {
             creatures.soundAt(party, attack > 80 ? SOUND_STRONG_EXPLOSION : SOUND_WEAK_EXPLOSION, m, x, y);
         } else if (type != Explosion.SMOKE) {
@@ -453,9 +495,9 @@ final class Flight {
     }
 
     /**
-     * DM's F224 (without Lord Chaos's capture, which comes with FUSE): a
-     * fluxcage on (x, y), unless it is a wall or stairs, for 100 ticks. Only
-     * Lord Chaos is held back by it (F202).
+     * DM's F224: a fluxcage on (x, y), unless it is a wall or stairs, for 100
+     * ticks. Only Lord Chaos is held back by it (F202), and one that makes
+     * three around him puts him to flight ({@link CreatureAI#fluxcaged}).
      */
     static void fluxcage(Party party, DungeonMap m, int x, int y) {
         SquareType type = m.get(x, y).type();
@@ -464,6 +506,7 @@ final class Flight {
         }
         m.explosionList().add(new Explosion(Explosion.FLUXCAGE, x, y, 0, 0, party.time() + 100));
         party.dungeon().creatures().changed(party);
+        party.dungeon().creatures().fluxcaged(party, m, x, y);
     }
 
     /**
@@ -508,6 +551,11 @@ final class Flight {
                         if (g != null && g.type().nonMaterial()) {
                             harmNonMaterial(party, m, g, attack, random);
                         }
+                    }
+                    case Explosion.REBIRTH_1 -> {
+                        e.setType(Explosion.REBIRTH_2);
+                        creatures.soundAt(party, SOUND_STRONG_EXPLOSION, m, e.x(), e.y());
+                        lasts = true;
                     }
                     case Explosion.SMOKE -> {
                         if (e.attack() > 55) {

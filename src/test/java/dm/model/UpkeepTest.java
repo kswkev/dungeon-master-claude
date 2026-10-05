@@ -140,6 +140,19 @@ class UpkeepTest {
         assertEquals(2048, elija.food(), "1600 + 500, but no more than 2048");
     }
 
+    /** Sprint 22: G237's mouth bit decides, so poison, bombs and the spell-power flasks stay in hand. */
+    @Test
+    void onlyWhatDmLetsYouDrinkIsDrunk() {
+        for (int type : new int[] {0, 1, 2, 3, 4, 5, 16, 17, 18, 19, ItemCatalog.EMPTY_FLASK}) {
+            Item potion = ItemCatalog.item(Item.Category.POTION, type, 100);
+            assertEquals(potion, Upkeep.consume(elija, potion), potion.name() + " stays in hand");
+        }
+        for (int type = 6; type <= ItemCatalog.WATER_FLASK; type++) {
+            Item potion = ItemCatalog.item(Item.Category.POTION, type, 100);
+            assertEquals(ItemCatalog.EMPTY_FLASK, Upkeep.consume(elija, potion).type(), potion.name() + " is drunk");
+        }
+    }
+
     @Test
     void aWaterskinLosesADraughtAndIsCalledWaterWhileItHoldsSome() {
         Item full = ItemCatalog.item(Item.Category.JUNK, ItemCatalog.WATERSKIN, 3);

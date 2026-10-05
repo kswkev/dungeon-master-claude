@@ -25,8 +25,11 @@ public final class Explosion implements Serializable {
     public static final int SMOKE = 40;
     /** A fluxcage (F224): no burst, it just stands for 100 ticks (DM's event 24 removes it). */
     public static final int FLUXCAGE = 50;
+    /** A VI altar's rebirth sparkle (DM's C100, 5 ticks), then its burst (C101, 1 tick, the strong explosion sound). */
+    public static final int REBIRTH_1 = 100;
+    public static final int REBIRTH_2 = 101;
 
-    private final int type;
+    private int type;
     private final int x;
     private final int y;
     private final int cell;
@@ -67,6 +70,10 @@ public final class Explosion implements Serializable {
     /** DM's explosion attack: how hard it hits and how big it is drawn. */
     public int attack() {
         return attack;
+    }
+
+    void setType(int type) {
+        this.type = type;
     }
 
     void setAttack(int attack) {

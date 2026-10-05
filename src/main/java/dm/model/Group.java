@@ -37,7 +37,8 @@ public final class Group implements Serializable {
     static final int ASPECT_FLIP = 0x40;
     static final int ASPECT_ATTACKING = 0x80;
 
-    private final CreatureType type;
+    /** Not final: the fuse sequence turns Lord Chaos into Lord Order and the Grey Lord (F446). */
+    private CreatureType type;
     private int x;
     private int y;
     private int cells;
@@ -87,6 +88,10 @@ public final class Group implements Serializable {
 
     public int y() {
         return y;
+    }
+
+    void setType(CreatureType type) {
+        this.type = type;
     }
 
     void moveTo(int x, int y) {

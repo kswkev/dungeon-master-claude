@@ -145,6 +145,11 @@ public final class Champion implements Serializable {
         return level;
     }
 
+    /** The level F444's end screen shows: F303 without item bonuses or temporary experience, at most 16. */
+    public int lastingSkillLevel(int skill) {
+        return Math.min(16, baseLevel(skill, false));
+    }
+
     /** F303 without the item modifiers, and with or without temporary experience. */
     int baseLevel(int skill, boolean temporary) {
         long exp = experience[skill] + (temporary ? temporaryExperience[skill] : 0);
@@ -319,6 +324,12 @@ public final class Champion implements Serializable {
 
     void addStamina(int amount) {
         stamina = Math.min(stamina + amount, maxStamina);
+    }
+
+    /** DM's F283 at a VI altar: back to life with a slightly lower maximum health (at least 25), and half of it. */
+    void reborn() {
+        maxHealth = Math.max(25, maxHealth - (maxHealth >> 6) - 1);
+        health = maxHealth >> 1;
     }
 
     /** The options' deep sleep: health, stamina and mana back to their maximum (mana a potion raised above it stays). */

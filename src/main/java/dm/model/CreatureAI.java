@@ -283,6 +283,101 @@ public final class CreatureAI implements Serializable {
         }
     }
 
+    // ---- Lord Chaos and the fluxcages (GROUP2.C F221-F225) --------------------------
+
+    /** F221: a fluxcage on (x, y), which is never a wall or stairs. */
+    private static boolean fluxcageOn(DungeonMap m, int x, int y) {
+        SquareType type = m.get(x, y).type();
+        return type != SquareType.WALL && type != SquareType.STAIRS
+                && m.explosionsAt(x, y).stream().anyMatch(e -> e.type() == Explosion.FLUXCAGE);
+    }
+
+    /** F222: Lord Chaos's group on (x, y), or null. */
+    private static Group lordChaos(DungeonMap m, int x, int y) {
+        Group g = m.groupAt(x, y);
+        return g != null && g.type() == CreatureType.LORD_CHAOS ? g : null;
+    }
+
+    /**
+     * F224 after a fluxcage appears on (x, y): if Lord Chaos stands next to
+     * it, the fluxcages on his other three sides are counted, and with two
+     * of them (three in all) he senses danger and moves away.
+     */
+    void fluxcaged(Party party, DungeonMap m, int x, int y) {
+        begin(party);
+        for (Direction d : new Direction[] {Direction.NORTH, Direction.WEST, Direction.EAST, Direction.SOUTH}) {
+            int lx = x + d.dx;
+            int ly = y + d.dy;
+            if (lordChaos(m, lx, ly) == null) {
+                continue;
+            }
+            int count = 0;
+            for (Direction side : Direction.values()) {
+                if (lx + side.dx != x || ly + side.dy != y) {
+                    count += fluxcageOn(m, lx + side.dx, ly + side.dy) ? 1 : 0;
+                }
+            }
+            if (count == 2) {
+                processEvent(m, lx, ly, DANGER_ON_SQUARE, 0);
+            }
+            return;
+        }
+    }
+
+    /**
+     * DM's F225, the Firestaff's FUSE on (x, y) of {@code m}: a harm
+     * non-material blast at 255. If Lord Chaos stands there, each side
+     * without a fluxcage is tried in a random order; the first open one (a
+     * corridor, teleporter, pit or door) lets him escape there. Walls and
+     * stairs hold him like fluxcages. Returns true when no side is open: he
+     * is caught, and the fuse sequence begins.
+     */
+    boolean fuse(Party party, DungeonMap m, int x, int y) {
+        begin(party);
+        if (x < 0 || y < 0 || x >= m.width() || y >= m.height()) {
+            return false;
+        }
+        Flight.explode(party, m, Explosion.HARM_NON_MATERIAL, 255, x, y, Group.CENTRED);
+        Group g = lordChaos(m, x, y);
+        if (g == null) {
+            return false;
+        }
+        boolean[] cages = {fluxcageOn(m, x - 1, y), fluxcageOn(m, x + 1, y),
+                fluxcageOn(m, x, y - 1), fluxcageOn(m, x, y + 1)};
+        int count = 0;
+        for (boolean c : cages) {
+            count += c ? 1 : 0;
+        }
+        while (count++ < 4) {
+            int nx = x;
+            int ny = y;
+            int side = rnd(4);
+            for (int tries = 0; tries < 4; tries++) {
+                if (!cages[side]) {
+                    cages[side] = true;
+                    switch (side) {
+                        case 0 -> nx--;
+                        case 1 -> nx++;
+                        case 2 -> ny--;
+                        default -> ny++;
+                    }
+                    break;
+                }
+                side = (side + 1) & 3;
+            }
+            SquareType type = m.get(nx, ny).type();
+            if (type == SquareType.CORRIDOR || type == SquareType.TELEPORTER || type == SquareType.PIT
+                    || type == SquareType.DOOR) {
+                if (moveGroup(m, g, x, y, nx, ny) == MOVED) {
+                    deleteEvents(m, x, y);
+                    startWandering(m, g);
+                }
+                return false;
+            }
+        }
+        return true;
+    }
+
     /** DM's F180. */
     private void startWandering(DungeonMap m, Group g) {
         if (g.behaviour() >= 4) {
@@ -1545,6 +1640,9 @@ public final class CreatureAI implements Serializable {
      * fresh events (or none).
      */
     private int moveGroup(DungeonMap m, Group g, int fx, int fy, int tx, int ty) {
+        if (m == party.map() && Flight.groupMoves(party, m, g, fx, fy, tx, ty)) {
+            return STOP; // F266: killed by the projectiles it walked into
+        }
         DungeonMap to = m;
         int x = tx;
         int y = ty;

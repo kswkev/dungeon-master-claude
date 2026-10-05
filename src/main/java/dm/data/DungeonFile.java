@@ -199,6 +199,10 @@ public final class DungeonFile {
             map.initSensors();
             map.setDecorations(new DecorationFinder(lists, ornamentSeed, m, text)
                     .find(squares, squareThings));
+            if (squareThings.length > 0 && !squareThings[0].isEmpty()) {
+                map.setEndgameTexts(squareThings[0].get(0).stream().filter(t -> t.type() == Thing.TEXT)
+                        .map(t -> TextDecoder.decode(text, t.words()[1] >>> 3)).toList());
+            }
             maps.add(map);
             columnBase += widths[m];
         }

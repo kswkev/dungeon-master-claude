@@ -77,14 +77,6 @@ public final class ItemCatalog {
     private static final Set<Integer> NECK_JUNK = Set.of(2, 3, 37, 38, 39, 40, 41, 48);
 
     /**
-     * Small junk that fits a pouch: compass, amulets and jewels, coins, keys,
-     * gems, magical boxes, rabbit's foot, corbamite, lock picks and magnifier.
-     */
-    private static final Set<Integer> POUCH_JUNK = Set.of(
-            0, 2, 3, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24,
-            26, 27, 28, 37, 38, 39, 40, 41, 42, 43, 46, 47, 48, 49, 50);
-
-    /**
      * The GRAPHICS.DAT picture (498-583) of each object lying in the dungeon,
      * by name. DM keeps this mapping in its program, not its data files, so
      * it was rebuilt by matching the floor pictures against the inventory icons.
@@ -377,8 +369,13 @@ public final class ItemCatalog {
         return FITS_CHEST.contains(objectInfoIndex(item));
     }
 
-    /** Whether G237 marks {@code item} for the mouth, as F342's CONSUMABLE reads it. */
-    public static boolean describedConsumable(Item item) {
+    /**
+     * G237's mouth bit: whether DM lets {@code item} be eaten or drunk (F349)
+     * and calls it CONSUMABLE (F342). That is food, the waterskin, the ROS to
+     * VI potions and the water flask; not the MON, UM, DES, VEN, SAR or ZO
+     * potions, the bombs or an empty flask.
+     */
+    public static boolean isConsumable(Item item) {
         return MOUTH.contains(objectInfoIndex(item));
     }
 
@@ -473,23 +470,18 @@ public final class ItemCatalog {
                 ? FOOD_AMOUNTS[t - FIRST_FOOD] : 0;
     }
 
-    /** Whether DM lets the item be put in the mouth: food, waterskins and potions. */
-    public static boolean isConsumable(Item item) {
-        return item.category() == Item.Category.POTION
-                || item.category() == Item.Category.JUNK && (item.type() == WATERSKIN || foodValue(item) > 0);
-    }
 
     static boolean isMissileWeapon(int type) {
         return MISSILES.contains(type);
     }
 
-    /** Potions, scrolls and the small junk in {@link #POUCH_JUNK}. */
+    /**
+     * G237's pouch bit (the same bit as {@link #passesThroughDoors}): scrolls,
+     * potions, small weapons such as daggers and darts, and small junk such as
+     * the waterskin, keys, coins, gems and some food (#45).
+     */
     static boolean fitsPouch(Item item) {
-        return switch (item.category()) {
-            case POTION, SCROLL -> true;
-            case JUNK -> POUCH_JUNK.contains(item.type());
-            default -> false;
-        };
+        return PASSES_DOORS.contains(objectInfoIndex(item));
     }
 
     static boolean isShield(int type) {
