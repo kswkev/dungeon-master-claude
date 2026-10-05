@@ -60,6 +60,35 @@ class CreatureAITest {
 
     @ParameterizedTest
     @ValueSource(longs = {1, 2, 3})
+    void aVexirkCastsFromAfar(long seed) {
+        assertTrue(CreatureType.VEXIRK.attackRange() > 1);
+        DungeonMap map = DungeonMap.fromAscii(0, "#########", "#.......#", "#########");
+        Group g = new Group(CreatureType.VEXIRK, 5, 1, Group.CENTRED, new int[] {200, 0, 0, 0}, 1,
+                Direction.WEST, List.of());
+        map.addGroup(g);
+        Party p = partyOf(map, 1, 1, Direction.EAST, seed, 2);
+        boolean cast = false;
+        for (int t = 0; t < 400 && !cast; t++) {
+            p.tick();
+            cast = map.projectiles().stream().anyMatch(Projectile::isSpell);
+        }
+        assertTrue(cast, "a spell is on its way");
+    }
+
+    @ParameterizedTest
+    @ValueSource(longs = {1, 2, 3})
+    void anInvisiblePartyIsNotSeen(long seed) {
+        DungeonMap map = DungeonMap.fromAscii(0, "#########", "#.......#", "#########");
+        Group g = mummy(5, 1, Direction.WEST);
+        map.addGroup(g);
+        Party p = partyOf(map, 1, 1, Direction.EAST, seed, 2);
+        Magic.countedSpell(p, Magic.INVISIBILITY, 1000);
+        totalDamage(p, 100);
+        assertTrue(g.behaviour() != Group.ATTACK && g.behaviour() != Group.APPROACH, "it hasn't seen the party");
+    }
+
+    @ParameterizedTest
+    @ValueSource(longs = {1, 2, 3})
     void aClosedDoorKeepsItOut(long seed) {
         DungeonMap map = DungeonMap.fromAscii(0, "#########", "#...D...#", "#########");
         Group g = mummy(6, 1, Direction.WEST);

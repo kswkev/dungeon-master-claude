@@ -567,7 +567,8 @@ public final class CreatureAI implements Serializable {
                                     state = ASPECT_TIME;
                                     continue;
                                 }
-                                nextAspectTime = aspectUpdateTime(g, creature, creatureAttacks(g, ex, ey, creature));
+                                nextAspectTime = aspectUpdateTime(g, creature, creatureAttacks(g, ex, ey, creature,
+                                        distanceToVisibleParty));
                                 next.time += (info.animationTicks() & 15) + rnd(2);
                             } else {
                                 g.setBehaviour(Group.APPROACH);
@@ -832,9 +833,9 @@ public final class CreatureAI implements Serializable {
         }
     }
 
-    /** Melee only for now: creatures that cast spells come to fight hand to hand. */
+    /** How far the creature attacks from: 1 hand to hand, more for those that cast spells (F207). */
     private static int attackRange(CreatureType info) {
-        return 1;
+        return info.attackRange();
     }
 
     // ---- looking, smelling and moving ----------------------------------------
@@ -1246,14 +1247,29 @@ public final class CreatureAI implements Serializable {
 
     // ---- attacking the party ----------------------------------------------------
 
-    /** DM's F207: creature {@code i} strikes at the party. Returns whether it attacked. */
-    private boolean creatureAttacks(Group g, int x, int y, int i) {
+    /**
+     * DM's F207: creature {@code i}, {@code distance} squares from the
+     * party, strikes at it. One with a range over 1 casts instead (always
+     * from afar, half the time up close): its spell flies from its cell
+     * toward the party. Returns whether it attacked.
+     */
+    private boolean creatureAttacks(Group g, int x, int y, int i, int distance) {
         party.creatureAttacked();
         CreatureType info = g.type();
         int targetCell = g.centred() ? rnd(2) : ((g.cellOf(i) + 5 - primaryDirToParty) & 2) >> 1;
         targetCell = (targetCell + primaryDirToParty) & 3;
-        int champion;
-        if (info.attacksAnyChampion()) {
+        int champion = -1;
+        boolean casts = info.attackRange() > 1 && (distance > 1 || rnd(2) != 0);
+        if (casts) {
+            int spell = creatureSpell(info);
+            if (spell >= 0) { // DM's BUG0_13: Lord Order and the Grey Lord have none (and aren't in the dungeon)
+                int kineticEnergy = (info.attack() >> 2) + 1;
+                kineticEnergy += rnd(kineticEnergy);
+                kineticEnergy += rnd(kineticEnergy);
+                Flight.launchSpell(party, spell, map, x, y, targetCell, Direction.fromIndex(primaryDirToParty),
+                        Math.max(20, Math.min(kineticEnergy, 255)), info.dexterity(), 8);
+            }
+        } else if (info.attacksAnyChampion()) {
             champion = rnd(4);
             int tries = 0;
             while (tries < 4 && !alive(champion)) {
@@ -1269,7 +1285,9 @@ public final class CreatureAI implements Serializable {
                 return false;
             }
         }
-        if (info == CreatureType.GIGGLER) {
+        if (casts) {
+            // the spell is on its way
+        } else if (info == CreatureType.GIGGLER) {
             steal(g, champion);
         } else {
             int damage = championDamage(g, champion) + 1;
@@ -1281,6 +1299,23 @@ public final class CreatureAI implements Serializable {
         }
         out.changed = true;
         return true;
+    }
+
+    /** F207's spells by creature type, or -1 for one that has none. */
+    private int creatureSpell(CreatureType info) {
+        return switch (info) {
+            case VEXIRK, LORD_CHAOS -> rnd(2) != 0 ? Explosion.FIREBALL : switch (rnd(4)) {
+                case 0 -> Explosion.HARM_NON_MATERIAL;
+                case 1 -> Explosion.LIGHTNING_BOLT;
+                case 2 -> Explosion.POISON_CLOUD;
+                default -> Explosion.OPEN_DOOR;
+            };
+            case SWAMP_SLIME -> Explosion.SLIME;
+            case WIZARD_EYE -> rnd(8) != 0 ? Explosion.LIGHTNING_BOLT : Explosion.OPEN_DOOR;
+            case MATERIALIZER -> rnd(2) != 0 ? Explosion.POISON_CLOUD : Explosion.FIREBALL;
+            case DEMON, RED_DRAGON -> Explosion.FIREBALL;
+            default -> -1;
+        };
     }
 
     private boolean alive(int member) {
