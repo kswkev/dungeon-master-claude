@@ -359,6 +359,29 @@ public final class ItemCatalog {
             144, 145, 146, 147, 148, 149, 150, 151, 153, 154, 155, 156, 157, 158, 159, 162, 163, 164, 165, 166,
             167, 168, 169, 170, 171, 173, 174, 175, 176, 177);
 
+    /** G237's chest bit (allowed-slots 0x0400), by object info index: what an open chest takes (never a chest). */
+    private static final Set<Integer> FITS_CHEST = Set.of(
+            0, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 31, 45,
+            50, 51, 52, 53, 54, 55, 58, 59, 64, 66, 69, 70, 71, 72, 73, 74, 75, 76, 77, 78, 79, 80, 81, 82, 83, 84,
+            85, 86, 87, 88, 89, 90, 91, 92, 93, 94, 95, 96, 97, 101, 102, 103, 104, 105, 106, 107, 110, 112, 115,
+            117, 120, 122, 123, 125, 126, 127, 128, 129, 130, 131, 132, 133, 134, 135, 136, 137, 138, 139, 140, 141,
+            142, 143, 144, 145, 146, 147, 148, 149, 150, 151, 153, 154, 155, 156, 157, 158, 159, 160, 161, 162, 163,
+            164, 165, 166, 167, 168, 169, 170, 171, 172, 173, 174, 175, 176, 177, 179);
+
+    /** G237's mouth bit (allowed-slots 0x0001): the potions and junk F342 calls CONSUMABLE. */
+    private static final Set<Integer> MOUTH = Set.of(
+            8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 128, 156, 157, 158, 159, 160, 161, 162, 163);
+
+    /** Whether DM lets {@code item} into a chest's cells. */
+    public static boolean fitsChest(Item item) {
+        return FITS_CHEST.contains(objectInfoIndex(item));
+    }
+
+    /** Whether G237 marks {@code item} for the mouth, as F342's CONSUMABLE reads it. */
+    public static boolean describedConsumable(Item item) {
+        return MOUTH.contains(objectInfoIndex(item));
+    }
+
     private static final int FIRST_KEY = 9;
     private static final int LAST_KEY = 24;
     private static final int COPPER_COIN = 6;
@@ -440,8 +463,7 @@ public final class ItemCatalog {
             variant = 1;
         }
         return variant == item.nameVariant() ? item
-                : new Item(item.category(), item.type(), item.name(), variant, item.wornOn(), item.charges(),
-                        item.contents(), item.text());
+                : item.withVariant(variant);
     }
 
     /** How much food eating {@code item} gives, or 0 if it isn't food. */

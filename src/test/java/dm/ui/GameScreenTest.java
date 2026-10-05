@@ -610,6 +610,78 @@ class GameScreenTest {
         return party.members().get(0);
     }
 
+    // ---- chests and scrolls (Sprint 21) ----
+
+    private static final Item CHEST = ItemCatalog.item(Item.Category.CONTAINER, 0)
+            .withContents(List.of(ItemCatalog.item(Item.Category.JUNK, 29), HELM));
+
+    private void clickChestCell(int i) {
+        Point p = CharacterSheet.chestCellCentre(i);
+        screen.press(p.x, p.y);
+        screen.release();
+    }
+
+    /** Elija with the chest in the action hand, her sheet open, so the chest is open in the panel. */
+    private Champion openChest() {
+        Champion elija = openElijaWithItems();
+        elija.take(Slot.ACTION_HAND);
+        elija.place(Slot.ACTION_HAND, CHEST);
+        render();
+        return elija;
+    }
+
+    @Test
+    void aChestInTheActionHandOpens() {
+        openChest();
+        assertSame(CHEST, screen.sheet().openChest());
+        click(Slot.ACTION_HAND); // taking the chest out of the hand closes it
+        assertSame(CHEST, party.held());
+        assertNull(screen.sheet().openChest());
+    }
+
+    @Test
+    void chestCellsGiveAndTakeItems() {
+        Champion elija = openChest();
+        clickChestCell(0);
+        assertEquals(APPLE, party.held());
+        assertEquals(List.of(HELM), elija.items().get(Slot.ACTION_HAND).contents());
+        clickChestCell(5);
+        assertNull(party.held());
+        assertEquals(List.of(HELM, APPLE), elija.items().get(Slot.ACTION_HAND).contents());
+        render();
+        clickChestCell(5); // the apple stays in the cell it was put in while the chest is open
+        assertEquals(APPLE, party.held());
+    }
+
+    @Test
+    void aChestDoesNotGoInAChest() {
+        Champion elija = openChest();
+        Item other = ItemCatalog.item(Item.Category.CONTAINER, 0);
+        party.setHeld(other);
+        clickChestCell(3);
+        assertSame(other, party.held());
+        assertEquals(2, elija.items().get(Slot.ACTION_HAND).contents().size());
+    }
+
+    @Test
+    void aChestWeighsWhatItHolds() {
+        Item empty = ItemCatalog.item(Item.Category.CONTAINER, 0);
+        assertEquals(50, empty.weight());
+        assertEquals(50 + APPLE.weight() + HELM.weight(), CHEST.weight());
+    }
+
+    @Test
+    void theEyeHidesTheHeldItemAndShowsItsPanel() {
+        openElijaWithItems();
+        party.setHeld(APPLE);
+        screen.press(VIEW.x + 20, VIEW.y + 21); // the eye, held down
+        assertTrue(screen.sheet().pressingEye());
+        assertNull(screen.sheet().openChest());
+        render();
+        screen.release();
+        assertFalse(screen.sheet().pressingEye());
+    }
+
     @Test
     void clickingAnItemPicksItUpAndAnEmptyCellTakesIt() {
         Champion elija = openElijaWithItems();

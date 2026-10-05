@@ -29,7 +29,9 @@ final class ItemReader {
      * The item an object thing stands for, or null for other things.
      * Weapons keep their charges in bits 10-13 (a torch's light power), junk
      * in bits 14-15 (a waterskin's draughts), as the DM Encyclopaedia
-     * documents. A potion's power (bits 0-7) is kept as its charges.
+     * documents. A potion's power (bits 0-7) is kept as its charges. A weapon
+     * is cursed in bit 8, poisoned in 9 and broken in 14; armour cursed in 8
+     * and broken in 13 (ScummVM's Weapon and Armour).
      */
     Item toItem(Thing t) {
         return toItem(t, 0);
@@ -38,14 +40,20 @@ final class ItemReader {
     private Item toItem(Thing t, int depth) {
         int w = t.words()[1];
         return switch (t.type()) {
-            case Thing.WEAPON -> ItemCatalog.item(Item.Category.WEAPON, w & 0x7F, (w >>> 10) & 15);
-            case Thing.ARMOUR -> ItemCatalog.item(Item.Category.ARMOUR, w & 0x7F);
+            case Thing.WEAPON -> ItemCatalog.item(Item.Category.WEAPON, w & 0x7F, (w >>> 10) & 15)
+                    .withFlags(bit(w, 8, Item.CURSED) | bit(w, 9, Item.POISONED) | bit(w, 14, Item.BROKEN));
+            case Thing.ARMOUR -> ItemCatalog.item(Item.Category.ARMOUR, w & 0x7F)
+                    .withFlags(bit(w, 8, Item.CURSED) | bit(w, 13, Item.BROKEN));
             case Thing.SCROLL -> ItemCatalog.item(Item.Category.SCROLL, 0).withText(scrollText(w & 0x3FF));
             case Thing.POTION -> ItemCatalog.item(Item.Category.POTION, (w >>> 8) & 0x7F, w & 0xFF); // power
             case Thing.CONTAINER -> ItemCatalog.item(Item.Category.CONTAINER, 0).withContents(contents(w, depth));
             case Thing.JUNK -> ItemCatalog.item(Item.Category.JUNK, w & 0x7F, (w >>> 14) & 3);
             default -> null;
         };
+    }
+
+    private static int bit(int word, int bit, int flag) {
+        return (word >>> bit & 1) != 0 ? flag : 0;
     }
 
     private String scrollText(int textThing) {

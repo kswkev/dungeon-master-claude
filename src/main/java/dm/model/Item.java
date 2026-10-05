@@ -16,14 +16,20 @@ import java.util.List;
  *                    a waterskin's draughts (0-3), or a potion's power (0-255)
  * @param contents    what a chest holds, at most {@link #CHEST_CELLS} (empty for everything else)
  * @param text        a scroll's text, or null
+ * @param flags       DM's description bits from the record: {@link #POISONED}, {@link #BROKEN}, {@link #CURSED}
  */
 public record Item(Category category, int type, String name, int nameVariant, Slot wornOn, int charges,
-                   List<Item> contents, String text) implements Serializable {
+                   List<Item> contents, String text, int flags) implements Serializable {
 
     public enum Category { WEAPON, ARMOUR, SCROLL, POTION, CONTAINER, JUNK }
 
     /** DM's open chest has 8 cells. */
     public static final int CHEST_CELLS = 8;
+
+    /** DM's object description bits (F342): a weapon can be poisoned, weapons and armour broken or cursed. */
+    public static final int POISONED = 2;
+    public static final int BROKEN = 4;
+    public static final int CURSED = 8;
 
     public Item {
         // A save from before Sprint 21 has no contents; the list is kept immutable.
@@ -31,7 +37,7 @@ public record Item(Category category, int type, String name, int nameVariant, Sl
     }
 
     public Item(Category category, int type, String name, int nameVariant, Slot wornOn, int charges) {
-        this(category, type, name, nameVariant, wornOn, charges, List.of(), null);
+        this(category, type, name, nameVariant, wornOn, charges, List.of(), null, 0);
     }
 
     public Item(Category category, int type, String name, int nameVariant, Slot wornOn) {
@@ -40,12 +46,22 @@ public record Item(Category category, int type, String name, int nameVariant, Sl
 
     /** The same chest holding {@code contents}. */
     public Item withContents(List<Item> contents) {
-        return new Item(category, type, name, nameVariant, wornOn, charges, contents, text);
+        return new Item(category, type, name, nameVariant, wornOn, charges, contents, text, flags);
     }
 
     /** The same scroll with {@code text} written on it. */
     public Item withText(String text) {
-        return new Item(category, type, name, nameVariant, wornOn, charges, contents, text);
+        return new Item(category, type, name, nameVariant, wornOn, charges, contents, text, flags);
+    }
+
+    /** The same item with DM's description bits {@code flags}. */
+    public Item withFlags(int flags) {
+        return new Item(category, type, name, nameVariant, wornOn, charges, contents, text, flags);
+    }
+
+    /** The same item shown with icon variant {@code variant}. */
+    Item withVariant(int variant) {
+        return new Item(category, type, name, variant, wornOn, charges, contents, text, flags);
     }
 
     /** Thrown or fired weapons that DM packs into the quiver. */
@@ -60,7 +76,8 @@ public record Item(Category category, int type, String name, int nameVariant, Sl
     /** The same item with {@code charges} charges (a waterskin's name changes to WATER when it holds some). */
     public Item withCharges(int charges) {
         Item item = ItemCatalog.item(category, type, charges);
-        return new Item(item.category, item.type, item.name, item.nameVariant, item.wornOn, charges, contents, text);
+        return new Item(item.category, item.type, item.name, item.nameVariant, item.wornOn, charges, contents, text,
+                flags);
     }
 
     /** DM's weight in tenths of a kilogram (ReDMCSB F140). */
