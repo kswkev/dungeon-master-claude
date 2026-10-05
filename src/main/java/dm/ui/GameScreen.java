@@ -11,6 +11,7 @@ import dm.model.DungeonMap;
 import dm.model.Item;
 import dm.model.Party;
 import dm.model.Slot;
+import dm.model.Spells;
 
 import java.awt.BasicStroke;
 import java.awt.Color;
@@ -86,6 +87,7 @@ public final class GameScreen {
         this.menu = new GameMenu(art);
         this.arrows = new MovementPanel(art);
         this.actions = new ActionArea(art);
+        this.spells = new SpellArea(art);
         this.sounds = sounds;
         this.bumpSound = art.sound(GraphicsFile.SOUND_BUMP);
         this.doorSound = art.sound(GraphicsFile.SOUND_DOOR);
@@ -311,6 +313,10 @@ public final class GameScreen {
         }
         if (ActionArea.AREA.contains(x, y)) { // works with the sheet open, as in DM
             clickActionArea(x, y);
+            return;
+        }
+        if (SpellArea.AREA.contains(x, y)) { // so does the spell area
+            clickSpellArea(x, y);
             return;
         }
         if (sheet.isOpen()) {
@@ -669,11 +675,76 @@ public final class GameScreen {
         }
     }
 
-    /** Return: wakes a sleeping party (DM's G460). */
+    /** Return: wakes a sleeping party (DM's G460); otherwise casts the caster's spell (not in DM). */
     public void pressReturn() {
-        if (!menu.isOpen()) {
-            party.wakeUp();
+        if (menu.isOpen() || gameOver) {
+            return;
         }
+        if (party.sleeping()) {
+            party.wakeUp();
+        } else if (spellsUsable()) {
+            castSpell();
+        }
+    }
+
+    /** A top-row digit 1-6: the caster enters symbol {@code column} of their current row (not in DM). */
+    public void spellSymbol(int column) {
+        if (spellsUsable()) {
+            party.addSymbol(column);
+        }
+    }
+
+    /** Backspace: the caster takes back their last symbol (not in DM). */
+    public void backspace() {
+        if (spellsUsable()) {
+            party.deleteSymbol();
+        }
+    }
+
+    /** Whether the spell area takes input: not asleep, not over, no menu, and no mirror candidate shown (DM's F0377). */
+    private boolean spellsUsable() {
+        return !menu.isOpen() && !gameOver && !party.sleeping() && sheet.candidate() == null
+                && party.magicCaster() >= 0;
+    }
+
+    /** DM's spell area (MENUS.C F0392-F0412), above the action area. */
+    private final SpellArea spells;
+
+    /** A click in the spell area: choose the caster, enter or take back a symbol, or cast. */
+    private void clickSpellArea(int x, int y) {
+        if (!spellsUsable()) {
+            return;
+        }
+        SpellArea.Click click = SpellArea.click(party, x, y);
+        switch (click.command()) {
+            case CASTER -> party.setMagicCaster(click.index());
+            case SYMBOL -> party.addSymbol(click.index());
+            case DELETE -> party.deleteSymbol();
+            case CAST -> castSpell();
+            default -> { }
+        }
+    }
+
+    /** DM's F0408: the caster casts, if they have entered any symbols. */
+    private void castSpell() {
+        int caster = party.magicCaster();
+        Champion c = party.members().get(caster);
+        if (c.symbols().isEmpty()) {
+            return;
+        }
+        String spell = spellName(c.symbols());
+        boolean cast = party.cast();
+        if (debug) {
+            System.out.println(c.name() + " casts " + spell + (cast ? "" : " (fails)"));
+        }
+    }
+
+    private static String spellName(String symbols) {
+        StringBuilder sb = new StringBuilder();
+        for (char s : symbols.toCharArray()) {
+            sb.append(sb.length() == 0 ? "" : " ").append(Spells.name(s));
+        }
+        return sb.toString();
     }
 
     /** A movement key was let go: its arrow stops being lit. */
@@ -837,12 +908,12 @@ public final class GameScreen {
         }
         g.setColor(Color.BLACK);
         g.fillRect(0, 0, WIDTH, HEIGHT);
-        if (!art.available()) {
-            drawPlaceholders(g);
-        }
         ChampionMirror viewed = sheet.candidate();
+        int shields = (party.shieldDefense() > 0 ? ChampionBars.PARTY_SHIELD : 0)
+                | (party.spellShieldDefense() > 0 ? ChampionBars.SPELL_SHIELD : 0)
+                | (party.fireShieldDefense() > 0 ? ChampionBars.FIRE_SHIELD : 0);
         bars.draw(g, party.members(), sheet.champion(), viewed == null ? null : viewed.champion(),
-                clock.getAsLong());
+                clock.getAsLong(), shields);
         formation.draw(g, party);
         if (menu.isOpen()) {
             menu.draw(g, saves::header,
@@ -865,6 +936,7 @@ public final class GameScreen {
             Rectangle a = MovementPanel.AREA;
             ActionArea.shade(g, a.x, a.y, a.width, a.height); // DM's F456 disabled menus
         }
+        spells.draw(g, party, party.sleeping());
         actions.draw(g, party, sheet.candidate() != null || party.sleeping());
         takeMessages();
         messages.draw(g);
@@ -926,15 +998,5 @@ public final class GameScreen {
         } else {
             Placeholders.icon(g, held, x, y);
         }
-    }
-
-    /**
-     * Without GRAPHICS.DAT, outlines the spell area, which the spells sprint
-     * will fill. With it the area stays black, as in DM until a champion can
-     * cast (#27).
-     */
-    private static void drawPlaceholders(Graphics2D g) {
-        g.setColor(new Color(40, 40, 40));
-        g.drawRect(233, 42, 86, 34);  // spell casting area
     }
 }

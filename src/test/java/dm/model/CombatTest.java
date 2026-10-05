@@ -156,7 +156,7 @@ class CombatTest {
         assertEquals(CreatureAI.KILLED_SOME, outcome);
         assertEquals(1, two.count());
         assertEquals(50, two.health(0), "the other moves down a place");
-        assertFalse(map.smokeAt(2, 1).isEmpty(), "a puff of smoke");
+        assertFalse(map.explosionsAt(2, 1).isEmpty(), "a puff of smoke");
         int items = 0;
         for (int cell = 0; cell < 4; cell++) {
             items += map.itemsAt(2, 1, cell).size();

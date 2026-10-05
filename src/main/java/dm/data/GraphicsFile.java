@@ -39,6 +39,8 @@ public final class GraphicsFile {
     /** 32x29 red burst drawn over a champion's status box when they take damage. */
     public static final int DAMAGE_TO_CHAMPION = 16;
     public static final int OBJECT_NAMES = 694;
+    /** DM's font (FNT1): 6 rows of 128 bytes, one per character, its 5 low bits the pixels (ScummVM's loadFNT1intoBitmap). */
+    public static final int FONT = 695;
     /** DM's screen layout table; see {@link Zones}. */
     public static final int ZONES = 696;
     /** Objects as seen lying in the dungeon (498-583); which item uses which is in {@link dm.model.ItemCatalog}. */
@@ -173,6 +175,16 @@ public final class GraphicsFile {
         byte[] pcm = new byte[count];
         System.arraycopy(data, start + 2, pcm, 0, count);
         return new Sound(pcm, SOUND_SAMPLE_RATE);
+    }
+
+    /** Entry {@code index}'s raw bytes, or null if there is no such entry. */
+    public byte[] raw(int index) {
+        if (index < 0 || index >= offsets.length) {
+            return null;
+        }
+        byte[] bytes = new byte[sizes[index]];
+        System.arraycopy(data, offsets[index], bytes, 0, bytes.length);
+        return bytes;
     }
 
     /** Object names indexed by icon number (several icons can share a name). */

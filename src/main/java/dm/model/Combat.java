@@ -12,7 +12,7 @@ import java.util.Random;
  * {@link CreatureAI}, and what flies is moved by {@link Flight}.
  *
  * <p>Actions that are spells or item magic (a staff's fireball and the like)
- * aren't offered yet; they come with the spells.
+ * aren't offered yet; item magic comes after the spells (Sprint 19, {@link Magic}).
  */
 final class Combat {
 
@@ -179,7 +179,7 @@ final class Combat {
                     disabledTicks = 0;
                 }
             }
-            default -> { } // BLOCK and HIT only count for their defense; the magic waits for the spells
+            default -> { } // BLOCK and HIT only count for their defense; item magic comes later
         }
         if (disabledTicks != 0) {
             disable(party, c, disabledTicks);

@@ -56,4 +56,14 @@ class KeyMapTest {
         assertEquals(TURN_RIGHT, KeyMap.action(KeyEvent.VK_E, STD));
         assertNull(KeyMap.action(KeyEvent.VK_X, STD));
     }
+
+    @Test
+    void theTopRowDigitsEnterSpellSymbols() {
+        assertEquals(0, KeyMap.spellSymbol(KeyEvent.VK_1, STD));
+        assertEquals(5, KeyMap.spellSymbol(KeyEvent.VK_6, STD));
+        assertEquals(-1, KeyMap.spellSymbol(KeyEvent.VK_7, STD));
+        assertEquals(-1, KeyMap.spellSymbol(KeyEvent.VK_NUMPAD4, PAD), "the keypad stays movement");
+        assertEquals(-1, KeyMap.spellSymbol(KeyEvent.VK_4, PAD));
+        assertNull(KeyMap.action(KeyEvent.VK_1, STD), "and the digits don't move");
+    }
 }

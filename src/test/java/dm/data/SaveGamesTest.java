@@ -104,6 +104,35 @@ class SaveGamesTest {
     }
 
     @Test
+    void spellsInProgressAreSaved() throws IOException {
+        party.setGodMode(true);
+        party.addSymbol(5); // MON FUL: a magic torch
+        party.addSymbol(3);
+        assertTrue(party.cast());
+        party.addSymbol(2); // ON YA IR: a party shield
+        party.addSymbol(0);
+        party.addSymbol(3);
+        assertTrue(party.cast());
+        party.addSymbol(5); // MON FUL IR, flying west down the corridor
+        party.addSymbol(3);
+        party.addSymbol(3);
+        assertTrue(party.cast());
+        party.addSymbol(1); // a half-entered spell
+        saves.save(2, party);
+        Party loaded = saves.load(2);
+        assertEquals(party.magicalLight(), loaded.magicalLight());
+        assertEquals(16, loaded.shieldDefense());
+        assertEquals(1, loaded.map().projectiles().size());
+        assertTrue(loaded.map().projectiles().get(0).isSpell());
+        assertEquals(party.members().get(0).symbols(), loaded.members().get(0).symbols());
+        for (int i = 0; i < 300; i++) {
+            loaded.tick(); // the shield runs out and the fireball bursts on the loaded game's own clock
+        }
+        assertEquals(0, loaded.shieldDefense());
+        assertTrue(loaded.map().projectiles().isEmpty());
+    }
+
+    @Test
     void theHeaderNamesTheLevelAndChampions() throws IOException {
         assertNull(saves.header(1), "empty");
         saves.save(1, party);

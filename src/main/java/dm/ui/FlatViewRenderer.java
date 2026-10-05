@@ -4,6 +4,7 @@ import dm.data.GraphicsFile;
 import dm.model.ChampionMirror;
 import dm.model.Direction;
 import dm.model.DungeonMap;
+import dm.model.Explosion;
 import dm.model.Party;
 import dm.model.Projectile;
 import dm.model.Square;
@@ -176,10 +177,22 @@ public final class FlatViewRenderer implements ViewRenderer {
             }
             for (Projectile p : map.projectiles()) {
                 if (p.x() == mx && p.y() == my && fwd.viewCellOf(p.cell()) == viewCell) {
-                    g.setColor(new Color(230, 230, 200));
+                    g.setColor(p.isSpell() ? new Color(255, 140, 40) : new Color(230, 230, 200));
                     g.fillOval(sx(x, z) - r / 2, sy(0, z) - r / 2, r, r);
                 }
             }
+        }
+        // Explosions: a puff over the square, red for fire, green for poison, grey for smoke.
+        for (Explosion e : map.explosionsAt(mx, my)) {
+            double z = Math.max(d, 0.6);
+            int r = Math.max(2, (int) Math.round(Math.max(48, e.attack()) / 6.0 / (z + EYE_BACK)));
+            g.setColor(switch (e.type()) {
+                case Explosion.FIREBALL, Explosion.LIGHTNING_BOLT -> new Color(255, 90, 30, 200);
+                case Explosion.POISON_BOLT, Explosion.POISON_CLOUD -> new Color(80, 200, 60, 170);
+                case Explosion.SMOKE -> new Color(150, 150, 150, 170);
+                default -> new Color(120, 160, 255, 190);
+            });
+            g.fillOval(sx(l, z) - r, sy(0, z) - r, 2 * r, 2 * r);
         }
     }
 

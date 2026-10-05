@@ -20,7 +20,7 @@ A Java remake of FTL's *Dungeon Master* (1988), built one sprint at a time.
 - Face a mirror from the square in front of it and click the portrait to open the champion's character sheet. The sheet shows their equipment, health, stamina and mana, stats and skill levels. Hover over an item to see its name.
 - **Resurrect** adds the champion to your party (up to 4) and leaves the mirror empty. **Cancel** leaves them where they are.
 - Party members appear in the boxes across the top with their hands and health/stamina/mana bars. Click a box to reopen that champion's sheet.
-- Reincarnate came in Sprint 17; spells come later.
+- Reincarnate came in Sprint 17, spells in Sprint 19.
 
 **Sprint 3: done.** Walking into a wall or closed door now gives the original feedback:
 - the original thud sound from GRAPHICS.DAT;
@@ -126,7 +126,7 @@ Run with `"-Ddm.debug=true"` to list every decoration on Level 1.
 - **Doors:** a strong enough blow breaks a breakable door (wooden ones most easily), and so can thrown things.
 - **Experience:** every action trains its skill, faster in a fight and on deeper levels, and a new level raises the champion's statistics, health, stamina and mana, announced in the message area at the bottom of the screen ("... JUST GAINED A FIGHTER LEVEL!"). Champions turn to face whoever hits them.
 
-**Not yet:** spells, including the magic in items' action menus (a staff's fireball and the like); exploding bombs.
+**Not yet (after Sprint 16):** the magic in items' action menus (a staff's fireball and the like); exploding bombs. Spells came in Sprint 19.
 
 **Sprint 17: done.**
 - **Reincarnate:** a champion in a mirror now shows the original's panel with RESURRECT, REINCARNATE and CANCEL. REINCARNATE opens the original's keyboard: type (or click) a new name and title, then OK. The champion forgets every skill but gains 12 statistic points. Hold the eye to see a candidate's skills and statistics first. As in the original, you can only look at a candidate with room in the party and nothing in your hand.
@@ -136,10 +136,20 @@ Run with `"-Ddm.debug=true"` to list every decoration on Level 1.
 
 **Sprint 18: done.** Options (OPTIONS in the game menu), none of them in the original:
 - **Difficulty:** EASY, NORMAL or HARD, picked with green gems. On EASY creatures do 20% less damage, the champions' blows, throws and shots do 20% more, every skill earns 20% more experience, and food and water last 20% longer. HARD is the reverse; NORMAL is the original.
-- **God mode:** the champions' health, stamina, mana, food and water never go down, and they can't be wounded. Eating, drinking and resting still raise them.
+- **God mode:** the champions' health, stamina, mana, food and water never go down, and they can't be wounded. Eating, drinking and resting still raise them. Since Sprint 19 every spell cast succeeds, at no mana cost.
 - **Deep sleep:** lying down to sleep (the ZZZ on a sheet) restores every living champion's health, stamina and mana at once.
 - **Lock master:** keyholes, locks and coin slots open without their key or coin. Holding the right one still uses it up, as usual; anything else stays in hand.
 - They take effect at once and are saved with the game.
+
+**Sprint 19: done.** Spells, with the original's rules (ported from ReDMCSB):
+- **The spell area:** above the action area, the caster's name sits on a wide tab; click another champion's small tab to make them the caster. Click the original's rune symbols to build a spell one row at a time (a power, then an element, a form and a class), each costing mana as you enter it, the more the stronger the power. Click the long bar below to cast, or the arrow to take back the last rune. The keyboard works too (not in the original): the top-row keys 1-6 enter a rune from the current row, Enter casts and Backspace takes one back.
+- **Casting:** a spell needs enough skill in its magic (wizard or priest); short of it, the caster may fail and is told they NEED MORE PRACTICE. A meaningless spell is mumbled. Casting trains the skill and keeps the caster busy for a moment.
+- **Light and darkness:** FUL (a magic torch) and OH IR RA (light) light the dungeon, fading slowly when they run out; DES IR SAR darkens it for a while.
+- **Shields:** YA IR (party shield) protects every champion's body, and FUL BRO NETA (fire shield) takes the heat out of fire. Each shows as the original's coloured border around the champions' boxes.
+- **Spells that fly:** FUL IR (fireball), OH KATH RA (lightning bolt), OH VEN (poison cloud), DES VEN (poison bolt), DES EW (harm non-material: the only thing that hurts ghosts) and ZO (opens a door that has a button). They fly from the caster's side, stronger with more power and skill, and burst where they hit with the original's explosions. Fireballs and lightning burn everything on that square and can break doors that magic can break. A poison cloud hangs over a square, choking what stands in it. Black flames feed on fireballs.
+- **Careful:** as in the original, a fireball cast into the wall in front of you bursts on your own square and burns the party.
+- **God mode** now also makes every spell succeed at no mana cost.
+- Not castable yet (the runes say so and give the mana back): potions, invisibility, thieves' eye, magic footprints and ZO KATH RA. Item magic and creatures' spells come next.
 
 ## Requirements
 

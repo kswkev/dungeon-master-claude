@@ -7,6 +7,7 @@ import dm.model.ChampionMirror;
 import dm.model.CreatureType;
 import dm.model.Direction;
 import dm.model.DungeonMap;
+import dm.model.Explosion;
 import dm.model.Group;
 import dm.model.Item;
 import dm.model.ItemCatalog;
@@ -437,7 +438,7 @@ public final class TexturedViewRenderer implements ViewRenderer {
         if (doorFront) {
             drawCreatures(g, map, d, l, fwd, mx, my);
         }
-        drawSmoke(g, map, d, l, fwd, mx, my);
+        drawExplosions(g, map, d, l, fwd, mx, my);
         if (showsField(map, sq, mx, my)) {
             drawTeleporter(g, d, l); // over everything on the square, as DM's F0113 comes last
         }
@@ -447,14 +448,32 @@ public final class TexturedViewRenderer implements ViewRenderer {
         return sq.type() == SquareType.TELEPORTER && sq.teleporterVisible() && map.isTeleporterOpen(mx, my);
     }
 
-    // ---- smoke (DM's smoke explosion where a creature died) -------------------
+    // ---- explosions (DM's F0115 explosion block) --------------------------------
 
     /**
-     * Smoke shares the poison cloud's picture. The PC's explosion pictures
-     * are 486 fire, 487 spell and 488 poison (DM's C348-C350, found by size
-     * and look), followed by the explosion patterns from 489.
+     * The PC's explosion pictures are 486 fire, 487 spell and 488 poison (DM's
+     * C348-C350, found by size and look); smoke is the poison picture in smoke
+     * colours. On the party's own square DM fills the whole view with an
+     * explosion pattern instead: 489 + 3 × aspect + size, 48×31 each.
      */
-    private static final int SMOKE_GRAPHIC = 488;
+    private static final int FIRST_EXPLOSION = 486;
+    private static final int FIRST_EXPLOSION_PATTERN = 489;
+    /** DM's explosion aspects (G211's order). */
+    private static final int ASPECT_FIRE = 0;
+    private static final int ASPECT_SPELL = 1;
+    private static final int ASPECT_POISON = 2;
+    private static final int ASPECT_SMOKE = 3;
+
+    /** F0115: which picture an explosion type uses. */
+    static int explosionAspect(int type) {
+        return switch (type) {
+            case Explosion.FIREBALL, Explosion.LIGHTNING_BOLT -> ASPECT_FIRE;
+            case Explosion.POISON_BOLT, Explosion.POISON_CLOUD -> ASPECT_POISON;
+            case Explosion.SMOKE -> ASPECT_SMOKE;
+            default -> ASPECT_SPELL;
+        };
+    }
+
     /** DM's G212 palette changes for smoke (new colour x 10). */
     private static final int[] SMOKE_CHANGES = {0, 10, 20, 30, 40, 50, 120, 10, 80, 90, 100, 110, 120, 130, 140, 150};
     /** DM's G216 explosion base scales for D3, D2, D1, D0 (in 32nds, times the explosion's size / 256). */
@@ -473,34 +492,41 @@ public final class TexturedViewRenderer implements ViewRenderer {
             {111, 50}, {45, 50}, {179, 50}, {111, 53}, {20, 53}, {205, 53},
             {111, 57}, {-30, 57}, {253, 57}, {111, 60}, {-53, 60}, {276, 60}};
 
-    private final java.util.Map<Integer, BufferedImage> smokeImages = new java.util.HashMap<>();
-    private final java.util.Random smokeFlips = new java.util.Random();
+    private final java.util.Map<Integer, BufferedImage> explosionImages = new java.util.HashMap<>();
+    private final java.util.Random explosionRandom = new java.util.Random();
 
     /**
-     * The puffs of smoke on a square, as DM's F0115 draws explosions: on the
-     * left or right column of the square (or its centre), the poison-cloud
-     * picture in smoke colours, scaled by the puff's size and the distance
-     * (F0114), and flipped at random each time it is drawn, so it churns.
+     * The explosions on a square, as DM's F0115 draws them: on the left or
+     * right column of the square (or its centre), the type's picture scaled
+     * by the explosion's attack and the distance (F0114), and flipped at
+     * random each time it is drawn, so it churns. On the party's own square
+     * the whole view fills with the type's explosion pattern.
      */
-    private void drawSmoke(Graphics2D g, DungeonMap map, int d, int l, Direction fwd, int mx, int my) {
-        if (Math.abs(l) > 1 || d > MAX_DEPTH || (d == 0 && l == 0)) {
+    private void drawExplosions(Graphics2D g, DungeonMap map, int d, int l, Direction fwd, int mx, int my) {
+        if (Math.abs(l) > 1 || d > MAX_DEPTH) {
             return;
         }
-        List<DungeonMap.Smoke> puffs = map.smokeAt(mx, my);
-        if (puffs.isEmpty()) {
+        List<Explosion> here = map.explosionsAt(mx, my);
+        if (here.isEmpty()) {
+            return;
+        }
+        if (d == 0 && l == 0) {
+            for (Explosion e : here) {
+                drawExplosionPattern(g, e);
+            }
             return;
         }
         int index = (MAX_DEPTH - d) * 3 + (l == 0 ? 0 : l < 0 ? 1 : 2);
-        for (DungeonMap.Smoke s : puffs) {
+        for (Explosion e : here) {
             int[] at;
-            if (s.centred()) {
+            if (e.centred()) {
                 at = CENTRED_EXPLOSION_XY[index];
             } else {
-                boolean left = s.cell() == fwd.ordinal() || s.cell() == fwd.turnLeft().ordinal();
+                boolean left = e.cell() == fwd.ordinal() || e.cell() == fwd.turnLeft().ordinal();
                 at = EXPLOSION_XY[index][left ? 0 : 1];
             }
-            int scale = Math.min(32, Math.max(4, (Math.max(48, s.attack() + 1) * EXPLOSION_SCALE[MAX_DEPTH - d]) >> 8) & ~1);
-            BufferedImage img = smokeImage(scale);
+            int scale = Math.min(32, Math.max(4, (Math.max(48, e.attack() + 1) * EXPLOSION_SCALE[MAX_DEPTH - d]) >> 8) & ~1);
+            BufferedImage img = explosionImage(explosionAspect(e.type()), scale);
             if (img == null) {
                 return;
             }
@@ -508,22 +534,131 @@ public final class TexturedViewRenderer implements ViewRenderer {
             int h = img.getHeight();
             int x = at[0] - w / 2 + 1;
             int y = at[1] - (h >> 1) + ((h & 1) == 0 ? 1 : 0);
-            boolean flipX = smokeFlips.nextBoolean();
-            boolean flipY = smokeFlips.nextBoolean();
+            boolean flipX = explosionRandom.nextBoolean();
+            boolean flipY = explosionRandom.nextBoolean();
             g.drawImage(img, flipX ? x + w : x, flipY ? y + h : y, flipX ? -w : w, flipY ? -h : h, null);
         }
     }
 
-    private BufferedImage smokeImage(int scale) {
-        return smokeImages.computeIfAbsent(scale, sc -> {
-            IndexedImage src = art.indexed(SMOKE_GRAPHIC);
+    /** DM's F0114: aspect {@code aspect}'s picture at {@code scale}/32, smoke in its own colours. */
+    private BufferedImage explosionImage(int aspect, int scale) {
+        return explosionImages.computeIfAbsent(aspect * 64 + scale, key -> {
+            IndexedImage src = art.indexed(FIRST_EXPLOSION + Math.min(aspect, ASPECT_POISON));
             if (src == null) {
                 return null;
             }
-            IndexedImage small = Bitmaps.shrink(src, Bitmaps.scaled(src.width(), sc), Bitmaps.scaled(src.height(), sc),
-                    SMOKE_CHANGES);
-            return Bitmaps.toImage(small, 10, Bitmaps.palette());
+            IndexedImage small = Bitmaps.shrink(src, Bitmaps.scaled(src.width(), scale),
+                    Bitmaps.scaled(src.height(), scale), aspect == ASPECT_SMOKE ? SMOKE_CHANGES : null);
+            return Bitmaps.toImage(small, Art.TRANSPARENT, Bitmaps.palette());
         });
+    }
+
+    /** The explosion pattern's 16-pixel units, as DM's F0133 copies them (like the teleporter field's). */
+    private static final int PATTERN_UNIT = 16;
+
+    /**
+     * F0115 for an explosion on the party's square: the pattern for its
+     * aspect and size (attack under 32 small, under 128 medium, else large)
+     * fills the whole view, copied unit after unit along its rows from a
+     * random unit, wrapping after a random last unit (87-90), so it boils.
+     * Smoke uses the poison pattern in smoke colours.
+     */
+    private void drawExplosionPattern(Graphics2D g, Explosion e) {
+        int aspect = explosionAspect(e.type());
+        boolean smoke = aspect == ASPECT_SMOKE;
+        int index = (smoke ? ASPECT_POISON : aspect) * 3;
+        int size = e.attack() >> 5;
+        if (size != 0) {
+            index += size > 3 ? 2 : 1;
+        }
+        IndexedImage pattern = art.indexed(FIRST_EXPLOSION_PATTERN + index);
+        if (pattern == null) {
+            return;
+        }
+        if (smoke) {
+            pattern = Bitmaps.shrink(pattern, pattern.width(), pattern.height(), SMOKE_CHANGES);
+        }
+        int last = explosionRandom.nextInt(4) + 87;
+        int unit = explosionRandom.nextInt(64);
+        int perRow = Math.max(1, pattern.width() / PATTERN_UNIT);
+        int[] colours = Bitmaps.palette();
+        BufferedImage out = new BufferedImage(VIEWPORT.width, VIEWPORT.height, BufferedImage.TYPE_INT_ARGB);
+        for (int y = 0; y < VIEWPORT.height; y++) {
+            for (int ux = 0; ux < VIEWPORT.width; ux += PATTERN_UNIT) {
+                int srcY = Math.min(unit / perRow, pattern.height() - 1);
+                int srcX = (unit % perRow) * PATTERN_UNIT;
+                for (int x = ux; x < Math.min(ux + PATTERN_UNIT, VIEWPORT.width); x++) {
+                    int c = pattern.pixel(srcX + x - ux, srcY);
+                    if (c != Art.TRANSPARENT) {
+                        out.setRGB(x, y, 0xFF000000 | colours[c]);
+                    }
+                }
+                if (++unit > last) {
+                    unit = 0;
+                }
+            }
+        }
+        g.drawImage(out, 0, 0, null);
+    }
+
+    // ---- spells in flight (DM's F0115 projectile block) -------------------------
+
+    /** DM's G210 projectile pictures for the spells, relative to the PC's first projectile, 454. */
+    private static final int FIRST_PROJECTILE = 454;
+    private static final int PROJECTILE_FIREBALL = 28;
+    private static final int PROJECTILE_DEFAULT = 29;
+    private static final int PROJECTILE_SLIME = 30;
+    private static final int PROJECTILE_POISON = 31;
+    /** The lightning bolt has a picture seen head-on and one seen side-on, after it. */
+    private static final int PROJECTILE_LIGHTNING = 9;
+    /** DM's G215 projectile scales: D3 back/front, D2 back/front, D1 back/front, D0 back. */
+    private static final int[] PROJECTILE_SCALE = {13, 16, 19, 22, 25, 28, 32};
+
+    /**
+     * A spell in flight, as F0115 draws projectile aspects: centred on the
+     * flight point, scaled by the distance and by its energy (a spell at full
+     * energy on the party's own square is drawn as is), in the distance
+     * colours of objects. A lightning bolt seen side-on uses its side picture,
+     * turned the way it flies; head-on it is mirrored on the right.
+     */
+    private void drawSpell(Graphics2D g, Projectile p, Point at, int d, int l, int viewCell, Direction fwd) {
+        int spell = p.spell();
+        int graphic = FIRST_PROJECTILE + switch (spell) {
+            case Explosion.FIREBALL -> PROJECTILE_FIREBALL;
+            case Explosion.SLIME -> PROJECTILE_SLIME;
+            case Explosion.LIGHTNING_BOLT -> PROJECTILE_LIGHTNING;
+            case Explosion.POISON_BOLT, Explosion.POISON_CLOUD -> PROJECTILE_POISON;
+            default -> PROJECTILE_DEFAULT;
+        };
+        boolean flip = false;
+        if (spell == Explosion.LIGHTNING_BOLT) {
+            boolean sideOn = (p.direction().ordinal() & 1) != (fwd.ordinal() & 1);
+            if (sideOn) {
+                graphic++;
+                flip = fwd.turnRight() == p.direction();
+            } else {
+                flip = !(l > 0 || (l == 0 && (viewCell == 1 || viewCell == 2)));
+            }
+        }
+        IndexedImage src = art.indexed(graphic);
+        if (src == null) {
+            return;
+        }
+        int w = src.width();
+        int h = src.height();
+        int scaleIndex = Math.min(PROJECTILE_SCALE.length - 1, (MAX_DEPTH - d) * 2 + (viewCell >= 2 ? 1 : 0));
+        int[] changes = null;
+        if (!(p.kineticEnergy() == 255 && d == 0 && l == 0)) {
+            int scale = (PROJECTILE_SCALE[scaleIndex] * Math.max(96, p.kineticEnergy() + 1)) >> 8;
+            w = Math.max(1, Bitmaps.scaled(w, scale));
+            h = Math.max(1, Bitmaps.scaled(h, scale));
+            changes = (scaleIndex >> 1) == 0 ? PAL_CHANGES_OBJECT_D3
+                    : (scaleIndex >> 1) == 1 ? PAL_CHANGES_OBJECT_D2 : null;
+        }
+        BufferedImage img = distant(graphic, w, h, changes, flip);
+        if (img != null) {
+            g.drawImage(img, at.x - w / 2, at.y - h / 2, null);
+        }
     }
 
     // ---- creatures -----------------------------------------------------------
@@ -720,7 +855,9 @@ public final class TexturedViewRenderer implements ViewRenderer {
                 if (p.x() == mx && p.y() == my) {
                     int viewCell = fwd.viewCellOf(p.cell());
                     Point at = art.zone(Zones.FLYING_OBJECTS + square * 4 + viewCell);
-                    if (at != null) {
+                    if (at != null && p.isSpell()) {
+                        drawSpell(g, p, at, d, l, viewCell, fwd);
+                    } else if (at != null) {
                         drawObject(g, p.item(), at, OBJECT_SCALE[d][viewCell >= 2 ? 0 : 1], false);
                     }
                 }
