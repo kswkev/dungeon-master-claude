@@ -96,6 +96,8 @@ final class Magic {
             return Result.FAILED;
         }
         Spells.Spell spell = Spells.find(symbols);
+        int step = c.symbolStep();
+        int symbolMana = c.symbolMana();
         c.setSymbols("", 0, 0);
         if (spell == null) {
             party.message(c.name() + " MUMBLES A MEANINGLESS SPELL.", -1);
@@ -123,6 +125,7 @@ final class Magic {
                 Slot flask = emptyFlaskInHand(c);
                 if (flask == null) {
                     party.message(c.name() + " NEEDS AN EMPTY FLASK IN HAND FOR POTION.", -1);
+                    c.setSymbols(symbols, step, symbolMana); // F0408 keeps them, to cast again with a flask
                     return Result.FAILED;
                 }
                 c.take(flask);

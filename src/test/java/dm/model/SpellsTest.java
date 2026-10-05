@@ -166,8 +166,8 @@ class SpellsTest {
         enter(UM, 1); // VI
         assertFalse(party.cast());
         assertEquals(List.of("ELIJA NEEDS AN EMPTY FLASK IN HAND FOR POTION."), messages());
+        assertEquals(symbols(UM, 1), elija.symbols(), "kept for another try");
         elija.place(Slot.READY_HAND, ItemCatalog.item(Item.Category.POTION, ItemCatalog.EMPTY_FLASK));
-        enter(UM, 1);
         assertTrue(party.cast());
         Item potion = elija.items().get(Slot.READY_HAND);
         assertEquals(14, potion.type());
