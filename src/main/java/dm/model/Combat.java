@@ -59,8 +59,54 @@ final class Combat {
                 list.add(action);
             }
         }
-        list.removeIf(Actions::isMagic);
+        list.removeIf(a -> a == Actions.FUSE); // the Fluxcage of Chaos endgame isn't in yet
         return list;
+    }
+
+    /** F407: the mana a fire, air, earth, water or wizard action costs, less for the more skilled (others cost none). */
+    private static int requiredMana(Champion c, int skill) {
+        if ((skill >= 16 && skill <= 19) || skill == Champion.WIZARD) { // DM's fire, air, earth and water skills
+            return 7 - Math.min(6, c.skillLevel(skill));
+        }
+        return 0;
+    }
+
+    /** DM's F405: the action hand's item loses a charge, if it has any. */
+    private static void decrementCharges(Champion c) {
+        Item item = c.items().get(Slot.ACTION_HAND);
+        if (item == null || item.charges() == 0) {
+            return;
+        }
+        switch (item.category()) {
+            case WEAPON, ARMOUR, JUNK -> c.replace(Slot.ACTION_HAND, item.withCharges(item.charges() - 1));
+            default -> { }
+        }
+    }
+
+    /**
+     * F407's heal (DM 1.1 on): while health is missing and mana lasts, each
+     * cycle heals up to the heal skill level (at most 10) for 2 mana and 2
+     * experience. Returns the experience it earns.
+     */
+    private static int heal(Champion c, int skill) {
+        int experience = Actions.experience(Actions.HEAL);
+        int missing = c.maxHealth() - c.health();
+        if (missing <= 0 || c.mana() == 0) {
+            return experience;
+        }
+        int capability = Math.min(10, c.skillLevel(skill));
+        experience = 2;
+        int mana = c.mana();
+        int amount;
+        do {
+            amount = Math.min(missing, capability);
+            c.addHealth(amount);
+            experience += 2;
+            mana -= 2;
+            missing -= amount;
+        } while (mana > 0 && missing != 0);
+        c.setMana(Math.max(0, mana));
+        return experience;
     }
 
     /** DM's F382: the charges of what the action hand holds (1 for an item that has none). */
@@ -179,7 +225,83 @@ final class Combat {
                     disabledTicks = 0;
                 }
             }
-            default -> { } // BLOCK and HIT only count for their defense; item magic comes later
+            case Actions.LIGHTNING, Actions.DISPELL, Actions.FIREBALL, Actions.SPIT, Actions.INVOKE -> {
+                int kineticEnergy;
+                int spell;
+                switch (action) {
+                    case Actions.LIGHTNING -> {
+                        kineticEnergy = 180;
+                        spell = Explosion.LIGHTNING_BOLT;
+                    }
+                    case Actions.DISPELL -> {
+                        kineticEnergy = 150;
+                        spell = Explosion.HARM_NON_MATERIAL;
+                    }
+                    case Actions.FIREBALL -> {
+                        kineticEnergy = 150;
+                        spell = Explosion.FIREBALL;
+                    }
+                    case Actions.SPIT -> {
+                        kineticEnergy = 250;
+                        spell = Explosion.FIREBALL;
+                    }
+                    default -> { // INVOKE: a random spell
+                        kineticEnergy = random.nextInt(128) + 100;
+                        spell = switch (random.nextInt(6)) {
+                            case 0 -> Explosion.POISON_BOLT;
+                            case 1 -> Explosion.POISON_CLOUD;
+                            case 2 -> Explosion.HARM_NON_MATERIAL;
+                            default -> Explosion.FIREBALL;
+                        };
+                    }
+                }
+                c.face(party.facing());
+                int mana = requiredMana(c, skill);
+                if (c.mana() < mana) {
+                    kineticEnergy = Math.max(2, c.mana() * kineticEnergy / mana);
+                    mana = c.mana();
+                }
+                if (!Magic.projectileSpell(party, c, spell, kineticEnergy, mana)) {
+                    experience >>= 1;
+                }
+                decrementCharges(c);
+            }
+            case Actions.SPELLSHIELD, Actions.FIRESHIELD -> {
+                if (!Magic.shieldWithMana(party, c, action == Actions.SPELLSHIELD, 280)) {
+                    experience >>= 2;
+                    disabledTicks >>= 1;
+                } else {
+                    decrementCharges(c);
+                }
+            }
+            case Actions.FLUXCAGE -> {
+                c.face(party.facing());
+                Flight.fluxcage(party, m, tx, ty);
+            }
+            case Actions.HEAL -> experience = heal(c, skill);
+            case Actions.WINDOW -> {
+                Magic.countedSpell(party, Magic.THIEVES_EYE, random.nextInt(c.skillLevel(skill) + 8) + 5);
+                decrementCharges(c);
+            }
+            case Actions.FREEZE_LIFE -> {
+                Item box = c.items().get(Slot.ACTION_HAND);
+                int ticks;
+                if (box != null && box.category() == Item.Category.JUNK && (box.type() == ItemCatalog.MAGICAL_BOX_BLUE
+                        || box.type() == ItemCatalog.MAGICAL_BOX_GREEN)) {
+                    ticks = box.type() == ItemCatalog.MAGICAL_BOX_BLUE ? 30 : 125;
+                    c.take(Slot.ACTION_HAND); // a magical box is used up
+                } else {
+                    ticks = 70;
+                    decrementCharges(c);
+                }
+                party.freezeLife(ticks);
+            }
+            case Actions.LIGHT -> {
+                party.addMagicalLight(Light.POWER_TO_AMOUNT[2]);
+                party.addPartySpell(new Magic.PartySpell(party.time() + 2500, Magic.LIGHT, -2));
+                decrementCharges(c);
+            }
+            default -> { } // BLOCK and HIT only count for their defense; FUSE isn't offered yet
         }
         if (disabledTicks != 0) {
             disable(party, c, disabledTicks);

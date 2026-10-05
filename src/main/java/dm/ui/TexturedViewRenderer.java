@@ -564,6 +564,11 @@ public final class TexturedViewRenderer implements ViewRenderer {
             return;
         }
         List<Explosion> here = map.explosionsAt(mx, my);
+        // DM's F0115: a fluxcage is no burst; its field is drawn over the square instead
+        boolean fluxcage = here.removeIf(e -> e.type() == Explosion.FLUXCAGE);
+        if (fluxcage) {
+            drawField(g, d, l, FIELD_FLUXCAGE);
+        }
         if (here.isEmpty()) {
             return;
         }
@@ -1165,6 +1170,7 @@ public final class TexturedViewRenderer implements ViewRenderer {
     // every frame.
 
     private static final int FIELD_TELEPORTER = 76;
+    private static final int FIELD_FLUXCAGE = 77;
     /** Masks for the side squares by [depth][|lateral|] (none for the centre). */
     private static final int[][] FIELD_MASK = {{-1, 75}, {-1, 74}, {-1, 73, 72}, {-1, 71, 70}};
     /** G0188's base unit count by [depth][centre 0, side 1]; DM adds random(2). */
@@ -1175,7 +1181,12 @@ public final class TexturedViewRenderer implements ViewRenderer {
     private boolean fieldDrawn;
 
     private void drawTeleporter(Graphics2D g, int d, int l) {
-        IndexedImage pattern = art.indexed(FIELD_TELEPORTER);
+        drawField(g, d, l, FIELD_TELEPORTER);
+    }
+
+    /** F0113 with graphic {@code field}: the teleporter's (76) or a fluxcage's (77). */
+    private void drawField(Graphics2D g, int d, int l, int field) {
+        IndexedImage pattern = art.indexed(field);
         if (pattern == null) {
             return;
         }

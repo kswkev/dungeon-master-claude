@@ -353,6 +353,16 @@ public final class CreatureAI implements Serializable {
         boolean archenemy = info.archenemy();
         int ticksSinceLastMove = (int) ((now - g.lastMoveTime) & 0xFF);
         int movementTicks = info.movementTicks() == CreatureType.IMMOBILE ? 100 : info.movementTicks();
+        if (party.lifeFrozen() && !archenemy) { // DM 1.2: frozen, it ignores reactions and tries again in 4 ticks
+            if (eventType < 0) {
+                return;
+            }
+            next.type = eventType;
+            next.ticks = ticks;
+            next.time += 4;
+            addEvent(next);
+            return;
+        }
         if (eventType < 0) { // a reaction: it comes 1 tick later, or later for a creature that just moved
             next.type = eventType + ASPECT_GROUP;
             int delay = ((movementTicks + 2) >> 2) - ticksSinceLastMove;
@@ -1076,6 +1086,13 @@ public final class CreatureAI implements Serializable {
                 }
             }
             default -> { }
+        }
+        if (info.archenemy()) { // only Lord Chaos is held back by a fluxcage
+            for (Explosion e : map.explosionsAt(nx, ny)) {
+                if (e.type() == Explosion.FLUXCAGE) {
+                    return false;
+                }
+            }
         }
         if (party.map() == map && party.x() == nx && party.y() == ny) {
             blockedByParty = true;

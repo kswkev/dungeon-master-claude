@@ -375,6 +375,20 @@ final class Flight {
     }
 
     /**
+     * DM's F224 (without Lord Chaos's capture, which comes with FUSE): a
+     * fluxcage on (x, y), unless it is a wall or stairs, for 100 ticks. Only
+     * Lord Chaos is held back by it (F202).
+     */
+    static void fluxcage(Party party, DungeonMap m, int x, int y) {
+        SquareType type = m.get(x, y).type();
+        if (type == SquareType.WALL || type == SquareType.STAIRS) {
+            return;
+        }
+        m.explosionList().add(new Explosion(Explosion.FLUXCAGE, x, y, 0, 0, party.time() + 100));
+        party.dungeon().creatures().changed(party);
+    }
+
+    /**
      * DM's F220, every tick for each explosion whose event is due, on every
      * map: a fireball or lightning bolt may break the door it burst on; harm
      * non-material hurts non-material creatures (a materializer only while it

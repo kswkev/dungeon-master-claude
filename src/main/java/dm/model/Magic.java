@@ -160,7 +160,19 @@ final class Magic {
         if (spell.type() == Explosion.OPEN_DOOR) {
             skill <<= 1;
         }
-        int kineticEnergy = Math.max(21, Math.min((power + 2) * (4 + (skill << 1)), 255));
+        projectileSpell(party, c, spell.type(), Math.max(21, Math.min((power + 2) * (4 + (skill << 1)), 255)), 0);
+    }
+
+    /**
+     * DM's F0327: {@code c} pays {@code mana} (false, and nothing happens,
+     * if they can't) and the spell leaves from their side of the party's
+     * front, with a step energy that is smaller for casters with more mana.
+     */
+    static boolean projectileSpell(Party party, Champion c, int spell, int kineticEnergy, int mana) {
+        if (c.mana() < mana && !party.godMode()) {
+            return false;
+        }
+        c.setMana(c.mana() - mana);
         int stepEnergy = 10 - Math.min(8, c.maxMana() >> 3);
         if (kineticEnergy < (stepEnergy << 2)) {
             kineticEnergy += 3;
@@ -168,8 +180,29 @@ final class Magic {
         }
         int dir = c.facing().ordinal();
         int cell = ((((party.cellOf(c) - dir + 1) & 2) >> 1) + dir) & 3;
-        Flight.launchSpell(party, spell.type(), party.map(), party.x(), party.y(), cell, c.facing(), kineticEnergy,
-                90, stepEnergy);
+        Flight.launchSpell(party, spell, party.map(), party.x(), party.y(), cell, c.facing(), kineticEnergy, 90,
+                stepEnergy);
+        return true;
+    }
+
+    /**
+     * DM's F0403 with mana, for the spell and fire shield actions: 4 mana;
+     * with less the shield lasts half as long, takes what mana is left and
+     * counts as failed; with none, nothing.
+     */
+    static boolean shieldWithMana(Party party, Champion c, boolean spellShield, int ticks) {
+        if (c.mana() == 0) {
+            return false;
+        }
+        boolean full = c.mana() >= 4;
+        if (full) {
+            c.setMana(c.mana() - 4);
+        } else {
+            ticks >>= 1;
+            c.setMana(0);
+        }
+        shield(party, spellShield, ticks);
+        return full;
     }
 
     /**

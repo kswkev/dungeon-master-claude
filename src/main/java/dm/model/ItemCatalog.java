@@ -70,6 +70,9 @@ public final class ItemCatalog {
 
     /** The junk ZO KATH RA makes (DM's C51_JUNK_ZOKATHRA). */
     public static final int ZOKATHRA = 51;
+    /** The magical boxes, whose freeze life is used up with them (DM's C42/C43). */
+    public static final int MAGICAL_BOX_BLUE = 42;
+    public static final int MAGICAL_BOX_GREEN = 43;
 
     private static final Set<Integer> NECK_JUNK = Set.of(2, 3, 37, 38, 39, 40, 41, 48);
 

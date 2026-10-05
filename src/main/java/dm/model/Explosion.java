@@ -23,6 +23,8 @@ public final class Explosion implements Serializable {
     public static final int POISON_BOLT = 6;
     public static final int POISON_CLOUD = 7;
     public static final int SMOKE = 40;
+    /** A fluxcage (F224): no burst, it just stands for 100 ticks (DM's event 24 removes it). */
+    public static final int FLUXCAGE = 50;
 
     private final int type;
     private final int x;

@@ -232,6 +232,18 @@ public final class Party implements Serializable {
     private int firstFootprint;
     private int lastFootprint;
 
+    /** DM's freeze life ticks: while above 0, creatures (but Lord Chaos) stand still; one goes each tick. */
+    private int freezeLifeTicks;
+
+    public boolean lifeFrozen() {
+        return freezeLifeTicks > 0;
+    }
+
+    /** F407's freeze life: {@code ticks} more, up to 200 in all. */
+    void freezeLife(int ticks) {
+        freezeLifeTicks = Math.min(200, freezeLifeTicks + ticks);
+    }
+
     /** True while an invisibility spell runs: only creatures that see the invisible can see the party (F200). */
     public boolean invisible() {
         return invisibility > 0;
@@ -1040,6 +1052,9 @@ public final class Party implements Serializable {
      */
     public Tick tick() {
         time++;
+        if (freezeLifeTicks > 0) {
+            freezeLifeTicks--;
+        }
         boolean burnt = time % Light.BURN_PERIOD == 0 && burnTorches();
         for (DungeonMap m : dungeon.maps()) {
             m.reenableGenerators(time);
