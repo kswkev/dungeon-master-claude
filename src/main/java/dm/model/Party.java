@@ -1178,11 +1178,17 @@ public final class Party implements Serializable {
             return false;
         }
         Item before = held;
+        int shield = c.shieldDefense();
         Item after = Upkeep.consume(c, before, random);
         if (after == before) {
             return false;
         }
         held = after;
+        int gained = c.shieldDefense() - shield;
+        if (gained > 0) { // a YA potion: DM's event 72 takes it away after its square in ticks
+            addPartySpell(new Magic.PartySpell(time + (long) gained * gained, Magic.CHAMPION_SHIELD, gained,
+                    members.indexOf(c)));
+        }
         return true;
     }
 

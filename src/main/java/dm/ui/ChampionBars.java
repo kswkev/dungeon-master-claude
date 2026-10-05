@@ -136,7 +136,7 @@ public final class ChampionBars {
             }
             g.setColor(BOX_BG);
             g.fillRect(x, 0, BOX_W, BOX_H);
-            drawShields(g, x, shields);
+            drawShields(g, x, c.shieldDefense() > 0 ? shields | PARTY_SHIELD : shields); // F292: a YA potion's shield too
             if (c == shown) {
                 BufferedImage portrait = art.portrait(c.portrait());
                 Rectangle r = new Rectangle(x, 0, 32, 29);

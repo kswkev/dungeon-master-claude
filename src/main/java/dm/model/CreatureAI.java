@@ -1432,7 +1432,7 @@ public final class CreatureAI implements Serializable {
         if (sharp) {
             defense >>= 1;
         }
-        defense += c.actionDefense() + party.shieldDefense() + shields;
+        defense += c.actionDefense() + c.shieldDefense() + party.shieldDefense() + shields;
         if (part > 1) {
             defense += ItemCatalog.armourDefense(c.items().get(Champion.WOUND_SLOTS.get(part)), sharp);
         }

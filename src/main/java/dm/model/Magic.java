@@ -26,11 +26,19 @@ final class Magic {
         NOT_YET
     }
 
-    /** A party spell running out (DM's events 70 light, 74 party shield, 77 spell shield, 78 fire shield). */
-    record PartySpell(long time, int kind, int amount) implements Serializable {
+    /**
+     * A party spell running out (DM's events 70 light, 72 a champion's shield,
+     * 74 party shield, 77 spell shield, 78 fire shield). {@code member} is the
+     * champion for event 72 (0 in games saved before Sprint 20).
+     */
+    record PartySpell(long time, int kind, int amount, int member) implements Serializable {
+        PartySpell(long time, int kind, int amount) {
+            this(time, kind, amount, 0);
+        }
     }
 
     static final int LIGHT = 70;
+    static final int CHAMPION_SHIELD = 72;
     static final int PARTY_SHIELD = 74;
     static final int SPELL_SHIELD = 77;
     static final int FIRE_SHIELD = 78;
@@ -116,6 +124,15 @@ final class Magic {
             }
         }
         switch (spell.kind()) {
+            case Spells.KIND_POTION -> {
+                Slot flask = emptyFlaskInHand(c);
+                if (flask == null) {
+                    party.message(c.name() + " NEEDS AN EMPTY FLASK IN HAND FOR POTION.", -1);
+                    return Result.FAILED;
+                }
+                c.take(flask);
+                c.place(flask, ItemCatalog.item(Item.Category.POTION, spell.type(), random.nextInt(16) + power * 40));
+            }
             case Spells.KIND_PROJECTILE -> castProjectile(party, member, c, spell, power, skill);
             case Spells.KIND_OTHER -> castOther(party, spell, power);
             default -> { }
@@ -123,6 +140,17 @@ final class Magic {
         party.addSkillExperience(member, spell.skill(), experience);
         Combat.disable(party, c, spell.duration());
         return Result.CAST;
+    }
+
+    /** F0411 (DM 1.1 on): the hand holding an empty flask, the action hand first, or null. */
+    private static Slot emptyFlaskInHand(Champion c) {
+        for (Slot slot : new Slot[] {Slot.ACTION_HAND, Slot.READY_HAND}) {
+            Item item = c.items().get(slot);
+            if (item != null && item.category() == Item.Category.POTION && item.type() == ItemCatalog.EMPTY_FLASK) {
+                return slot;
+            }
+        }
+        return null;
     }
 
     /**
@@ -220,6 +248,11 @@ final class Magic {
                 }
             }
             case PARTY_SHIELD, SPELL_SHIELD, FIRE_SHIELD -> party.addShield(e.kind(), -e.amount());
+            case CHAMPION_SHIELD -> {
+                if (e.member() < party.members().size()) {
+                    party.members().get(e.member()).addShieldDefense(-e.amount());
+                }
+            }
             default -> { }
         }
     }

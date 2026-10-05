@@ -4,6 +4,8 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 Time and Token is limited
 
+For each sprint ask 3-5 clarifying questions to better understand requirements
+
 ## Project
 
 A Java/Swing remake of FTL's *Dungeon Master* (1988), built sprint by sprint.

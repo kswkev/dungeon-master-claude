@@ -97,7 +97,7 @@ public final class Spells {
          */
         public boolean castable() {
             return switch (kind()) {
-                case KIND_PROJECTILE -> true;
+                case KIND_POTION, KIND_PROJECTILE -> true;
                 case KIND_OTHER -> switch (type()) {
                     case OTHER_LIGHT, OTHER_DARKNESS, OTHER_PARTY_SHIELD, OTHER_MAGIC_TORCH, OTHER_FIRESHIELD -> true;
                     default -> false;

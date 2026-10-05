@@ -95,7 +95,7 @@ class SpellsTest {
         assertTrue(Spells.find(symbols(LO, FUL, BRO, NETA)).castable(), "fire shield");
         assertTrue(Spells.find(symbols(LO, DES, IR, SAR)).castable(), "darkness");
         assertTrue(Spells.find(symbols(LO, OH, 0)).castable(), "poison cloud");
-        assertFalse(Spells.find(symbols(LO, 1)).castable(), "VI, a health potion");
+        assertTrue(Spells.find(symbols(LO, 1)).castable(), "VI, a health potion");
         assertFalse(Spells.find(symbols(LO, OH, EW, SAR)).castable(), "invisibility");
         assertFalse(Spells.find(symbols(LO, YA, BRO, 1)).castable(), "magic footprints");
         assertFalse(Spells.find(symbols(LO, OH, EW, 4)).castable(), "thieves' eye");
@@ -162,6 +162,39 @@ class SpellsTest {
         assertEquals(List.of("ELIJA NEEDS MORE PRACTICE WITH THIS WIZARD SPELL."), messages());
         assertTrue(map.projectiles().isEmpty());
         assertFalse(elija.actionDisabled());
+    }
+
+    @Test
+    void aPotionSpellFillsAnEmptyFlaskInHand() {
+        master();
+        enter(UM, 1); // VI
+        assertFalse(party.cast());
+        assertEquals(List.of("ELIJA NEEDS AN EMPTY FLASK IN HAND FOR POTION."), messages());
+        elija.place(Slot.READY_HAND, ItemCatalog.item(Item.Category.POTION, ItemCatalog.EMPTY_FLASK));
+        enter(UM, 1);
+        assertTrue(party.cast());
+        Item potion = elija.items().get(Slot.READY_HAND);
+        assertEquals(14, potion.type());
+        assertTrue(potion.charges() >= 80 && potion.charges() < 96, "UM is power 2: 80 + random(16)");
+    }
+
+    @Test
+    void aYaPotionShieldsItsDrinkerForAWhile() {
+        party.setHeld(ItemCatalog.item(Item.Category.POTION, 12, 100));
+        assertTrue(party.feed(elija));
+        assertEquals(18, elija.shieldDefense(), "(100/25 + 8) * 1.5");
+        tick(18 * 18 - 1);
+        assertEquals(18, elija.shieldDefense());
+        tick(1);
+        assertEquals(0, elija.shieldDefense());
+    }
+
+    @Test
+    void typeElevenIsTheStaminaPotion() {
+        elija.decrementStamina(elija.rawMaxStamina() / 2);
+        int before = elija.stamina();
+        Upkeep.consume(elija, ItemCatalog.item(Item.Category.POTION, 11, 100));
+        assertTrue(elija.stamina() > before);
     }
 
     @Test
