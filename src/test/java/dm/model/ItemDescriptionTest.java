@@ -31,7 +31,8 @@ class ItemDescriptionTest {
     @Test
     void everythingEndsWithItsWeight() {
         Item dagger = ItemCatalog.item(Item.Category.WEAPON, 8);
-        assertEquals(List.of("WEIGHS 0.5 KG."), describe(dagger).lines());
+        List<String> lines = describe(dagger).lines();
+        assertEquals("WEIGHS 0.5 KG.", lines.get(lines.size() - 1));
         assertEquals("DAGGER", describe(dagger).name());
     }
 
@@ -88,7 +89,23 @@ class ItemDescriptionTest {
     @Test
     void longLinesWrapAtASpace() {
         Item dagger = ItemCatalog.item(Item.Category.WEAPON, 8).withFlags(Item.POISONED | Item.BROKEN | Item.CURSED);
-        assertEquals(List.of("(POISONED, BROKEN", "AND CURSED)", "WEIGHS 0.5 KG."), describe(dagger).lines());
+        assertEquals(List.of("(POISONED, BROKEN", "AND CURSED)"), describe(dagger).lines().subList(0, 2));
+    }
+
+    @Test
+    void weaponsShowTheirRatingAndActions() {
+        Item sword = ItemCatalog.item(Item.Category.WEAPON, 10);
+        assertEquals(List.of("DAMAGE RATING 34.", "SWING", "PARRY 2+", "CHOP 3+", "WEIGHS 3.2 KG."),
+                describe(sword).lines(), "G238 strength; the levels an unskilled champion still needs");
+        assertEquals(List.of("SHOOT", "WEIGHS 1.0 KG."), describe(ItemCatalog.item(Item.Category.WEAPON, 25)).lines(),
+                "a bow's rating is for nothing it does");
+        Item eyeOfTime = ItemCatalog.item(Item.Category.WEAPON, 0, 0);
+        assertEquals("FREEZE LIFE (0)", describe(eyeOfTime).lines().get(2), "the charges left");
+        Item charged = ItemCatalog.item(Item.Category.WEAPON, 0, 3);
+        assertEquals("FREEZE LIFE (3)", describe(charged).lines().get(2));
+        Item wand = ItemCatalog.item(Item.Category.WEAPON, 35, 15);
+        assertEquals(List.of("CALM", "SPELLSHIELD 2+(15)", "HEAL 3+", "WEIGHS 0.1 KG."), describe(wand).lines(),
+                "a level and charges in 18 characters");
     }
 
     @Test

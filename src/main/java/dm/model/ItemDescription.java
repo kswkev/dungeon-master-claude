@@ -71,6 +71,9 @@ public record ItemDescription(String name, List<String> lines) {
             add(lines, "DEFENSE " + ItemCatalog.armourDefense(item, false) + ".");
             add(lines, "SHARP DEFENSE " + ItemCatalog.armourDefense(item, true) + ".");
         }
+        if (item.category() == Item.Category.WEAPON) {
+            addWeapon(lines, item, viewer);
+        }
         int weight = item.weight();
         add(lines, "WEIGHS " + weight / 10 + "." + weight % 10 + " KG.");
         return new ItemDescription(name(item, viewer, party), List.copyOf(lines));
@@ -112,6 +115,46 @@ public record ItemDescription(String name, List<String> lines) {
             }
         }
         return sb.append(')').toString();
+    }
+
+    /**
+     * Not in DM: a weapon's G238 strength (what F312 adds to its wielder's
+     * blows and throws, so only shown when it has a melee or throw action)
+     * and its G237 actions, one per row, each marked with the skill level
+     * {@code viewer} still needs as "n+" (F383's minimum) and, when it uses a charge,
+     * how many the weapon has left.
+     */
+    private static void addWeapon(List<String> lines, Item item, Champion viewer) {
+        int set = ItemCatalog.actionSet(item);
+        List<Integer> actions = new ArrayList<>();
+        for (int i = 0; i < 3 && set != 0; i++) {
+            actions.add(Actions.setAction(set, i));
+        }
+        int strength = ItemCatalog.weaponStrength(item);
+        if (strength > 0 && actions.stream().anyMatch(a -> a == Actions.THROW || Combat.isMelee(a))) {
+            add(lines, "DAMAGE RATING " + strength + ".");
+        }
+        for (int i = 0; i < actions.size(); i++) {
+            int action = actions.get(i);
+            if (action == Actions.NONE) {
+                continue;
+            }
+            String entry = Actions.name(action);
+            if (i > 0) {
+                int property = Actions.setProperty(set, i);
+                int level = property & 0x7F;
+                if (viewer != null && viewer.skillLevel(Actions.skill(action)) < level) {
+                    entry += " " + level + "+";
+                }
+                if ((property & 0x80) != 0) {
+                    entry += " (" + Combat.charges(item) + ")"; // the item's charges, which every such action uses
+                }
+                if (entry.length() > LINE_LENGTH) {
+                    entry = entry.replace(" (", "("); // SPELLSHIELD 2+(15) rather than a row of its own
+                }
+            }
+            add(lines, entry);
+        }
     }
 
     /** F335: each line goes on as many rows as it needs, split at a space. */

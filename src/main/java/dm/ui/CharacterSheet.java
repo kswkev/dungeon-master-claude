@@ -558,10 +558,14 @@ public final class CharacterSheet {
         }
         drawIcon(g, item, DESCRIPTION_ICON.x, DESCRIPTION_ICON.y);
         printPanelText(g, description.name(), DESCRIPTION_NAME.x, DESCRIPTION_NAME.y);
-        int y = DESCRIPTION_LINES.y;
+        // DM's descriptions take at most 6 rows; a weapon's actions can make 7 (not in DM): closer rows,
+        // starting 2 higher so the last clears the panel's border.
+        boolean seven = description.lines().size() > 6;
+        int y = DESCRIPTION_LINES.y - (seven ? 2 : 0);
+        int spacing = seven ? DmFont.HEIGHT : DESCRIPTION_LINE;
         for (String line : description.lines()) {
             printPanelText(g, line, DESCRIPTION_LINES.x, y);
-            y += DESCRIPTION_LINE;
+            y += spacing;
         }
     }
 
