@@ -180,6 +180,13 @@ Spells came in Sprint 19; the magic in items' action menus (a staff's fireball a
 - **Picking up and dropping** reach the row of the square ahead too: click an item lying there to pick it up, or the floor just beyond your own square to drop it there. As in the original, nothing is thrown at a wall straight ahead.
 - **Not in the original:** scrolls show the rune symbols of the spells they name; armour descriptions show their defense (and what is left of it against sharp blows); weapon descriptions show their damage rating and actions, with the skill level still needed and the charges left.
 
+**Sprint 24: done.** More improvements:
+- **Skill progress (not in the original):** holding the eye lists all four skills (fighter, ninja, priest and wizard), including ones not yet learnt. Under each is a green bar that fills toward the next level.
+- **The map (not in the original):** click the scroll under the formation box to open a map of everything the party has seen: walls, doors, pits, teleporters and stairs, with the party as a green arrow pointing the way it faces. The arrows page through the floors you've been on. The game pauses while the map is open; click anywhere else or press Esc to close it.
+- **Spell lists (not in the original):** the blue and gold scrolls beside the map list the wizard and priest spells your party has cast successfully, with their runes, the runes' names and the spell's name. Spells not yet cast show as ??? rows, so you can see how many are left to find.
+- **Magic items work as in the original:** the Crown of Nerra, Dexhelm, Powertowers, Flamebain, Cloak of Night, Jewel Symal and Moonstone raise their statistic while worn; staffs, wands and some blades add mana in the action hand; the Rabbit's Foot brings luck; and cursed things bring bad luck.
+- **Better descriptions (not in the original):** food and water show what they give, and worn or held items say what they do and where, e.g. "WORN ON HEAD: WISDOM +10".
+
 ## Requirements
 
 - JDK 17 or newer

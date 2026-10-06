@@ -27,6 +27,23 @@ class ChampionTest {
     }
 
     @Test
+    void levelProgressIsThePercentOfTheWayToTheNextLevel() {
+        Champion c = Champion.parse(ELIJA, 0);
+        c.reincarnate("ELIJA", "", new java.util.Random(1)); // no experience
+        assertEquals(0, c.levelProgress(Champion.FIGHTER));
+        long[] steps = {250, 250, 250, 249, 1, (500L << 14) - 1000};
+        int[] expected = {50, 0, 50, 99, 0, 100};
+        int[] levels = {1, 2, 2, 2, 3, 16};
+        for (int i = 0; i < steps.length; i++) {
+            c.addExperience(Champion.FIGHTER, steps[i]);
+            assertEquals(levels[i], c.lastingSkillLevel(Champion.FIGHTER));
+            assertEquals(expected[i], c.levelProgress(Champion.FIGHTER), "after " + steps[i]);
+        }
+        c.addTemporaryExperience(Champion.PRIEST, 250);
+        assertEquals(0, c.levelProgress(Champion.PRIEST), "temporary experience doesn't count");
+    }
+
+    @Test
     void movementTicksFollowTheLoad() {
         Champion c = Champion.parse(ELIJA, 0);
         int max = c.maxLoad();

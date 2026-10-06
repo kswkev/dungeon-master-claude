@@ -574,11 +574,12 @@ class GameScreenTest {
         assertEquals(0, bumps);
     }
 
-    private void render() {
+    private BufferedImage render() {
         BufferedImage img = new BufferedImage(GameScreen.WIDTH, GameScreen.HEIGHT, BufferedImage.TYPE_INT_RGB);
         Graphics2D g = img.createGraphics();
         screen.render(g);
         g.dispose();
+        return img;
     }
 
     private void clickPortrait() {
@@ -919,7 +920,17 @@ class GameScreenTest {
         assertFalse(screen.sheet().pressingEye());
         screen.press(EYE.x, EYE.y);
         assertTrue(screen.sheet().pressingEye());
-        render();
+        BufferedImage img = render();
+        // Every skill row has its progress bar (not in DM): green up to the progress, black after.
+        Champion elija = screen.party().members().get(0);
+        for (int s = 0; s < Champion.BASE_SKILLS.size(); s++) {
+            int y = VIEW.y + 58 + 7 * s + 2;
+            int filled = CharacterSheet.BAR_WIDTH * elija.levelProgress(s) / 100;
+            assertEquals(Art.PALETTE[0].getRGB(), img.getRGB(VIEW.x + 107 + CharacterSheet.BAR_WIDTH - 1, y), "track " + s);
+            if (filled > 0) {
+                assertEquals(Art.PALETTE[7].getRGB(), img.getRGB(VIEW.x + 107, y), "fill " + s);
+            }
+        }
         screen.release();
         assertFalse(screen.sheet().pressingEye());
     }

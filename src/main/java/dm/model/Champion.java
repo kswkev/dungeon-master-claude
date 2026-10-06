@@ -156,11 +156,37 @@ public final class Champion implements Serializable {
 
     /** F303 without the item modifiers, and with or without temporary experience. */
     int baseLevel(int skill, boolean temporary) {
+        return levelOf(levelExperience(skill, temporary));
+    }
+
+    /**
+     * How far the lasting experience (as {@link #lastingSkillLevel}) has come
+     * from the current level toward the next, 0-99; 100 from level 16 on.
+     * Not in DM.
+     */
+    public int levelProgress(int skill) {
+        long exp = levelExperience(skill, false);
+        int level = levelOf(exp);
+        if (level >= 16) {
+            return 100;
+        }
+        long low = level == 1 ? 0 : 500L << (level - 2);
+        long high = 500L << (level - 1);
+        return (int) ((exp - low) * 100 / (high - low));
+    }
+
+    /** The experience F303 counts: a hidden skill averages its own and its base skill's. */
+    private long levelExperience(int skill, boolean temporary) {
         long exp = experience[skill] + (temporary ? temporaryExperience[skill] : 0);
         if (skill >= BASE_SKILLS.size()) {
             int base = (skill - BASE_SKILLS.size()) / 4;
             exp = (exp + experience[base] + (temporary ? temporaryExperience[base] : 0)) / 2;
         }
+        return exp;
+    }
+
+    /** F303: level 1 under 500, then one more for each doubling. */
+    private static int levelOf(long exp) {
         int level = 1;
         while (exp >= 500) {
             exp >>= 1;
@@ -340,11 +366,12 @@ public final class Champion implements Serializable {
     void refresh() {
         health = Math.max(health, maxHealth);
         stamina = Math.max(stamina, maxStamina);
-        mana = Math.max(mana, maxMana);
+        mana = Math.max(mana, maxMana());
     }
 
+    /** Sets a statistic as {@link #stat} reads it, items' bonuses included. */
     void setStat(Stat s, int value) {
-        stats[s.ordinal()] = value;
+        stats[s.ordinal()] = value - itemBonus(s);
     }
 
     /** The skill numbers, for {@link #skillLevel}: 4 base skills, then 4 hidden ones under each. */
@@ -418,7 +445,7 @@ public final class Champion implements Serializable {
             }
             delta++;
         }
-        stats[s.ordinal()] = current + Math.min(delta, 170 - current);
+        setStat(s, current + Math.min(delta, 170 - current));
     }
 
     public String name() {
@@ -466,16 +493,30 @@ public final class Champion implements Serializable {
         return mana;
     }
 
+    /** The maximum mana, with what staffs and the like add while held (F299). */
     public int maxMana() {
-        return maxMana;
+        return maxMana + itemBonus(null);
     }
 
+    /** A statistic, with what the items carried add or take away (F299). */
     public int stat(Stat s) {
-        return stats[s.ordinal()];
+        return stats[s.ordinal()] + itemBonus(s);
     }
 
     public int maxStat(Stat s) {
-        return maxStats[s.ordinal()];
+        return maxStats[s.ordinal()] + itemBonus(s);
+    }
+
+    /** DM's F299 bonuses of everything carried to statistic {@code s}, or to maximum mana for null. */
+    int itemBonus(Stat s) {
+        int bonus = 0;
+        for (Map.Entry<Slot, Item> e : items.entrySet()) {
+            ItemEffects.Bonus b = ItemEffects.of(e.getKey(), e.getValue());
+            if (b != null && b.stat() == s) {
+                bonus += b.amount();
+            }
+        }
+        return bonus;
     }
 
     public Map<Slot, Item> items() {
@@ -778,8 +819,9 @@ public final class Champion implements Serializable {
         }
         int luck = stat(Stat.LUCK);
         boolean lucky = luck > 0 && random.nextInt(luck) > percentage;
-        stats[Stat.LUCK.ordinal()] = Math.max(minStat(Stat.LUCK), Math.min(luck + (lucky ? -2 : 2),
-                maxStat(Stat.LUCK)));
+        // F299 moves the minimum with the maximum (a Rabbit's Foot, cursed things).
+        setStat(Stat.LUCK, Math.max(minStat(Stat.LUCK) + itemBonus(Stat.LUCK), Math.min(luck + (lucky ? -2 : 2),
+                maxStat(Stat.LUCK))));
         return lucky;
     }
 

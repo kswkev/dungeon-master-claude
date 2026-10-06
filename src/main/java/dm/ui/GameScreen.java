@@ -137,8 +137,8 @@ public final class GameScreen {
      * menu is open: as in DM, a dialog pauses the game.
      */
     public boolean tick() {
-        if (menu.isOpen()) {
-            return false;
+        if (menu.isOpen() || overlayOpen()) {
+            return false; // the map pauses the game too (not in DM)
         }
         if (party.endgame() != null) {
             return endgameTick();
@@ -216,6 +216,30 @@ public final class GameScreen {
 
     /** DM's message area along the bottom of the screen. */
     private final MessageArea messages = new MessageArea();
+
+    /** The map of what the party has seen (not in DM). */
+    private final AutoMap automap = new AutoMap();
+
+    AutoMap automap() {
+        return automap;
+    }
+
+    /** The wizard's and the priest's lists of the spells cast (not in DM). */
+    private final SpellBook spellBook = new SpellBook();
+
+    SpellBook spellBook() {
+        return spellBook;
+    }
+
+    /** Whether the map or a spell list covers the view: the game is paused, as under the menu. */
+    private boolean overlayOpen() {
+        return automap.isOpen() || spellBook.isOpen();
+    }
+
+    private void closeOverlays() {
+        automap.close();
+        spellBook.close();
+    }
 
     /** Moves the party's new messages (level gains and the like) into the message area. Returns whether there were any. */
     private boolean takeMessages() {
@@ -318,6 +342,19 @@ public final class GameScreen {
             clickMenu(menu.click(x, y));
             return;
         }
+        if (automap.isOpen()) {
+            automap.click(party, x, y);
+            return;
+        }
+        if (spellBook.isOpen()) {
+            int button = SpellBook.buttonAt(x, y);
+            if (button != 0 && (button == 1) != spellBook.wizard()) {
+                spellBook.open(button == 1); // the other school's scroll switches lists
+            } else {
+                spellBook.close();
+            }
+            return;
+        }
         if (inputBlocked()) {
             return;
         }
@@ -326,6 +363,20 @@ public final class GameScreen {
             if (x < 224 && y >= 33 && y <= 168) {
                 party.wakeUp();
             }
+            return;
+        }
+        if (AutoMap.BUTTON.contains(x, y)) {
+            party.explore();
+            arrows.setPressed(null);
+            sheet.setPressingEye(false);
+            automap.open(party);
+            return;
+        }
+        int spellButton = SpellBook.buttonAt(x, y);
+        if (spellButton != 0) {
+            arrows.setPressed(null);
+            sheet.setPressingEye(false);
+            spellBook.open(spellButton == 1);
             return;
         }
         if (clickHand(x, y)) {
@@ -399,6 +450,10 @@ public final class GameScreen {
     public void rightPress(int x, int y) {
         pointer = new Point(x, y);
         if (menu.isOpen() || inputBlocked()) {
+            return;
+        }
+        if (overlayOpen()) {
+            closeOverlays();
             return;
         }
         if (party.sleeping()) {
@@ -573,6 +628,7 @@ public final class GameScreen {
     void restore(Party loaded) {
         party = loaded;
         sheet.close();
+        closeOverlays();
         gameOver = false;
         bumped = false;
         bars.clearDamage();
@@ -600,6 +656,8 @@ public final class GameScreen {
         }
         if (menu.isOpen()) {
             menu.close();
+        } else if (overlayOpen()) {
+            closeOverlays();
         } else {
             arrows.setPressed(null);
             sheet.setPressingEye(false);
@@ -803,7 +861,8 @@ public final class GameScreen {
      * the game is over, like the arrows.
      */
     public void key(MovementPanel.Action action) {
-        if (action == null || inputBlocked() || sheet.isOpen() || menu.isOpen() || party.sleeping()) {
+        if (action == null || inputBlocked() || sheet.isOpen() || menu.isOpen() || overlayOpen()
+                || party.sleeping()) {
             return;
         }
         arrows.setPressed(action);
@@ -812,7 +871,7 @@ public final class GameScreen {
 
     /** Whether keys are typing a reincarnated champion's name rather than moving. */
     public boolean typing() {
-        return sheet.renaming() && !menu.isOpen();
+        return sheet.renaming() && !menu.isOpen() && !overlayOpen();
     }
 
     /** A character typed on the rename panel: letters, , . ; : space, Enter and Backspace. */
@@ -824,7 +883,7 @@ public final class GameScreen {
 
     /** Return: wakes a sleeping party (DM's G460); otherwise casts the caster's spell (not in DM). */
     public void pressReturn() {
-        if (menu.isOpen() || inputBlocked()) {
+        if (menu.isOpen() || overlayOpen() || inputBlocked()) {
             return;
         }
         if (party.sleeping()) {
@@ -850,7 +909,7 @@ public final class GameScreen {
 
     /** Whether the spell area takes input: not asleep, not over, no menu, and no mirror candidate shown (DM's F0377). */
     private boolean spellsUsable() {
-        return !menu.isOpen() && !inputBlocked() && !party.sleeping() && sheet.candidate() == null
+        return !menu.isOpen() && !overlayOpen() && !inputBlocked() && !party.sleeping() && sheet.candidate() == null
                 && party.magicCaster() >= 0;
     }
 
@@ -1168,9 +1227,15 @@ public final class GameScreen {
         bars.draw(g, party.members(), sheet.champion(), viewed == null ? null : viewed.champion(),
                 clock.getAsLong(), shields);
         formation.draw(g, party);
+        automap.drawButton(g, art);
+        spellBook.drawButtons(g, art);
         if (menu.isOpen()) {
             menu.draw(g, saves::header,
                     new GameMenu.Settings(party.difficulty(), party.godMode(), party.deepSleep(), party.lockMaster()));
+        } else if (automap.isOpen()) {
+            automap.draw(g, party, art);
+        } else if (spellBook.isOpen()) {
+            spellBook.draw(g, party, art);
         } else if (sheet.isOpen()) {
             sheet.draw(g, party);
         } else if (party.sleeping()) {

@@ -132,6 +132,31 @@ public final class Spells {
             new Spell(0x006B6C00, 2, 19, 0x7831), // ZO VEN: poison potion
             new Spell(0x006B6E76, 0, 3, 0x3C73)); // ZO KATH RA: Zokathra
 
+    /** The spells' names, in {@link #TABLE}'s order (not in DM, which never names them). */
+    private static final List<String> TITLES = List.of(
+            "PARTY SHIELD", "MAGIC FOOTPRINTS", "INVISIBILITY", "POISON CLOUD", "THIEVES EYE",
+            "LIGHTNING BOLT", "LIGHT", "MAGIC TORCH", "FIREBALL", "STRENGTH POTION", "FIRE SHIELD",
+            "HARM NON-MATERIAL", "POISON BOLT", "DARKNESS", "OPEN DOOR", "SHIELD POTION", "STAMINA POTION",
+            "WISDOM POTION", "VITALITY POTION", "HEALTH POTION", "CURE POISON POTION", "DEXTERITY POTION",
+            "MANA POTION", "POISON POTION", "ZOKATHRA");
+
+    /** Every spell, in G0487's order. */
+    public static List<Spell> table() {
+        return TABLE;
+    }
+
+    /** A spell's name, e.g. FIREBALL. */
+    public static String title(Spell spell) {
+        return TITLES.get(TABLE.indexOf(spell));
+    }
+
+    /** Whether the spell is a wizard's (its skill is wizard or one of its hidden skills) rather than a priest's. */
+    public static boolean isWizard(Spell spell) {
+        int skill = spell.skill();
+        int base = skill > Champion.WIZARD ? (skill - 4) / 4 : skill;
+        return base == Champion.WIZARD;
+    }
+
     /**
      * F0409: the spell {@code symbols} (a power then up to three more) make,
      * or null: a power alone, or symbols that make no spell.

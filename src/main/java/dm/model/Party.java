@@ -4,6 +4,7 @@ import java.io.Serializable;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Random;
@@ -602,6 +603,7 @@ public final class Party implements Serializable {
             c.face(Direction.fromIndex(c.facing().ordinal() + delta));
         }
         facing = d;
+        explore();
     }
 
     public void turnLeft() {
@@ -670,7 +672,58 @@ public final class Party implements Serializable {
             }
         }
         projectileTicks = 0;
+        explore();
         return result;
+    }
+
+    /** The spells the party has cast (not in DM), by their symbols after the power; null in older saves. */
+    private HashSet<String> castSpells;
+
+    /** Whether any champion has cast {@code spell} successfully. */
+    public boolean hasCast(Spells.Spell spell) {
+        return castSpells != null && castSpells.contains(spell.symbolString());
+    }
+
+    void spellCast(Spells.Spell spell) {
+        if (castSpells == null) {
+            castSpells = new HashSet<>();
+        }
+        castSpells.add(spell.symbolString());
+    }
+
+    /**
+     * Marks what the view shows as seen, for the map (not in DM). The
+     * party's column is looked down up to 3 squares ahead, stopping at the
+     * first square that blocks the view ({@link DungeonMap#blocksView}); the
+     * squares either side of each open square in it are seen too. The
+     * columns beside the party are looked down the same way, but no deeper
+     * than the middle column reaches, since a wall ahead hides what is
+     * beyond it on either side.
+     */
+    public void explore() {
+        Direction right = facing.turnRight();
+        int reach = 3;
+        for (int d = 0; d <= 3; d++) {
+            int sx = x + d * facing.dx;
+            int sy = y + d * facing.dy;
+            map.markSeen(sx, sy);
+            if (d > 0 && map.blocksView(sx, sy)) {
+                reach = d;
+                break;
+            }
+            map.markSeen(sx + right.dx, sy + right.dy);
+            map.markSeen(sx - right.dx, sy - right.dy);
+        }
+        for (int side = -1; side <= 1; side += 2) {
+            for (int d = 0; d <= reach; d++) {
+                int sx = x + side * right.dx + d * facing.dx;
+                int sy = y + side * right.dy + d * facing.dy;
+                map.markSeen(sx, sy);
+                if (map.blocksView(sx, sy)) {
+                    break;
+                }
+            }
+        }
     }
 
     /**
@@ -1204,6 +1257,7 @@ public final class Party implements Serializable {
      */
     public Tick tick() {
         time++;
+        explore(); // doors open, and teleporters and pits move the party between steps
         if (movementTicks > 0) {
             movementTicks--;
         }

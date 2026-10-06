@@ -147,6 +147,10 @@ public final class Upkeep {
      * or an empty flask after a potion. Returns {@code item} itself, untouched,
      * if it can't go in the mouth (or is an empty waterskin).
      */
+    /** The water a waterskin's draught and a water flask give (F349). */
+    static final int WATERSKIN_DRAUGHT = 800;
+    static final int WATER_FLASK = 1600;
+
     public static Item consume(Champion c, Item item) {
         return consume(c, item, new Random());
     }
@@ -161,7 +165,7 @@ public final class Upkeep {
             if (item.charges() == 0) {
                 return item;
             }
-            c.setWater(c.water() + 800);
+            c.setWater(c.water() + WATERSKIN_DRAUGHT);
             left = item.withCharges(item.charges() - 1);
         } else if (item.category() == Item.Category.POTION) {
             drinkPotion(c, item, random);
@@ -231,7 +235,7 @@ public final class Upkeep {
                 }
                 c.setMana(mana);
             }
-            case ItemCatalog.WATER_FLASK -> c.setWater(c.water() + 1600);
+            case ItemCatalog.WATER_FLASK -> c.setWater(c.water() + WATER_FLASK);
             default -> { }
         }
     }

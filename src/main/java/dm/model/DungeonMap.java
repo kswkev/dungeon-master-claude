@@ -78,6 +78,8 @@ public final class DungeonMap implements Serializable {
     private int offsetY;
     private final List<Projectile> projectiles = new ArrayList<>();
     private Decorations decorations;
+    /** The squares the party has seen, for the map (not in DM); null until one is (and in older saves). */
+    private boolean[][] seen;
 
     public DungeonMap(int level, Square[][] squares) {
         this(level, squares, List.of());
@@ -149,6 +151,46 @@ public final class DungeonMap implements Serializable {
 
     public Square get(int x, int y) {
         return inBounds(x, y) ? squares[x][y] : Square.SOLID;
+    }
+
+    // ---- the map (not in DM) -----------------------------------------------
+
+    /** Marks (x, y) as seen by the party; squares off the map are ignored. */
+    public void markSeen(int x, int y) {
+        if (!inBounds(x, y)) {
+            return;
+        }
+        if (seen == null) {
+            seen = new boolean[width][height];
+        }
+        seen[x][y] = true;
+    }
+
+    /** Whether the party has seen (x, y). */
+    public boolean seen(int x, int y) {
+        return seen != null && inBounds(x, y) && seen[x][y];
+    }
+
+    /** Whether the party has seen any square of this map. */
+    public boolean explored() {
+        return seen != null;
+    }
+
+    /**
+     * Whether the view stops at (x, y): walls and fake walls (drawn as
+     * walls), and doors 3/4 or fully closed unless their design is
+     * see-through, as for creatures (F197).
+     */
+    public boolean blocksView(int x, int y) {
+        Square sq = get(x, y);
+        if (sq.looksSolid()) {
+            return true;
+        }
+        if (sq.type() != SquareType.DOOR) {
+            return false;
+        }
+        int state = doorState(x, y);
+        return (state == 3 || state == DOOR_CLOSED) && CreatureAI.DOOR_SEE_THROUGH[doorStyle(x, y)] == 0;
     }
 
     /** Walls block; doors block unless fully open or broken; everything else is walkable. */
