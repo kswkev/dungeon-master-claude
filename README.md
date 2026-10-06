@@ -187,6 +187,16 @@ Spells came in Sprint 19; the magic in items' action menus (a staff's fireball a
 - **Magic items work as in the original:** the Crown of Nerra, Dexhelm, Powertowers, Flamebain, Cloak of Night, Jewel Symal and Moonstone raise their statistic while worn; staffs, wands and some blades add mana in the action hand; the Rabbit's Foot brings luck; and cursed things bring bad luck.
 - **Better descriptions (not in the original):** food and water show what they give, and worn or held items say what they do and where, e.g. "WORN ON HEAD: WISDOM +10".
 
+**Sprint 25: done.** The last of the original's sensors, ported from ReDMCSB:
+- **Timing:** switches, plates and the like now act after the delay the dungeon gives them, as in the original. Some doors and pits react a moment later than before.
+- **Countdowns:** some mechanisms count presses and only act on the last.
+- **Launchers:** walls shoot fireballs, lightning, poison clouds and darts, as on Levels 8, 9 and 11.
+- **Plates for things:** a plate that reacts to one particular object on it, and floors that react to what the party carries (the Firestaff, for one).
+- **Restart:** five seconds after THE END, RESTART THIS GAME loads your newest save, and NEW GAME goes back to the entrance.
+- **The entrance:** the game opens at the dungeon's doors, as the original does. ENTER opens them with their rattle and the game begins, RESUME loads a saved game, and QUIT quits. The testing options (`-Ddm.start` and so on) skip it.
+- **Entrance music:** with the PC version's `SONG.DAT` in `data/`, its music loops at the entrance and fades as the doors open.
+- **Knocking on walls (not in the original):** clicking the wall ahead with an empty hand thumps. An illusionary wall makes no sound, so you can tell the two apart.
+
 ## Requirements
 
 - JDK 17 or newer
@@ -200,11 +210,13 @@ The original game data is copyrighted and is **not** included. Copy your own fil
 ```
 data/DUNGEON.DAT
 data/GRAPHICS.DAT
+data/SONG.DAT      (optional: the entrance music)
 ```
 
 - For DUNGEON.DAT, the Atari ST, Amiga and PC versions should all work. The loader works out compression and byte order by itself. So far only a PC (uncompressed) file has been tested.
 - GRAPHICS.DAT must be the PC version. Without it the game still runs, using simple placeholder art.
-- Both files are git-ignored.
+- SONG.DAT is the PC version's music file. Without it the entrance is silent.
+- All of these files are git-ignored.
 
 ## Build and run
 

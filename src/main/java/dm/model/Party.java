@@ -79,6 +79,7 @@ public final class Party implements Serializable {
     /** A party on {@code maps.get(mapIndex)}, able to take stairs to the other maps. */
     public Party(List<DungeonMap> maps, int mapIndex, int x, int y, Direction facing) {
         this.dungeon = new Dungeon(maps);
+        dungeon.setParty(this);
         this.map = maps.get(mapIndex);
         this.x = x;
         this.y = y;
@@ -676,6 +677,29 @@ public final class Party implements Serializable {
         return result;
     }
 
+    /**
+     * DM's F274: whether a living champion carries an object of inventory
+     * icon {@code icon} in any slot (or in a chest there), or it is on the
+     * pointer.
+     */
+    boolean possesses(int icon) {
+        List<Item> carried = new ArrayList<>();
+        for (Champion c : members) {
+            if (c.health() > 0) {
+                carried.addAll(c.items().values());
+            }
+        }
+        if (held != null) {
+            carried.add(held);
+        }
+        for (Item item : carried) {
+            if (dungeon.iconOf(item) == icon || item.contents().stream().anyMatch(i -> dungeon.iconOf(i) == icon)) {
+                return true;
+            }
+        }
+        return false;
+    }
+
     /** The spells the party has cast (not in DM), by their symbols after the power; null in older saves. */
     private HashSet<String> castSpells;
 
@@ -1257,6 +1281,7 @@ public final class Party implements Serializable {
      */
     public Tick tick() {
         time++;
+        dungeon.setParty(this); // games saved before Sprint 25 don't have it
         explore(); // doors open, and teleporters and pits move the party between steps
         if (movementTicks > 0) {
             movementTicks--;
@@ -1268,10 +1293,12 @@ public final class Party implements Serializable {
             freezeLifeTicks--;
         }
         boolean burnt = time % Light.BURN_PERIOD == 0 && burnTorches();
+        boolean sensed = false;
         for (DungeonMap m : dungeon.maps()) {
             m.reenableGenerators(time);
+            sensed |= m.runSensorEvents(time); // sensor effects that took their delay to arrive (F272)
         }
-        boolean spells = tickPartySpells() | tickRebirths();
+        boolean spells = sensed | tickPartySpells() | tickRebirths();
         boolean smoked = Flight.tickExplosions(this);
         boolean landed = Flight.tick(this);
         boolean enabled = enableActions();

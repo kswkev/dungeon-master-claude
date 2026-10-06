@@ -33,9 +33,24 @@ public final class GameWindow extends JFrame {
             new BufferedImage(16, 16, BufferedImage.TYPE_INT_ARGB), new Point(0, 0), "blank");
 
     public GameWindow(Party party, Art art, SoundPlayer sounds, boolean debug) {
+        this(party, art, sounds, debug, null, false, null);
+    }
+
+    /**
+     * @param newGame  a fresh game for THE END's NEW GAME button, or null for none
+     * @param entrance whether the game starts at DM's entrance
+     * @param song     the entrance's music (SONG.DAT), or null for none
+     */
+    public GameWindow(Party party, Art art, SoundPlayer sounds, boolean debug,
+                      java.util.function.Supplier<Party> newGame, boolean entrance, dm.data.Sound song) {
         super(title(party));
         setDefaultCloseOperation(EXIT_ON_CLOSE);
         GameScreen game = new GameScreen(party, art, sounds, debug);
+        game.setNewGame(newGame);
+        game.setMusic(MusicPlayer.javaSound(), song);
+        if (entrance) {
+            game.showEntrance();
+        }
         game.setOnQuit(() -> {
             dispose();
             System.exit(0);
@@ -84,6 +99,13 @@ public final class GameWindow extends JFrame {
                 }
             });
             tickTimer.start();
+            // The entrance doors open faster than the game ticks (F438's steps).
+            Timer animationTimer = new Timer((int) Entrance.STEP_MS, e -> {
+                if (game.animate()) {
+                    repaint();
+                }
+            });
+            animationTimer.start();
 
             MouseAdapter mouse = new MouseAdapter() {
                 @Override

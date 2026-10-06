@@ -105,6 +105,83 @@ public final class GameScreen {
         this.clickSound = art.sound(GraphicsFile.SOUND_CLICK);
         this.screamSound = art.sound(GraphicsFile.SOUND_SCREAM);
         this.swallowSound = art.sound(GraphicsFile.SOUND_SWALLOW);
+        party.dungeon().setIconOf(art::iconIndex);
+    }
+
+    /** DM's entrance, shown before the game begins (F441); null once the doors have opened. */
+    private Entrance entrance;
+    /** The door steps whose rattle has played while the entrance opens. */
+    private int rattled;
+
+    /** The entrance's music (SONG.DAT, the PC version's) and what plays it; none without the file. */
+    private MusicPlayer music = MusicPlayer.silent();
+    private Sound song;
+
+    public void setMusic(MusicPlayer music, Sound song) {
+        this.music = music;
+        this.song = song;
+    }
+
+    /**
+     * Shows the entrance: the game waits behind its doors, the music
+     * looping, until ENTER (or RESUME loads a game).
+     */
+    public void showEntrance() {
+        entrance = new Entrance(art);
+        rattled = 0;
+        music.loop(song);
+    }
+
+    Entrance entrance() {
+        return entrance;
+    }
+
+    /**
+     * Advances the entrance doors (the window calls this every {@link Entrance#STEP_MS}):
+     * a rattle every third step, as F438 plays; once open the game begins.
+     * Returns whether to repaint.
+     */
+    public boolean animate() {
+        if (entrance == null || !entrance.opening()) {
+            return false;
+        }
+        long now = clock.getAsLong();
+        int step = Math.min(entrance.step(now), Entrance.STEPS);
+        while (rattled < step) {
+            rattled++;
+            if (rattled % 3 == 1) {
+                sounds.play(doorSound);
+            }
+        }
+        if (entrance.done(now)) {
+            entrance = null;
+        }
+        return true;
+    }
+
+    /** A click on the waiting entrance: ENTER opens the doors, RESUME offers the saved games, QUIT quits. */
+    private void clickEntrance(int x, int y) {
+        switch (entrance.click(x, y)) {
+            case ENTER -> {
+                sounds.play(clickSound); // F441's switch sound before the doors open
+                entrance.open(clock.getAsLong());
+                rattled = 0;
+                music.fadeOut(Entrance.STEPS * Entrance.STEP_MS); // the music fades as the doors open
+            }
+            case RESUME -> {
+                menu.open();
+                menu.showSlots(false);
+            }
+            case QUIT -> quit();
+            case NONE -> { }
+        }
+    }
+
+    /** Starts a new game from the beginning, for THE END's NEW GAME (not in DM); null hides the button. */
+    private java.util.function.Supplier<Party> newGame;
+
+    public void setNewGame(java.util.function.Supplier<Party> newGame) {
+        this.newGame = newGame;
     }
 
     public FormationBox formation() {
@@ -137,8 +214,14 @@ public final class GameScreen {
      * menu is open: as in DM, a dialog pauses the game.
      */
     public boolean tick() {
-        if (menu.isOpen() || overlayOpen()) {
+        if (menu.isOpen() || overlayOpen() || entrance != null) {
             return false; // the map pauses the game too (not in DM)
+        }
+        if (gameOver) { // DM's F444 stops the game; the restart buttons appear a little later
+            boolean shown = restartShown();
+            boolean changed = shown != restartDrawn;
+            restartDrawn = shown;
+            return changed;
         }
         if (party.endgame() != null) {
             return endgameTick();
@@ -342,8 +425,16 @@ public final class GameScreen {
             clickMenu(menu.click(x, y));
             return;
         }
+        if (entrance != null) {
+            clickEntrance(x, y);
+            return;
+        }
         if (automap.isOpen()) {
             automap.click(party, x, y);
+            return;
+        }
+        if (gameOver) {
+            clickTheEnd(x, y);
             return;
         }
         if (spellBook.isOpen()) {
@@ -627,6 +718,11 @@ public final class GameScreen {
     /** Swaps in a loaded game and clears what the screen remembered of the old one. */
     void restore(Party loaded) {
         party = loaded;
+        party.dungeon().setIconOf(art::iconIndex);
+        gameOverAt = -1;
+        restartDrawn = false;
+        entrance = null; // RESUME's load goes straight into the game
+        music.stop();
         sheet.close();
         closeOverlays();
         gameOver = false;
@@ -639,6 +735,7 @@ public final class GameScreen {
 
     private void quit() {
         menu.close();
+        music.stop();
         if (debug) {
             System.out.println("Quit");
         }
@@ -653,6 +750,10 @@ public final class GameScreen {
     public void escape() {
         if (party.endgame() != null && !gameWon()) {
             return; // the fuse sequence plays out first
+        }
+        if (entrance != null) { // the entrance has its own choices; Esc only leaves RESUME's slots
+            menu.close();
+            return;
         }
         if (menu.isOpen()) {
             menu.close();
@@ -774,6 +875,10 @@ public final class GameScreen {
                     return;
                 }
             }
+            // Not in DM: knocking on the wall ahead thumps; an illusionary (fake) wall makes no sound.
+            if (map.get(aheadX, aheadY).type() == SquareType.WALL && WALL_FACE.contains(x, y)) {
+                sounds.play(dmSound(WOODEN_THUD)); // the thud, GRAPHICS.DAT 674
+            }
             return;
         }
         Square ahead = map.get(aheadX, aheadY);
@@ -794,6 +899,9 @@ public final class GameScreen {
             }
         }
     }
+
+    /** The front face of the wall straight ahead (the D1 wall zone, 160×111 at viewport (32,9)), in screen coordinates. */
+    static final Rectangle WALL_FACE = new Rectangle(ViewRenderer.VIEWPORT.x + 32, ViewRenderer.VIEWPORT.y + 9, 160, 111);
 
     /** F0373: the top object of view cell {@code viewCell}'s pile into the hand. */
     private void grab(int viewCell, int aheadX, int aheadY) {
@@ -1067,7 +1175,7 @@ public final class GameScreen {
 
     /** The game takes no input once it is over, and none during the fuse sequence (DM's F446 clears the inputs). */
     private boolean inputBlocked() {
-        return gameOver || party.endgame() != null;
+        return gameOver || party.endgame() != null || entrance != null;
     }
 
     /**
@@ -1106,6 +1214,7 @@ public final class GameScreen {
         }
         if (party.allDead()) {
             gameOver = true;
+            gameOverAt = clock.getAsLong();
             sheet.close();
             party.setHeld(null);
             if (debug) {
@@ -1135,6 +1244,91 @@ public final class GameScreen {
             }
         }
         g.drawImage(tinted, 120, 95, null);
+        if (restartShown()) {
+            if (newestSave() >= 0) {
+                drawEndButton(g, RESTART_BOX, "RESTART THIS GAME", 110);
+            }
+            if (newGame != null) {
+                drawEndButton(g, NEW_GAME_BOX, "NEW GAME", 137);
+            }
+        }
+    }
+
+    /**
+     * DM's F444 restart box (G013/G014): a dark grey frame around black,
+     * shown through THE END's palette with colour 1 pink and colour 4
+     * white, so a pink frame with white lettering.
+     */
+    private void drawEndButton(Graphics2D g, Rectangle box, String text, int textX) {
+        g.setColor(END_PINK);
+        g.fillRect(box.x, box.y, box.width, box.height);
+        g.setColor(Color.BLACK);
+        g.fillRect(box.x + 2, box.y + 2, box.width - 4, box.height - 4);
+        DmFont font = art.font();
+        if (font != null) {
+            font.draw(g, text, textX, box.y + 9, Color.WHITE, Color.BLACK);
+        } else {
+            PixelFont.draw(g, text, textX, box.y + 5, Color.WHITE);
+        }
+    }
+
+    /** When the party died (the clock's milliseconds), or -1. */
+    private long gameOverAt = -1;
+    /** Whether the last frame drawn showed the restart buttons, so a tick repaints when they appear. */
+    private boolean restartDrawn;
+    /** DM waits 300 vertical blanks (5 seconds) after THE END before offering the restart. */
+    static final long RESTART_DELAY_MS = 5000;
+    /** DM's G013 outer box, x 103-217, y 145-159 (text at (110,154)); NEW GAME (not in DM) the same just below. */
+    static final Rectangle RESTART_BOX = new Rectangle(103, 145, 115, 15);
+    static final Rectangle NEW_GAME_BOX = new Rectangle(103, 163, 115, 15);
+    /** DM's ST colour 0x437 for the restart box's frame. */
+    private static final Color END_PINK = new Color(146, 109, 255);
+
+    /** Whether THE END offers its buttons: 5 seconds after the party died, with the menu closed. */
+    boolean restartShown() {
+        return gameOver && !menu.isOpen() && gameOverAt >= 0 && clock.getAsLong() >= gameOverAt + RESTART_DELAY_MS;
+    }
+
+    /** The most recently saved slot, or -1 with no save. */
+    private int newestSave() {
+        int newest = -1;
+        long when = Long.MIN_VALUE;
+        for (int slot = 1; slot <= SaveGames.SLOTS; slot++) {
+            SaveGames.Header h = saves.header(slot);
+            if (h != null && h.savedAt() > when) {
+                when = h.savedAt();
+                newest = slot;
+            }
+        }
+        return newest;
+    }
+
+    /**
+     * A click on THE END: RESTART THIS GAME loads the newest save, as DM's
+     * restart reloads its saved game; NEW GAME (not in DM) starts again from
+     * the Hall of Champions.
+     */
+    private void clickTheEnd(int x, int y) {
+        if (!restartShown()) {
+            return;
+        }
+        int slot = newestSave();
+        if (slot >= 0 && RESTART_BOX.contains(x, y)) {
+            try {
+                restore(saves.load(slot));
+            } catch (IOException e) {
+                if (debug) {
+                    System.out.println("Restart failed: " + e.getMessage());
+                }
+            }
+        } else if (newGame != null && NEW_GAME_BOX.contains(x, y)) {
+            try {
+                restore(newGame.get());
+                showEntrance(); // a new game starts at the doors
+            } catch (RuntimeException e) {
+                System.err.println(e.getMessage());
+            }
+        }
     }
 
     private static final int THE_END = 6;
@@ -1210,6 +1404,14 @@ public final class GameScreen {
     }
 
     public void render(Graphics2D g) {
+        if (entrance != null) {
+            entrance.draw(g, view, clock.getAsLong());
+            if (menu.isOpen()) {
+                menu.draw(g, saves::header,
+                        new GameMenu.Settings(party.difficulty(), party.godMode(), party.deepSleep(), party.lockMaster()));
+            }
+            return;
+        }
         if (gameOver && !menu.isOpen()) {
             drawTheEnd(g);
             return;

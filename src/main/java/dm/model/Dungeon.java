@@ -31,6 +31,31 @@ public final class Dungeon implements Serializable {
         return creatures;
     }
 
+    /** The party in this dungeon (for the clock, the random numbers and what it carries); null until it starts. */
+    private Party party;
+    /**
+     * DM's inventory icon of an item (F032), for the sensors that name one;
+     * icons come from GRAPHICS.DAT, so the UI supplies this. Not saved.
+     */
+    private transient java.util.function.ToIntFunction<Item> iconOf;
+
+    Party party() {
+        return party;
+    }
+
+    void setParty(Party party) {
+        this.party = party;
+    }
+
+    public void setIconOf(java.util.function.ToIntFunction<Item> iconOf) {
+        this.iconOf = iconOf;
+    }
+
+    /** The item's inventory icon, or -1 without one. */
+    int iconOf(Item item) {
+        return iconOf == null || item == null ? -1 : iconOf.applyAsInt(item);
+    }
+
     /** The map at {@code index} in DUNGEON.DAT's order (teleporters name maps this way), or null. */
     public DungeonMap map(int index) {
         return index >= 0 && index < maps.size() ? maps.get(index) : null;

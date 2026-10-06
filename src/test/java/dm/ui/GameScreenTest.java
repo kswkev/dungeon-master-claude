@@ -84,6 +84,35 @@ class GameScreenTest {
     }
 
     @Test
+    void anEmptyHandKnockingOnAWallThumps() {
+        recruitElija();
+        party.turnLeft(); // the plain wall at (0,1)
+        render();
+        int before = soundsPlayed;
+        Point face = new Point(GameScreen.WALL_FACE.x + 80, GameScreen.WALL_FACE.y + 50);
+        screen.press(face.x, face.y);
+        assertEquals(before + 1, soundsPlayed, "the thump");
+        assertEquals(0, bumps, "a knock isn't a bump: no flash, no damage");
+        party.setHeld(ItemCatalog.item(Item.Category.WEAPON, 8));
+        screen.press(GameScreen.PILE_BOXES[0].x + 5, GameScreen.PILE_BOXES[0].y + 5); // dropped, not knocked
+        assertEquals(before + 1, soundsPlayed);
+    }
+
+    @Test
+    void anIllusionaryWallMakesNoSound() {
+        Party p = new Party(DungeonMap.fromAscii(0, "#F#", "#.#", "###"), 1, 1, Direction.NORTH);
+        p.recruit(new ChampionMirror(0, 1, Direction.EAST, Champion.parse(ELIJA, 0)));
+        GameScreen s = new GameScreen(p, Art.none(), sound -> soundsPlayed++, false);
+        BufferedImage img = new BufferedImage(GameScreen.WIDTH, GameScreen.HEIGHT, BufferedImage.TYPE_INT_RGB);
+        Graphics2D g = img.createGraphics();
+        s.render(g);
+        g.dispose();
+        int before = soundsPlayed;
+        s.press(GameScreen.WALL_FACE.x + 80, GameScreen.WALL_FACE.y + 50);
+        assertEquals(before, soundsPlayed);
+    }
+
+    @Test
     void bumpWithNoPartyOnlyPlaysTheThud() {
         pressForward(); // the mirror wall is straight ahead
         assertEquals(1, soundsPlayed);
@@ -230,6 +259,57 @@ class GameScreenTest {
         clickMenu(GameMenu.Choice.CANCEL);
         assertFalse(screen.menu().isOpen());
         assertFalse(screen.sheet().isOpen(), "back to the dungeon, where it was opened");
+    }
+
+    private void dieOfABump() {
+        Champion elija = party.members().get(0);
+        elija.takeDamage(elija.health() - 1);
+        pressForward(); // the fatal bump
+        assertTrue(screen.gameOver());
+    }
+
+    private static Point centre(Rectangle r) {
+        return new Point(r.x + r.width / 2, r.y + r.height / 2);
+    }
+
+    @Test
+    void fiveSecondsAfterTheEndRestartLoadsTheNewestSave() {
+        screen.setSaveGames(new SaveGames(saveDir));
+        recruitElija();
+        screen.escape();
+        clickMenu(GameMenu.Choice.SAVE);
+        clickMenu(GameMenu.Choice.SLOT, 2);
+        clickMenu(GameMenu.Choice.OK);
+        dieOfABump();
+        Point restart = centre(GameScreen.RESTART_BOX);
+        screen.press(restart.x, restart.y);
+        assertTrue(screen.gameOver(), "not offered yet");
+        assertFalse(screen.tick());
+        now += GameScreen.RESTART_DELAY_MS;
+        assertTrue(screen.tick(), "a repaint as the buttons appear");
+        assertTrue(screen.restartShown());
+        render();
+        screen.press(restart.x, restart.y);
+        assertFalse(screen.gameOver(), "the saved game is back");
+        assertEquals(1, screen.party().members().size());
+        assertTrue(screen.party().members().get(0).health() > 0);
+    }
+
+    @Test
+    void newGameStartsAgainAndRestartNeedsASave() {
+        screen.setSaveGames(new SaveGames(saveDir)); // empty
+        Party fresh = new Party(DungeonMap.fromAscii(0, "###", "#.#", "###"), 1, 1, Direction.NORTH);
+        screen.setNewGame(() -> fresh);
+        recruitElija();
+        dieOfABump();
+        now += GameScreen.RESTART_DELAY_MS;
+        Point restart = centre(GameScreen.RESTART_BOX);
+        screen.press(restart.x, restart.y);
+        assertTrue(screen.gameOver(), "no save to restart from");
+        Point newGame = centre(GameScreen.NEW_GAME_BOX);
+        screen.press(newGame.x, newGame.y);
+        assertFalse(screen.gameOver());
+        assertSame(fresh, screen.party());
     }
 
     @Test

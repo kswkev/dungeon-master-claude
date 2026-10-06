@@ -23,6 +23,15 @@ public final class WallSensor implements Serializable {
     public static final int TYPE_CLICK_WITH_ITEM = 3;
     public static final int TYPE_CLICK_WITH_ITEM_USED_UP = 4;
     public static final int TYPE_AND_OR_GATE = 5;
+    /** F248's C006: counts effects down (CLEAR, TOGGLE) and up (SET); at 0 it fires. */
+    public static final int TYPE_COUNTDOWN = 6;
+    /** F247's launchers: a new object (7 single, 9 double), a spell (8, 10), or the wall's own objects (14, 15). */
+    public static final int TYPE_LAUNCHER_OBJECT = 7;
+    public static final int TYPE_LAUNCHER_SPELL = 8;
+    public static final int TYPE_LAUNCHER_OBJECT_DOUBLE = 9;
+    public static final int TYPE_LAUNCHER_SPELL_DOUBLE = 10;
+    public static final int TYPE_LAUNCHER_WALL_OBJECT = 14;
+    public static final int TYPE_LAUNCHER_WALL_OBJECT_DOUBLE = 15;
     public static final int TYPE_STORAGE_ROTATE = 13;
     /** F275's C016: swaps the held item (the one named) for the object on the wall square. */
     public static final int TYPE_OBJECT_EXCHANGER = 16;
@@ -97,11 +106,66 @@ public final class WallSensor implements Serializable {
         return gateValue == ((data >>> 4) & 15);
     }
 
+    /** Word 2 bits 7-10: the ticks its effect takes to reach its target (DM's sensor Value, F272). */
+    private int delay;
+    /** Word 3 bits 4-15 (DM's B.B.Multiple): a launcher's kinetic energy (bits 0-7) and step energy (8-11). */
+    private int multiple;
+    /** A countdown's count, from its data; null until it first counts (and in older saves). */
+    private Integer count;
+
+    public int delay() {
+        return delay;
+    }
+
+    /** Set by the loader: the delay (word 2 bits 7-10) and DM's multiple (word 3 bits 4-15). */
+    public void setTiming(int delay, int multiple) {
+        this.delay = delay;
+        this.multiple = multiple;
+    }
+
+    /** A launcher's kinetic energy: M47, the multiple's low byte (local sensors keep it as their action too). */
+    int kineticEnergy() {
+        return (multiple != 0 ? multiple : localAction) & 0xFF;
+    }
+
+    public boolean isLauncher() {
+        return type >= TYPE_LAUNCHER_OBJECT && type <= TYPE_LAUNCHER_SPELL_DOUBLE
+                || type == TYPE_LAUNCHER_WALL_OBJECT || type == TYPE_LAUNCHER_WALL_OBJECT_DOUBLE;
+    }
+
+    /** Whether the launcher fires one projectile (7, 8, 14) rather than two. */
+    boolean singleLauncher() {
+        return type == TYPE_LAUNCHER_OBJECT || type == TYPE_LAUNCHER_SPELL || type == TYPE_LAUNCHER_WALL_OBJECT;
+    }
+
+    /** A countdown's count now. */
+    int count() {
+        return count == null ? data : count;
+    }
+
+    /**
+     * F248 for a countdown: while above 0 a SET counts up (to 511) and
+     * anything else down. Returns whether it counted (it stays at 0 once there).
+     */
+    boolean countDown(FloorSensor.Effect effect) {
+        int n = count();
+        if (n == 0) {
+            return false;
+        }
+        count = effect == FloorSensor.Effect.SET ? Math.min(511, n + 1) : n - 1;
+        return true;
+    }
+
     /** Once-only sensors switch off after firing. */
     void used() {
         if (onceOnly) {
             enabled = false;
         }
+    }
+
+    /** DM's M44: the sensor stops working for good. */
+    void disable() {
+        enabled = false;
     }
 
     public int x() {
