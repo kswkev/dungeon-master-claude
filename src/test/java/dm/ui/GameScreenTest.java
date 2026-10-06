@@ -14,6 +14,7 @@ import dm.model.Item;
 import dm.model.ItemCatalog;
 import dm.model.Party;
 import dm.model.Slot;
+import dm.model.Spells;
 import dm.model.Square;
 import dm.model.WallSensor;
 import org.junit.jupiter.api.BeforeEach;
@@ -469,6 +470,17 @@ class GameScreenTest {
         screen.press(VIEW.x + 190, VIEW.y + 128); // where ours had CLOSE
         assertTrue(screen.sheet().isOpen());
         render();
+    }
+
+    @Test
+    void scrollsShowTheSymbolsOfTheSpellsTheyName() {
+        String fulIr = "" + (char) (Spells.FIRST_SYMBOL + 9) + (char) (Spells.FIRST_SYMBOL + 15);
+        assertEquals(List.of("FIREBALL", "", "FUL IR. " + fulIr),
+                CharacterSheet.scrollLines("FIREBALL\n\nFUL IR."));
+        assertEquals(List.of("FUL BRO NETA.", "" + (char) 105 + (char) 112 + (char) 117),
+                CharacterSheet.scrollLines("FUL BRO NETA."), "too wide: on a line of its own");
+        assertEquals(List.of("BALANCE IS THE", "ULTIMATE GOOD"),
+                CharacterSheet.scrollLines("BALANCE IS THE\nULTIMATE GOOD"));
     }
 
     @Test

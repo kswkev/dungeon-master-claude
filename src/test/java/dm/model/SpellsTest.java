@@ -350,4 +350,26 @@ class SpellsTest {
         assertEquals("", elija.symbols(), "a dead champion's symbols are forgotten");
         assertFalse(party.setMagicCaster(0));
     }
+
+    /** The symbols for space-separated names, e.g. "FUL IR". */
+    private static String symbols(String names) {
+        StringBuilder sb = new StringBuilder();
+        for (String n : names.split(" ")) {
+            sb.append((char) (Spells.FIRST_SYMBOL + Spells.NAMES.indexOf(n)));
+        }
+        return sb.toString();
+    }
+
+    @Test
+    void scrollTextNamesSpells() {
+        assertEquals(List.of(symbols("FUL IR")), Spells.namedIn("FUL IR."));
+        assertEquals(List.of(symbols("DES VEN")), Spells.namedIn("DES VEN WILL"), "mid-sentence");
+        assertEquals(List.of(symbols("ZO")), Spells.namedIn("A ZO SPELL."));
+        assertEquals(List.of(symbols("ZO KATH RA")), Spells.namedIn("ZOKATHRA MIGHT"), "joined names");
+        assertEquals(List.of(symbols("VI BRO")), Spells.namedIn("CASTING VI BRO"));
+        assertEquals(List.of(), Spells.namedIn("OH WELL"), "OH alone is no spell");
+        assertEquals(List.of(), Spells.namedIn("PUT IT ON"), "power symbols don't count");
+        assertEquals(List.of(), Spells.namedIn("BRO KU"), "not in DM's table");
+        assertEquals(List.of(), Spells.namedIn("FIREBALL"));
+    }
 }

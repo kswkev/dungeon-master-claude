@@ -8,6 +8,7 @@ import dm.model.ItemCatalog;
 import dm.model.ItemDescription;
 import dm.model.Party;
 import dm.model.Slot;
+import dm.model.Spells;
 
 import java.awt.Color;
 import java.awt.Graphics2D;
@@ -123,6 +124,12 @@ public final class CharacterSheet {
     private static final int PANEL_OPEN_SCROLL = 23;
     private static final int SCROLL_CENTRE_X = 162;
     private static final int SCROLL_CENTRE_Y = 92;
+    /** The parchment is 98 pixels wide (x 33-130 of graphic 23): 16 characters. */
+    private static final int SCROLL_COLUMNS = 16;
+    /** Its rows 6-64 (viewport y 58-116) hold 8 lines 7 apart. */
+    private static final int PARCHMENT_TOP = 58;
+    private static final int PARCHMENT_HEIGHT = 59;
+    private static final int SCROLL_ROWS = 8;
     /** F339: the arrow (graphic 18) over a chest or scroll, or the eye (19) while it's looked at, keyed on red. */
     private static final int ARROW_FOR_CHEST = 18;
     private static final int EYE_FOR_DESCRIPTION = 19;
@@ -491,8 +498,14 @@ public final class CharacterSheet {
         if (text == null) {
             return;
         }
-        String[] lines = text.split("\n");
-        int y = SCROLL_CENTRE_Y - DESCRIPTION_LINE * lines.length / 2;
+        List<String> lines = scrollLines(text);
+        int spacing = DESCRIPTION_LINE;
+        int y = SCROLL_CENTRE_Y - DESCRIPTION_LINE * lines.size() / 2;
+        if (lines.size() > SCROLL_ROWS) {
+            // Only a line of spell symbols makes more than DM's 8: closer rows, centred on the parchment.
+            spacing = DmFont.HEIGHT;
+            y = PARCHMENT_TOP + 4 + (PARCHMENT_HEIGHT - spacing * lines.size()) / 2;
+        }
         for (String line : lines) {
             int x = SCROLL_CENTRE_X - (DmFont.ADVANCE * line.length() >> 1);
             if (font != null) {
@@ -500,8 +513,32 @@ public final class CharacterSheet {
             } else {
                 PixelFont.draw(g, line, x, y - 4, Art.PALETTE[0]);
             }
-            y += DESCRIPTION_LINE;
+            y += spacing;
         }
+    }
+
+    /**
+     * The scroll's lines, each followed by the symbols of the spells it
+     * names (not in DM; {@link Spells#namedIn}): on the same line where they
+     * fit the parchment, otherwise on a line of their own after it.
+     */
+    static List<String> scrollLines(String text) {
+        List<String> lines = new ArrayList<>();
+        for (String line : text.split("\n")) {
+            StringBuilder symbols = new StringBuilder();
+            for (String spell : Spells.namedIn(line)) {
+                symbols.append(symbols.length() == 0 ? "" : " ").append(spell);
+            }
+            if (symbols.length() == 0) {
+                lines.add(line);
+            } else if (line.length() + 1 + symbols.length() <= SCROLL_COLUMNS) {
+                lines.add(line + " " + symbols);
+            } else {
+                lines.add(line);
+                lines.add(symbols.toString());
+            }
+        }
+        return lines;
     }
 
     static String scrollGlyphs(String line) {
