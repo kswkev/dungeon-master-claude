@@ -83,6 +83,12 @@ public final class FlatViewRenderer implements ViewRenderer {
         return doorButtonHit;
     }
 
+    /** Without DM's art the piles aren't measured: DM's drop boxes (G0462) stand in for them. */
+    @Override
+    public Rectangle pileHit(int viewCell) {
+        return GameScreen.PILE_BOXES[viewCell];
+    }
+
     @Override
     public void draw(Graphics2D g, Party party) {
         Shape oldClip = g.getClip();

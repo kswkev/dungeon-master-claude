@@ -1,5 +1,6 @@
 package dm.model;
 
+import java.util.ArrayList;
 import java.util.List;
 
 /**
@@ -147,6 +148,51 @@ public final class Spells {
         for (Spell s : TABLE) {
             if ((s.symbols() & 0xFF000000) != 0 ? packed == s.symbols() : (packed & 0x00FFFFFF) == s.symbols()) {
                 return s;
+            }
+        }
+        return null;
+    }
+
+    /**
+     * The spells a line of scroll text names (not in DM): each run of
+     * symbol names after the power row ("FUL IR.", "DES VEN WILL", "A ZO
+     * SPELL") that makes a spell in G0487, as its symbol characters, in
+     * order. A word of joined names counts too ("ZOKATHRA"). Power symbols
+     * never start a run, so "ON" and "OH WELL" stay words.
+     */
+    public static List<String> namedIn(String line) {
+        List<String> spells = new ArrayList<>();
+        StringBuilder run = new StringBuilder();
+        for (String word : line.split("[^A-Z]+")) {
+            String symbols = word.isEmpty() ? null : symbolsOf(word);
+            if (symbols != null) {
+                run.append(symbols);
+                continue;
+            }
+            addSpell(spells, run);
+        }
+        addSpell(spells, run);
+        return spells;
+    }
+
+    private static void addSpell(List<String> spells, StringBuilder run) {
+        if (run.length() > 0 && run.length() <= 3 && find(FIRST_SYMBOL + run.toString()) != null) {
+            spells.add(run.toString());
+        }
+        run.setLength(0);
+    }
+
+    /** {@code word} as symbols past the power row, joined names included, or null. */
+    private static String symbolsOf(String word) {
+        if (word.isEmpty()) {
+            return "";
+        }
+        for (int i = PER_ROW; i < NAMES.size(); i++) {
+            if (word.startsWith(NAMES.get(i))) {
+                String rest = symbolsOf(word.substring(NAMES.get(i).length()));
+                if (rest != null) {
+                    return (char) (FIRST_SYMBOL + i) + rest;
+                }
             }
         }
         return null;

@@ -5,15 +5,18 @@ import dm.data.Sound;
 import dm.model.Actions;
 import dm.model.Champion;
 import dm.model.ChampionMirror;
+import dm.model.CreatureType;
 import dm.model.Decorations;
 import dm.model.Difficulty;
 import dm.model.Direction;
 import dm.model.DungeonMap;
 import dm.model.FloorSensor;
+import dm.model.Group;
 import dm.model.Item;
 import dm.model.ItemCatalog;
 import dm.model.Party;
 import dm.model.Slot;
+import dm.model.Spells;
 import dm.model.Square;
 import dm.model.WallSensor;
 import org.junit.jupiter.api.BeforeEach;
@@ -316,11 +319,47 @@ class GameScreenTest {
         screen.key(MovementPanel.Action.BACKWARD); // from (1,1) facing north to (1,2)
         assertEquals(2, party.y());
         screen.keyReleased();
+        screen.tick(); // DM's movement ticks: at least 1 after a step
         screen.key(MovementPanel.Action.TURN_LEFT);
         assertEquals(Direction.WEST, party.facing());
         screen.key(MovementPanel.Action.FORWARD); // into the wall
         assertEquals(1, bumps, "a bump, as with the arrow");
         render();
+    }
+
+    @Test
+    void aStepWaitsForTheSlowestChampionsMovementTicks() {
+        recruitElija();
+        screen.key(MovementPanel.Action.BACKWARD); // (1,1) to (1,2)
+        screen.keyReleased();
+        screen.key(MovementPanel.Action.FORWARD);
+        screen.keyReleased();
+        assertEquals(2, party.y(), "dropped: still 2 ticks to go");
+        screen.key(MovementPanel.Action.TURN_LEFT);
+        assertEquals(Direction.WEST, party.facing(), "turning is never held up");
+        screen.key(MovementPanel.Action.TURN_RIGHT);
+        screen.tick();
+        screen.key(MovementPanel.Action.FORWARD);
+        assertEquals(2, party.y(), "1 tick to go");
+        screen.keyReleased();
+        screen.tick();
+        screen.key(MovementPanel.Action.FORWARD);
+        assertEquals(1, party.y());
+    }
+
+    @Test
+    void thePartyCannotFollowWhatItThrewFor4Ticks() {
+        recruitElija();
+        party.setHeld(ItemCatalog.item(Item.Category.WEAPON, 10));
+        assertTrue(party.throwHeld(false)); // north
+        assertFalse(party.canStep(Party.Move.FORWARD));
+        assertTrue(party.canStep(Party.Move.BACKWARD), "only the projectile's way is blocked");
+        for (int i = 0; i < 3; i++) {
+            party.tick();
+        }
+        assertFalse(party.canStep(Party.Move.FORWARD));
+        party.tick();
+        assertTrue(party.canStep(Party.Move.FORWARD));
     }
 
     @Test
@@ -351,6 +390,99 @@ class GameScreenTest {
 
     private static Item last(List<Item> pile) {
         return pile.get(pile.size() - 1);
+    }
+
+    @Test
+    void rightClickOnAStatusBoxTogglesThatSheet() {
+        recruitElija();
+        ChampionMirror second = new ChampionMirror(2, 0, Direction.SOUTH, Champion.parse(ELIJA, 1));
+        party.recruit(second);
+        screen.rightPress(66, 20); // G0447: the whole box, hands too, out to x 66
+        assertSame(party.members().get(0), screen.sheet().champion());
+        render();
+        screen.rightPress(69 + 30, 4);
+        assertSame(party.members().get(1), screen.sheet().champion(), "switches to the other member");
+        screen.rightPress(69 + 30, 4);
+        assertFalse(screen.sheet().isOpen(), "the one shown closes");
+        screen.rightPress(67, 4); // the gap between boxes
+        assertFalse(screen.sheet().isOpen());
+    }
+
+    @Test
+    void rightClickInsideTheSheetClosesItKeepingTheHeldItem() {
+        recruitElija();
+        screen.press(NAME_X, NAME_Y);
+        Item held = ItemCatalog.item(Item.Category.JUNK, 0);
+        party.setHeld(held);
+        screen.rightPress(VIEW.x + 100, VIEW.y + 60);
+        assertFalse(screen.sheet().isOpen());
+        assertSame(held, party.held());
+        screen.press(NAME_X, NAME_Y);
+        screen.rightPress(300, 190); // anywhere on the screen, as G0449
+        assertFalse(screen.sheet().isOpen());
+    }
+
+    @Test
+    void rightClickBelowTheBarsOpensTheLeadersSheet() {
+        screen.rightPress(VIEW.x + 100, VIEW.y + 60);
+        assertFalse(screen.sheet().isOpen(), "no leader yet");
+        recruitElija();
+        screen.rightPress(VIEW.x + 100, VIEW.y + 60);
+        assertSame(party.members().get(0), screen.sheet().champion());
+        screen.rightPress(VIEW.x + 100, VIEW.y + 60);
+        assertFalse(screen.sheet().isOpen());
+        screen.rightPress(290, 10); // the formation box: nothing for the right button
+        assertFalse(screen.sheet().isOpen());
+    }
+
+    @Test
+    void rightClickLeavesACandidateAlone() {
+        clickPortrait();
+        assertNotNull(screen.sheet().candidate());
+        screen.rightPress(VIEW.x + 100, VIEW.y + 60);
+        screen.rightPress(NAME_X, NAME_Y);
+        assertNotNull(screen.sheet().candidate(), "only DM's CANCEL closes it");
+    }
+
+    @Test
+    void rightClickIgnoresADeadChampionAndWakesTheParty() {
+        recruitElija();
+        ChampionMirror second = new ChampionMirror(2, 0, Direction.SOUTH, Champion.parse(ELIJA, 1));
+        party.recruit(second);
+        Champion first = party.members().get(0);
+        first.takeDamage(first.health());
+        party.bury();
+        screen.rightPress(NAME_X, NAME_Y);
+        assertFalse(screen.sheet().isOpen());
+        assertTrue(party.sleep());
+        screen.rightPress(VIEW.x + 100, VIEW.y + 60);
+        assertFalse(party.sleeping());
+        assertFalse(screen.sheet().isOpen(), "waking opens nothing");
+    }
+
+    @Test
+    void theSheetHasNoCloseButtonButShowsTheLoad() {
+        assertEquals(" 12.5/ 45 KG", CharacterSheet.loadText(125, 445));
+        assertEquals("  0.0/  1 KG", CharacterSheet.loadText(0, 5));
+        assertEquals(Art.PALETTE[13], CharacterSheet.loadColour(25, 40));
+        assertEquals(Art.PALETTE[11], CharacterSheet.loadColour(26, 40), "over five eighths");
+        assertEquals(Art.PALETTE[8], CharacterSheet.loadColour(41, 40), "over the maximum");
+        recruitElija();
+        screen.press(NAME_X, NAME_Y);
+        screen.press(VIEW.x + 190, VIEW.y + 128); // where ours had CLOSE
+        assertTrue(screen.sheet().isOpen());
+        render();
+    }
+
+    @Test
+    void scrollsShowTheSymbolsOfTheSpellsTheyName() {
+        String fulIr = "" + (char) (Spells.FIRST_SYMBOL + 9) + (char) (Spells.FIRST_SYMBOL + 15);
+        assertEquals(List.of("FIREBALL", "", "FUL IR. " + fulIr),
+                CharacterSheet.scrollLines("FIREBALL\n\nFUL IR."));
+        assertEquals(List.of("FUL BRO NETA.", "" + (char) 105 + (char) 112 + (char) 117),
+                CharacterSheet.scrollLines("FUL BRO NETA."), "too wide: on a line of its own");
+        assertEquals(List.of("BALANCE IS THE", "ULTIMATE GOOD"),
+                CharacterSheet.scrollLines("BALANCE IS THE\nULTIMATE GOOD"));
     }
 
     @Test
@@ -802,14 +934,21 @@ class GameScreenTest {
         screen.release();
     }
 
-    /** Upper part of the view, clear of the mirror portrait in the middle. */
+    /** DM's throw zone (screen y 47-102), clear of the mirror portrait in the middle. */
     private void clickAir(boolean right) {
-        screen.press(VIEW.x + (right ? 210 : 14), VIEW.y + 20);
+        screen.press(VIEW.x + (right ? 185 : 40), VIEW.y + 20);
+        screen.release();
+    }
+
+    /** DM's drop boxes for the near row of the square ahead (screen y 122-147). */
+    private void clickAhead(boolean right) {
+        screen.press(right ? 150 : 70, 135);
         screen.release();
     }
 
     @Test
     void clickingTheFloorPicksUpTheTopItemAndDropsTheHeldOne() {
+        recruitElija(); // DM's F373 needs a leader's hand
         DungeonMap map = party.map();
         map.addItem(1, 1, Direction.NORTH.cellOf(1), SWORD);
         map.addItem(1, 1, Direction.NORTH.cellOf(1), APPLE);
@@ -879,16 +1018,65 @@ class GameScreenTest {
     }
 
     @Test
-    void throwingAtTheWallAheadDropsTheItemOnTheThrowersSquare() {
+    void withAWallAheadNothingIsThrownOrDroppedBeyondIt() {
         recruitElija();
         party.setHeld(SWORD);
+        clickAir(false);
+        assertSame(SWORD, party.held(), "DM's F377 doesn't throw at a wall straight ahead");
+        assertTrue(party.map().projectiles().isEmpty());
+        clickAhead(false);
+        assertSame(SWORD, party.held(), "nor drops into it");
+        clickFloor(false);
+        assertEquals(List.of(SWORD), party.map().itemsAt(1, 1, 0), "only on the party's own square");
+    }
+
+    @Test
+    void itemsGoOnAndComeOffTheNearRowOfTheSquareAhead() {
+        recruitElija();
+        party.turnRight();
+        party.turnRight(); // face south: (1,2) is ahead
+        DungeonMap map = party.map();
+        party.setHeld(SWORD);
+        clickAhead(false);
+        assertNull(party.held());
+        int nearLeft = Direction.SOUTH.cellOf(3);
+        assertEquals(List.of(SWORD), map.itemsAt(1, 2, nearLeft), "facing south the near-left cell is north-east");
+        render(); // records the pile's box
+        Rectangle pile = screen.view().pileHit(3);
+        screen.press(pile.x + pile.width / 2, pile.y + pile.height / 2);
+        assertSame(SWORD, party.held());
+        assertTrue(map.itemsAt(1, 2, nearLeft).isEmpty());
+    }
+
+    @Test
+    void aCreatureOnTheGroundGuardsTheCellAhead() {
+        recruitElija();
+        party.turnRight();
+        party.turnRight();
+        DungeonMap map = party.map();
+        int nearLeft = Direction.SOUTH.cellOf(3);
+        map.addItem(1, 2, nearLeft, APPLE);
+        map.addGroup(new Group(CreatureType.MUMMY, 1, 2, Group.CENTRED, new int[] {200, 0, 0, 0}, 1,
+                Direction.NORTH, List.of()));
+        render();
+        Rectangle pile = screen.view().pileHit(3);
+        screen.press(pile.x + pile.width / 2, pile.y + pile.height / 2);
+        assertNull(party.held(), "DM: not from under a creature that walks");
+        assertEquals(List.of(APPLE), map.itemsAt(1, 2, nearLeft));
+    }
+
+    @Test
+    void aThrowFromTheAirZoneOnly() {
+        recruitElija();
+        party.turnRight();
+        party.turnRight();
+        party.setHeld(SWORD);
+        screen.press(VIEW.x + 14, VIEW.y + 20); // left of DM's zone
+        assertSame(SWORD, party.held());
         clickAir(false);
         assertNull(party.held());
         assertEquals(1, party.map().projectiles().size());
         render(); // drawn in flight
-        assertTrue(screen.tick());
-        assertTrue(party.map().projectiles().isEmpty());
-        assertEquals(List.of(SWORD), party.map().itemsAt(1, 1, 0), "north-west: far-left facing north");
     }
 
     @Test

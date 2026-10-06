@@ -109,7 +109,17 @@ final class Combat {
     }
 
     /** DM's F382: the charges of what the action hand holds (1 for an item that has none). */
-    private static int charges(Item item) {
+    /** The actions F402 performs as blows (F407's melee cases). */
+    static boolean isMelee(int action) {
+        return switch (action) {
+            case Actions.BASH, Actions.HACK, Actions.BERZERK, Actions.KICK, Actions.SWING, Actions.CHOP,
+                 Actions.DISRUPT, Actions.JAB, Actions.PARRY, Actions.STAB_14, Actions.STAB_9, Actions.STUN,
+                 Actions.THRUST, Actions.MELEE, Actions.SLASH, Actions.CLEAVE, Actions.PUNCH -> true;
+            default -> false;
+        };
+    }
+
+    static int charges(Item item) {
         if (item == null) {
             return 1;
         }
@@ -157,7 +167,7 @@ final class Combat {
         switch (action) {
             case Actions.BASH, Actions.HACK, Actions.BERZERK, Actions.KICK, Actions.SWING, Actions.CHOP,
                  Actions.DISRUPT, Actions.JAB, Actions.PARRY, Actions.STAB_14, Actions.STAB_9, Actions.STUN,
-                 Actions.THRUST, Actions.MELEE, Actions.SLASH, Actions.CLEAVE, Actions.PUNCH -> {
+                 Actions.THRUST, Actions.MELEE, Actions.SLASH, Actions.CLEAVE, Actions.PUNCH -> { // isMelee
                 boolean breaksDoors = action == Actions.BASH || action == Actions.HACK || action == Actions.BERZERK
                         || action == Actions.KICK || action == Actions.SWING || action == Actions.CHOP;
                 if (breaksDoors && m.get(tx, ty).type() == SquareType.DOOR
@@ -474,6 +484,7 @@ final class Combat {
         int cell = (((party.cellOf(c) - dir + 1) & 2) >> 1) + dir;
         Flight.launch(party, item, party.map(), party.x(), party.y(), cell, c.facing(), kineticEnergy, attack,
                 stepEnergy);
+        party.sentProjectile(c.facing());
     }
 
     /**
@@ -529,6 +540,7 @@ final class Combat {
         int stepEnergy = Math.max(5, 11 - level);
         Flight.launch(party, item, party.map(), party.x(), party.y(), party.facing().ordinal() + side,
                 party.facing(), kineticEnergy, attack, stepEnergy);
+        party.sentProjectile(party.facing());
         return true;
     }
 

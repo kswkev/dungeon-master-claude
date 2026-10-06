@@ -31,6 +31,14 @@ public interface ViewRenderer {
     Rectangle doorButtonHit();
 
     /**
+     * Screen rectangle around the objects drawn on view cell {@code viewCell}
+     * that an empty hand can grab, from the last {@link #draw}, or null: the
+     * party's own square's far cells (0 left, 1 right) and the near cells of
+     * the square ahead (3 left, 2 right), as DM's G0291 clickable boxes.
+     */
+    Rectangle pileHit(int viewCell);
+
+    /**
      * Whether the last {@link #draw} showed something that changes every
      * frame (a teleporter's field), so the view should be redrawn every tick.
      */

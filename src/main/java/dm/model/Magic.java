@@ -185,6 +185,7 @@ final class Magic {
         int cell = ((((party.cellOf(c) - dir + 1) & 2) >> 1) + dir) & 3;
         Flight.launchSpell(party, spell, party.map(), party.x(), party.y(), cell, c.facing(), kineticEnergy, 90,
                 stepEnergy);
+        party.sentProjectile(c.facing());
         return true;
     }
 
