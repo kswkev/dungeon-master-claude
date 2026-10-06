@@ -36,6 +36,19 @@ class ItemDescriptionTest {
     }
 
     @Test
+    void armourShowsItsDefenseBeforeItsWeight() {
+        Item armour = ItemCatalog.item(Item.Category.ARMOUR, 13); // G239: defense 11, sharp defense 2
+        int weight = armour.weight();
+        assertEquals(List.of("DEFENSE 11.", "SHARP DEFENSE 8.", "WEIGHS " + weight / 10 + "." + weight % 10 + " KG."),
+                describe(armour).lines());
+        Item cursed = ItemCatalog.item(Item.Category.ARMOUR, 4).withFlags(Item.CURSED);
+        assertEquals(List.of("(CURSED)", "DEFENSE 25.", "SHARP DEFENSE 25."),
+                describe(cursed).lines().subList(0, 3));
+        Item illumulet = ItemCatalog.item(Item.Category.JUNK, 10);
+        assertFalse(describe(illumulet).lines().stream().anyMatch(l -> l.contains("DEFENSE")), "not armour");
+    }
+
+    @Test
     void aBurntOutTorchSaysSo() {
         Item torch = ItemCatalog.item(Item.Category.WEAPON, 2, 0);
         assertTrue(Light.isTorch(torch));

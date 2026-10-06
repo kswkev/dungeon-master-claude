@@ -66,6 +66,11 @@ public record ItemDescription(String name, List<String> lines) {
         if (!attributes.isEmpty()) {
             add(lines, attributes);
         }
+        if (item.category() == Item.Category.ARMOUR) {
+            // Not in DM: F143's defense, and what is left of it against sharp attacks.
+            add(lines, "DEFENSE " + ItemCatalog.armourDefense(item, false) + ".");
+            add(lines, "SHARP DEFENSE " + ItemCatalog.armourDefense(item, true) + ".");
+        }
         int weight = item.weight();
         add(lines, "WEIGHS " + weight / 10 + "." + weight % 10 + " KG.");
         return new ItemDescription(name(item, viewer, party), List.copyOf(lines));
