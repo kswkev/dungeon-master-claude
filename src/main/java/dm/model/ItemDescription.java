@@ -74,9 +74,58 @@ public record ItemDescription(String name, List<String> lines) {
         if (item.category() == Item.Category.WEAPON) {
             addWeapon(lines, item, viewer);
         }
+        addNourishment(lines, item);
+        addEffects(lines, ItemEffects.describe(item));
         int weight = item.weight();
         add(lines, "WEIGHS " + weight / 10 + "." + weight % 10 + " KG.");
         return new ItemDescription(name(item, viewer, party), List.copyOf(lines));
+    }
+
+    /** The most rows the panel takes (DM's 6, and 7 a little closer together). */
+    static final int MAX_ROWS = 7;
+
+    /** Not in DM: what food gives the food bar, and water the water bar (a waterskin per draught). */
+    private static void addNourishment(List<String> lines, Item item) {
+        int food = ItemCatalog.foodValue(item);
+        if (food > 0) {
+            add(lines, "FOOD VALUE " + food);
+        }
+        if (item.category() == Item.Category.JUNK && item.type() == WATERSKIN_TYPE) {
+            add(lines, "WATER VALUE " + Upkeep.WATERSKIN_DRAUGHT);
+        } else if (item.category() == Item.Category.POTION && item.type() == ItemCatalog.WATER_FLASK) {
+            add(lines, "WATER VALUE " + Upkeep.WATER_FLASK);
+        }
+    }
+
+    /**
+     * Not in DM: what the item does worn or held ({@link ItemEffects#describe}),
+     * each place once ("WORN ON NECK:") with its effects under it. If that
+     * would take the panel past {@link #MAX_ROWS} (with the weight still to
+     * come), each effect goes on one row with a short place instead
+     * ("NECK: MANA +3").
+     */
+    private static void addEffects(List<String> lines, List<String[]> effects) {
+        List<String> full = new ArrayList<>();
+        String last = null;
+        for (String[] e : effects) {
+            if (!e[0].equals(last)) {
+                full.add(e[0]);
+                last = e[0];
+            }
+            full.add(e[1]);
+        }
+        if (lines.size() + full.size() + 1 <= MAX_ROWS) {
+            lines.addAll(full);
+            return;
+        }
+        for (String[] e : effects) {
+            if (lines.size() + 1 >= MAX_ROWS) {
+                break; // only a poisoned, broken and cursed weapon with three actions: "(CURSED)" says enough
+            }
+            String place = e[0].replace("WORN ON ", "").replace("IN ACTION HAND", "HAND")
+                    .replace("WORN OR IN HAND", "WORN");
+            add(lines, place + e[1]);
+        }
     }
 
     /**

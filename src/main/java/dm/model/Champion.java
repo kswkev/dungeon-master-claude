@@ -366,11 +366,12 @@ public final class Champion implements Serializable {
     void refresh() {
         health = Math.max(health, maxHealth);
         stamina = Math.max(stamina, maxStamina);
-        mana = Math.max(mana, maxMana);
+        mana = Math.max(mana, maxMana());
     }
 
+    /** Sets a statistic as {@link #stat} reads it, items' bonuses included. */
     void setStat(Stat s, int value) {
-        stats[s.ordinal()] = value;
+        stats[s.ordinal()] = value - itemBonus(s);
     }
 
     /** The skill numbers, for {@link #skillLevel}: 4 base skills, then 4 hidden ones under each. */
@@ -444,7 +445,7 @@ public final class Champion implements Serializable {
             }
             delta++;
         }
-        stats[s.ordinal()] = current + Math.min(delta, 170 - current);
+        setStat(s, current + Math.min(delta, 170 - current));
     }
 
     public String name() {
@@ -492,16 +493,30 @@ public final class Champion implements Serializable {
         return mana;
     }
 
+    /** The maximum mana, with what staffs and the like add while held (F299). */
     public int maxMana() {
-        return maxMana;
+        return maxMana + itemBonus(null);
     }
 
+    /** A statistic, with what the items carried add or take away (F299). */
     public int stat(Stat s) {
-        return stats[s.ordinal()];
+        return stats[s.ordinal()] + itemBonus(s);
     }
 
     public int maxStat(Stat s) {
-        return maxStats[s.ordinal()];
+        return maxStats[s.ordinal()] + itemBonus(s);
+    }
+
+    /** DM's F299 bonuses of everything carried to statistic {@code s}, or to maximum mana for null. */
+    int itemBonus(Stat s) {
+        int bonus = 0;
+        for (Map.Entry<Slot, Item> e : items.entrySet()) {
+            ItemEffects.Bonus b = ItemEffects.of(e.getKey(), e.getValue());
+            if (b != null && b.stat() == s) {
+                bonus += b.amount();
+            }
+        }
+        return bonus;
     }
 
     public Map<Slot, Item> items() {
@@ -804,8 +819,9 @@ public final class Champion implements Serializable {
         }
         int luck = stat(Stat.LUCK);
         boolean lucky = luck > 0 && random.nextInt(luck) > percentage;
-        stats[Stat.LUCK.ordinal()] = Math.max(minStat(Stat.LUCK), Math.min(luck + (lucky ? -2 : 2),
-                maxStat(Stat.LUCK)));
+        // F299 moves the minimum with the maximum (a Rabbit's Foot, cursed things).
+        setStat(Stat.LUCK, Math.max(minStat(Stat.LUCK) + itemBonus(Stat.LUCK), Math.min(luck + (lucky ? -2 : 2),
+                maxStat(Stat.LUCK))));
         return lucky;
     }
 

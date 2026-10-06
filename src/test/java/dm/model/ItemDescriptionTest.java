@@ -104,8 +104,48 @@ class ItemDescriptionTest {
         Item charged = ItemCatalog.item(Item.Category.WEAPON, 0, 3);
         assertEquals("FREEZE LIFE (3)", describe(charged).lines().get(2));
         Item wand = ItemCatalog.item(Item.Category.WEAPON, 35, 15);
-        assertEquals(List.of("CALM", "SPELLSHIELD 2+(15)", "HEAL 3+", "WEIGHS 0.1 KG."), describe(wand).lines(),
-                "a level and charges in 18 characters");
+        assertEquals(List.of("CALM", "SPELLSHIELD 2+(15)", "HEAL 3+", "IN ACTION HAND:", " MANA +1", "WEIGHS 0.1 KG."),
+                describe(wand).lines(), "a level and charges in 18 characters");
+    }
+
+    @Test
+    void foodAndWaterShowWhatTheyGive() {
+        Item apple = ItemCatalog.item(Item.Category.JUNK, ItemCatalog.FIRST_FOOD);
+        assertTrue(describe(apple).lines().contains("FOOD VALUE " + ItemCatalog.foodValue(apple)));
+        Item skin = ItemCatalog.item(Item.Category.JUNK, ItemCatalog.WATERSKIN, 2);
+        assertTrue(describe(skin).lines().contains("WATER VALUE 800"), "a draught");
+        Item flask = ItemCatalog.item(Item.Category.POTION, ItemCatalog.WATER_FLASK);
+        assertTrue(describe(flask).lines().contains("WATER VALUE 1600"));
+    }
+
+    @Test
+    void wornThingsTellWhatTheyDoAndWhere() {
+        Item crown = ItemCatalog.item(Item.Category.ARMOUR, 24);
+        assertEquals(List.of("WORN ON HEAD:", " WISDOM +10"), describe(crown).lines().subList(2, 4));
+        Item moonstone = ItemCatalog.item(Item.Category.JUNK, 39);
+        assertEquals(List.of("WORN ON NECK:", " MANA +3", " INFLUENCE +1"),
+                describe(moonstone).lines().subList(0, 3), "one place, both effects");
+        Item cursed = crown.withFlags(Item.CURSED);
+        assertTrue(describe(cursed).lines().contains(" LUCK -3"));
+        assertFalse(describe(cursed).lines().contains(" WISDOM +10"), "a curse instead of the bonus");
+        Item foot = ItemCatalog.item(Item.Category.JUNK, 46);
+        assertEquals(List.of("CARRIED:", " LUCK +10"), describe(foot).lines().subList(0, 2));
+    }
+
+    @Test
+    void noDescriptionPassesThePanelsRows() {
+        Item.Category[] categories = {Item.Category.WEAPON, Item.Category.ARMOUR, Item.Category.POTION,
+                Item.Category.JUNK};
+        int[] counts = {46, 58, 21, 53}; // ItemCatalog's names per category
+        for (int k = 0; k < categories.length; k++) {
+            for (int type = 0; type < counts[k]; type++) {
+                Item item = ItemCatalog.item(categories[k], type, 3);
+                for (Item i : List.of(item, item.withFlags(Item.CURSED | Item.POISONED | Item.BROKEN))) {
+                    assertTrue(describe(i).lines().size() <= ItemDescription.MAX_ROWS,
+                            i.name() + ": " + describe(i).lines());
+                }
+            }
+        }
     }
 
     @Test
