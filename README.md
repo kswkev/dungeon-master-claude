@@ -173,6 +173,13 @@ Spells came in Sprint 19; the magic in items' action menus (a staff's fireball a
 - **Creatures walk into projectiles** too, as the party already did.
 - **Drinking:** only what the original lets you drink can be drunk: food, water, and the ROS to VI potions. MON, UM, DES, VEN, SAR and ZO potions, bombs and empty flasks stay in hand.
 
+**Sprint 23: done.** Improvements, closer to the original and a few of our own:
+- **The character sheet (#46)** is written in the original's font at its places, with the LOAD line (yellow when heavily loaded, red when overloaded). The CLOSE button is gone; the X closes the sheet, as in the original. Holding the eye shows skills and statistics laid out as in the original.
+- **The right mouse button (#47):** right-click a champion's box to open or switch to their sheet, anywhere else to close it; with no sheet open, right-click the view to open the leader's. It also wakes a sleeping party.
+- **Walking pace:** as in the original, each step takes a moment before the next, longer for heavily loaded or overloaded champions and those with a wounded foot (Boots of Speed help). After throwing, shooting or casting, the party can't step after the projectile for a moment.
+- **Picking up and dropping** reach the row of the square ahead too: click an item lying there to pick it up, or the floor just beyond your own square to drop it there. As in the original, nothing is thrown at a wall straight ahead.
+- **Not in the original:** scrolls show the rune symbols of the spells they name; armour descriptions show their defense (and what is left of it against sharp blows); weapon descriptions show their damage rating and actions, with the skill level still needed and the charges left.
+
 ## Requirements
 
 - JDK 17 or newer
