@@ -175,6 +175,39 @@ class SpellsTest {
     }
 
     @Test
+    void onlySpellsThatWorkAreRememberedForTheSpellLists() {
+        Spells.Spell fireball = Spells.find(symbols(LO, FUL, IR));
+        Spells.Spell health = Spells.find(symbols(LO, 1));
+        enter(MON, FUL, IR);
+        assertFalse(party.cast(), "needs more practice");
+        assertFalse(party.hasCast(fireball));
+        master();
+        enter(UM, 1);
+        assertFalse(party.cast(), "no flask");
+        assertFalse(party.hasCast(health));
+        party.deleteSymbol(); // the symbols kept for another try
+        party.deleteSymbol();
+        enter(LO, FUL, IR);
+        assertTrue(party.cast());
+        assertTrue(party.hasCast(fireball));
+        assertTrue(party.hasCast(Spells.find(symbols(MON, FUL, IR))), "whatever the power");
+    }
+
+    @Test
+    void everySpellHasANameAndASchool() {
+        assertEquals("FIREBALL", Spells.title(Spells.find(symbols(LO, FUL, IR))));
+        assertEquals("ZOKATHRA", Spells.title(Spells.find(symbols(LO, 5, 2, 4))));
+        assertTrue(Spells.isWizard(Spells.find(symbols(LO, FUL, IR))));
+        assertTrue(Spells.isWizard(Spells.find(symbols(LO, 5, 2, 4))), "ZO KATH RA uses wizard itself");
+        assertFalse(Spells.isWizard(Spells.find(symbols(LO, 1))), "VI is a priest's");
+        assertFalse(Spells.isWizard(Spells.find(symbols(LO, 5, BRO, 4))), "ZO BRO RA uses priest itself");
+        assertEquals(13, Spells.table().stream().filter(Spells::isWizard).count());
+        for (Spells.Spell s : Spells.table()) {
+            assertTrue(Spells.title(s).length() <= 18, Spells.title(s));
+        }
+    }
+
+    @Test
     void aYaPotionShieldsItsDrinkerForAWhile() {
         party.setHeld(ItemCatalog.item(Item.Category.POTION, 12, 100));
         assertTrue(party.feed(elija));

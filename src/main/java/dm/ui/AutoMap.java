@@ -103,15 +103,30 @@ final class AutoMap {
         }
     }
 
-    /** The scroll button: DM's scroll icon, its middle rows if it is taller than the strip. */
     void drawButton(Graphics2D g, Art art) {
+        drawScroll(g, scrollIcon(art), BUTTON, PARCHMENT);
+    }
+
+    /**
+     * A scroll button in {@code box}: the icon, or without art a plain
+     * scroll of colour {@code paper}.
+     */
+    static void drawScroll(Graphics2D g, BufferedImage icon, Rectangle box, Color paper) {
+        if (icon == null) {
+            g.setColor(paper);
+            g.fillRect(box.x + 2, box.y + 2, box.width - 4, box.height - 4);
+            g.setColor(INK);
+            g.drawRect(box.x + 1, box.y + 1, box.width - 3, box.height - 3);
+            return;
+        }
+        g.drawImage(icon, box.x, box.y + (box.height - icon.getHeight()) / 2, null);
+    }
+
+    /** DM's scroll icon, its middle rows if it is taller than the strip, or null without art. */
+    static BufferedImage scrollIcon(Art art) {
         BufferedImage icon = art.iconSprite(ItemCatalog.item(Item.Category.SCROLL, 0));
         if (icon == null) {
-            g.setColor(PARCHMENT);
-            g.fillRect(BUTTON.x + 2, BUTTON.y + 2, BUTTON.width - 4, BUTTON.height - 4);
-            g.setColor(INK);
-            g.drawRect(BUTTON.x + 1, BUTTON.y + 1, BUTTON.width - 3, BUTTON.height - 3);
-            return;
+            return null;
         }
         int top = icon.getHeight();
         int bottom = -1;
@@ -124,15 +139,14 @@ final class AutoMap {
             }
         }
         if (bottom < 0) {
-            return;
+            return null;
         }
         int rows = bottom - top + 1;
         if (rows > BUTTON.height) {
             top += (rows - BUTTON.height) / 2;
             rows = BUTTON.height;
         }
-        BufferedImage cut = icon.getSubimage(0, top, icon.getWidth(), rows);
-        g.drawImage(cut, BUTTON.x, BUTTON.y + (BUTTON.height - rows) / 2, null);
+        return icon.getSubimage(0, top, icon.getWidth(), rows);
     }
 
     /** The parchment over the dungeon view. */
@@ -297,15 +311,19 @@ final class AutoMap {
     }
 
     /** Text in DM's font at its text point (x, y), or centred on x. */
-    private static void text(Graphics2D g, Art art, String s, int x, int y, boolean centred) {
+    static void text(Graphics2D g, Art art, String s, int x, int y, boolean centred) {
+        text(g, art, s, x, y, centred, INK);
+    }
+
+    static void text(Graphics2D g, Art art, String s, int x, int y, boolean centred, Color colour) {
         if (centred) {
             x -= s.length() * DmFont.ADVANCE / 2;
         }
         DmFont font = art.font();
         if (font != null) {
-            font.draw(g, s, x, y, INK, null);
+            font.draw(g, s, x, y, colour, null);
         } else {
-            PixelFont.draw(g, s, x, y - 4, INK);
+            PixelFont.draw(g, s, x, y - 4, colour);
         }
     }
 }

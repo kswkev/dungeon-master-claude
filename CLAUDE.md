@@ -38,7 +38,7 @@ A Java/Swing remake of FTL's *Dungeon Master* (1988), built sprint by sprint.
 
 - Sprint 23 (improvements): the character sheet's text in DM's font with the LOAD line and no CLOSE button (#46), the right mouse button (#47), DM's movement delay by load, spell symbols on scrolls (not in DM), items picked up from and dropped onto the square ahead, and armour defense and weapon ratings and actions in item descriptions (not in DM).
 
-- Sprint 24 (improvements): the eye panel lists all four skills with a bar filling toward each one's next level, and a map of what the party has seen, opened from a scroll under the formation box (neither is in DM).
+- Sprint 24 (improvements): the eye panel lists all four skills with a bar filling toward each one's next level, a map of what the party has seen, opened from a scroll under the formation box, and beside it two tinted scrolls listing the wizard and priest spells the party has cast (none of these is in DM).
 
 Not implemented yet: wall sensors 6 (countdown) and 7-10, 14-15 (projectile launchers), floor sensors 4 and 8, and DM's RESTART on the end screens.
 
@@ -380,6 +380,12 @@ Code lives under `src/main/java/dm/`, in three layers.
   - **Drawing:** a parchment over the viewport, drawn after the menu and before the sheet. The squares fill `MAP_AREA` (132×128, tiles 2-8 px fitted to the seen bounding box). A floor can span several maps, so each map is placed at its dungeon-wide offset.
   - **What shows:** walls and fake walls in ink, floor lighter than the parchment; doors as a bar across the passage, pale when open or broken; open, non-invisible pits black; open, visible teleporters blue; stairs grey with step lines (light up, dark down). The party, when on the floor shown, is a green arrow (`partyArrow`) pointing its way.
   - **Paging:** `UP`/`DOWN` (at viewport (160,24) and (160,52), 40×22) page through the floors with a seen square, plus the party's own; an arrow with no floor that way is faded. A legend sits underneath.
+- **Spell lists** (Sprint 24, not in DM; `SpellBook`, `Party.hasCast`/`spellCast`, `Spells.table`/`title`/`isWizard`):
+  - **What counts:** `Magic.cast` records a spell (by its symbols after the power, so any power) only when it works. A failed skill check, a potion spell with no flask, or mumbling doesn't count. The set is saved; an old save loads with none.
+  - **Buttons:** blue (wizard) at `WIZARD_BUTTON` (251,29) and gold (priest) at `PRIEST_BUTTON` (269,29): the map's cropped scroll icon with its light pixels tinted.
+  - **Schools:** a spell is a wizard's when its skill is wizard (3) or a wizard hidden skill (16-19), so 13 wizard spells and 12 priest. ZO KATH RA (skill 3) is a wizard's, ZO BRO RA (2) a priest's, and fire shield (15) a priest's, as in G0487.
+  - **Drawing:** the parchment, as the map. The title is "WIZARD SPELLS n OF 13". Then one row per spell in G0487's order, 8 px apart from viewport y 24: the runes in DM's font at x 8, the rune names at x 32, the spell's name (`Spells.TITLES`, our own; DM never names them) at x 110. A spell not yet cast is a faded ??? row.
+  - **Clicks:** like the map, the game is paused and any click or Esc closes it. The other school's scroll switches lists; the same scroll closes it. `overlayOpen()`/`closeOverlays()` in `GameScreen` cover both the map and the lists.
 - **Keyboard** (`KeyMap`, `GameScreen.key`): keys go through the same path as the arrow buttons, lighting the arrow while held. The PC numpad works (7/8/9 turn left, forward, turn right; 4/5/6 left, back, right), with Num Lock off too: keypad keys are told apart by `KEY_LOCATION_NUMPAD`, so the keypad's Left sidesteps while the arrow key's Left turns. The arrow keys work (up/down move, left/right turn), and so do W/A/S/D with Q/E to turn. Movement keys are ignored while a sheet is open or after the end; the spell keys (1-6, Enter, Backspace) work with a sheet open, like the spell area (see **Spell area**).
 - Screen regions match the original layout:
   - the dungeon view is the `ViewRenderer.VIEWPORT` rectangle (the character sheet replaces it while open);

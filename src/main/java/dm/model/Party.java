@@ -4,6 +4,7 @@ import java.io.Serializable;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Random;
@@ -673,6 +674,21 @@ public final class Party implements Serializable {
         projectileTicks = 0;
         explore();
         return result;
+    }
+
+    /** The spells the party has cast (not in DM), by their symbols after the power; null in older saves. */
+    private HashSet<String> castSpells;
+
+    /** Whether any champion has cast {@code spell} successfully. */
+    public boolean hasCast(Spells.Spell spell) {
+        return castSpells != null && castSpells.contains(spell.symbolString());
+    }
+
+    void spellCast(Spells.Spell spell) {
+        if (castSpells == null) {
+            castSpells = new HashSet<>();
+        }
+        castSpells.add(spell.symbolString());
     }
 
     /**

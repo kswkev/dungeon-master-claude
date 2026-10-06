@@ -137,6 +137,7 @@ final class Magic {
         }
         party.addSkillExperience(member, spell.skill(), experience);
         Combat.disable(party, c, spell.duration());
+        party.spellCast(spell); // for the spell lists (not in DM)
         return Result.CAST;
     }
 
