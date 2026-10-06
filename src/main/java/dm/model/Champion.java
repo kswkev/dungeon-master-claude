@@ -156,11 +156,37 @@ public final class Champion implements Serializable {
 
     /** F303 without the item modifiers, and with or without temporary experience. */
     int baseLevel(int skill, boolean temporary) {
+        return levelOf(levelExperience(skill, temporary));
+    }
+
+    /**
+     * How far the lasting experience (as {@link #lastingSkillLevel}) has come
+     * from the current level toward the next, 0-99; 100 from level 16 on.
+     * Not in DM.
+     */
+    public int levelProgress(int skill) {
+        long exp = levelExperience(skill, false);
+        int level = levelOf(exp);
+        if (level >= 16) {
+            return 100;
+        }
+        long low = level == 1 ? 0 : 500L << (level - 2);
+        long high = 500L << (level - 1);
+        return (int) ((exp - low) * 100 / (high - low));
+    }
+
+    /** The experience F303 counts: a hidden skill averages its own and its base skill's. */
+    private long levelExperience(int skill, boolean temporary) {
         long exp = experience[skill] + (temporary ? temporaryExperience[skill] : 0);
         if (skill >= BASE_SKILLS.size()) {
             int base = (skill - BASE_SKILLS.size()) / 4;
             exp = (exp + experience[base] + (temporary ? temporaryExperience[base] : 0)) / 2;
         }
+        return exp;
+    }
+
+    /** F303: level 1 under 500, then one more for each doubling. */
+    private static int levelOf(long exp) {
         int level = 1;
         while (exp >= 500) {
             exp >>= 1;

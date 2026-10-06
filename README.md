@@ -180,6 +180,9 @@ Spells came in Sprint 19; the magic in items' action menus (a staff's fireball a
 - **Picking up and dropping** reach the row of the square ahead too: click an item lying there to pick it up, or the floor just beyond your own square to drop it there. As in the original, nothing is thrown at a wall straight ahead.
 - **Not in the original:** scrolls show the rune symbols of the spells they name; armour descriptions show their defense (and what is left of it against sharp blows); weapon descriptions show their damage rating and actions, with the skill level still needed and the charges left.
 
+**Sprint 24: done.** More improvements:
+- **Skill progress (not in the original):** holding the eye lists all four skills (fighter, ninja, priest and wizard), including ones not yet learnt. Under each is a green bar that fills toward the next level.
+
 ## Requirements
 
 - JDK 17 or newer

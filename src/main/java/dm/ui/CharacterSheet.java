@@ -79,6 +79,9 @@ public final class CharacterSheet {
     private static final int STATS_VALUE_X = 174;
     private static final int STATS_MAX_X = 192;
     private static final int PANEL_LINE = 7;
+    /** The skill progress bars (not in DM): the panel's 18 text columns wide, under each row. */
+    static final int BAR_WIDTH = 18 * DmFont.ADVANCE;
+    static final int BAR_HEIGHT = 2;
     /** F355's labels and F287's values for health, stamina and mana, 8 rows apart from y 116; F292's load line. */
     private static final int VITALS_Y = 116;
     private static final int LOAD_X = 104;
@@ -745,10 +748,12 @@ public final class CharacterSheet {
     }
 
     /**
-     * DM's F347 on the empty panel: each base skill above level 1 (no
-     * temporary experience, at most 16) as "LEVEL SKILL", then the
-     * statistics, the current value red below its maximum and light green
-     * above it.
+     * DM's F347 on the empty panel: each base skill (no temporary experience,
+     * at most 16) as "LEVEL SKILL", then the statistics, the current value
+     * red below its maximum and light green above it. Not in DM (Sprint 24):
+     * unskilled ones are listed too, by name alone, and under each row a bar
+     * fills toward the next level ({@link Champion#levelProgress}), on the
+     * text cells' blank bottom row and the gap below it.
      */
     private void drawSkillsAndStats(Graphics2D g) {
         BufferedImage panel = art.keyed(PANEL_EMPTY, 8);
@@ -758,10 +763,13 @@ public final class CharacterSheet {
         int y = SKILLS_Y;
         for (int s = 0; s < Champion.BASE_SKILLS.size(); s++) {
             int level = champion.lastingSkillLevel(s);
-            if (level > 1) {
-                print(g, Champion.LEVEL_NAMES.get(level - 2) + " " + Champion.BASE_SKILLS.get(s), SKILLS_X, y, TEXT);
-                y += PANEL_LINE;
-            }
+            String skill = Champion.BASE_SKILLS.get(s);
+            print(g, level > 1 ? Champion.LEVEL_NAMES.get(level - 2) + " " + skill : skill, SKILLS_X, y, TEXT);
+            g.setColor(Art.PALETTE[0]);
+            g.fillRect(SKILLS_X - 1, y + 1, BAR_WIDTH, BAR_HEIGHT);
+            g.setColor(LIGHT_GREEN);
+            g.fillRect(SKILLS_X - 1, y + 1, BAR_WIDTH * champion.levelProgress(s) / 100, BAR_HEIGHT);
+            y += PANEL_LINE;
         }
         y = STATS_Y;
         for (Champion.Stat stat : SHOWN_STATS) {
