@@ -27,6 +27,29 @@ class ChampionTest {
     }
 
     @Test
+    void movementTicksFollowTheLoad() {
+        Champion c = Champion.parse(ELIJA, 0);
+        int max = c.maxLoad();
+        assertEquals(2, c.movementTicks(max * 5 / 8), "up to five eighths");
+        assertEquals(3, c.movementTicks(max * 5 / 8 + 1));
+        assertEquals(3, c.movementTicks(max), "BUG0_72 fixed: the maximum isn't over");
+        assertEquals(4, c.movementTicks(max + 1));
+        assertEquals(8, c.movementTicks(max * 2));
+        c.addWounds(1 << 5); // feet
+        assertEquals(3, c.movementTicks(0));
+        assertEquals(6, c.movementTicks(max + 1), "2 more when overloaded");
+        Item boots = null;
+        for (int type = 0; boots == null; type++) {
+            Item i = ItemCatalog.item(Item.Category.ARMOUR, type);
+            if (i.name().equals("BOOTS OF SPEED")) {
+                boots = i;
+            }
+        }
+        c.place(Slot.FEET, boots);
+        assertEquals(2, c.movementTicks(0), "Boots of Speed take 1 off");
+    }
+
+    @Test
     void parsesStatsInDmOrder() {
         Champion c = Champion.parse(ELIJA, 0);
         assertEquals(50, c.stat(Champion.Stat.LUCK));

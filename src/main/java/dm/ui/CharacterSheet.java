@@ -71,16 +71,22 @@ public final class CharacterSheet {
         }
     }
 
-    private static final int TEXT_X = 98;
-    private static final int TEXT_RIGHT = 221;
-    private static final int SKILL_LINE = 7;
-    private static final int STAT_LINE = 6;
+    /** DM's F347 skills and statistics (on the empty panel): skill lines from y 58, statistics from 86, 7 rows apart. */
+    private static final int SKILLS_X = 108;
+    private static final int SKILLS_Y = 58;
+    private static final int STATS_Y = 86;
+    private static final int STATS_VALUE_X = 174;
+    private static final int STATS_MAX_X = 192;
+    private static final int PANEL_LINE = 7;
+    /** F355's labels and F287's values for health, stamina and mana, 8 rows apart from y 116; F292's load line. */
+    private static final int VITALS_Y = 116;
+    private static final int LOAD_X = 104;
+    private static final int LOAD_VALUE_X = 148;
     /** DM's resurrect panel (graphic 40, keyed on dark green) and its click boxes (G0457, less the viewport's 33 rows). */
     private static final int RESURRECT_PANEL_KEY = 6;
     private static final Rectangle RESURRECT_BUTTON = new Rectangle(108, 57, 51, 49);
     private static final Rectangle REINCARNATE_BUTTON = new Rectangle(161, 57, 51, 49);
     private static final Rectangle CANDIDATE_CANCEL = new Rectangle(108, 108, 104, 13);
-    private static final Rectangle CANCEL_BUTTON = new Rectangle(164, 123, 58, 11);
     private static final Rectangle CLOSE_ICON = new Rectangle(208, 1, 13, 12);
     /** DM's click zones on the inventory background (ScummVM's G0447 mouse input table, less the viewport's 33 rows). */
     private static final Rectangle MOUTH = new Rectangle(56, 13, 16, 16);
@@ -130,7 +136,11 @@ public final class CharacterSheet {
     private static final int DESCRIPTION_LINE = 7;
 
     private static final Color TEXT = Art.PALETTE[13];
-    private static final Color HEADING = Art.PALETTE[15];
+    /** DM's F292: the leader's name and title are gold, the others' lightest grey. */
+    private static final Color LEADER = Art.PALETTE[9];
+    private static final Color YELLOW = Art.PALETTE[11];
+    private static final Color RED = Art.PALETTE[8];
+    private static final Color LIGHT_GREEN = Art.PALETTE[7];
     private static final List<Champion.Stat> SHOWN_STATS = List.of(
             Champion.Stat.STRENGTH, Champion.Stat.DEXTERITY, Champion.Stat.WISDOM,
             Champion.Stat.VITALITY, Champion.Stat.ANTI_MAGIC, Champion.Stat.ANTI_FIRE);
@@ -251,7 +261,7 @@ public final class CharacterSheet {
             }
             return EYE.contains(vx, vy) ? Action.EYE : Action.NONE;
         }
-        if (CLOSE_ICON.contains(vx, vy) || CANCEL_BUTTON.contains(vx, vy)) {
+        if (CLOSE_ICON.contains(vx, vy)) {
             return Action.CLOSE;
         }
         if (SLEEP.contains(vx, vy)) {
@@ -405,9 +415,9 @@ public final class CharacterSheet {
         try {
             drawBackground(v);
             drawStateBoxes(v);
-            PixelFont.draw(v, champion.fullName(), 3, 3, HEADING);
+            drawNameAndTitle(v, party);
             drawItems(v);
-            drawVitals(v);
+            drawVitals(v, party);
             Item hand = champion.items().get(Slot.ACTION_HAND);
             if (renaming != null) {
                 renaming.draw(v, art);
@@ -425,7 +435,6 @@ public final class CharacterSheet {
             } else {
                 drawFoodAndWater(v);
             }
-            drawButtons(v);
             if (held == null) {
                 drawTooltip(v);
             }
@@ -521,11 +530,16 @@ public final class CharacterSheet {
 
     /** DM's F052: text in the viewport, in a colour on darkest grey. */
     private void printPanelText(Graphics2D g, String text, int x, int y) {
+        print(g, text, x, y, TEXT);
+    }
+
+    /** DM's F052 in any colour; without DM's font, the pixel font at the same place. */
+    private void print(Graphics2D g, String text, int x, int y, Color colour) {
         DmFont font = art.font();
         if (font != null) {
-            font.draw(g, text, x, y, TEXT, Art.PALETTE[12]);
+            font.draw(g, text, x, y, colour, Art.PALETTE[12]);
         } else {
-            PixelFont.draw(g, text, x, y - 4, TEXT);
+            PixelFont.draw(g, text, x, y - 4, colour);
         }
     }
 
@@ -640,35 +654,82 @@ public final class CharacterSheet {
         }
     }
 
-    private void drawVitals(Graphics2D g) {
-        int y = 112;
-        vitalLine(g, "HEALTH", champion.health(), champion.maxHealth(), y);
-        vitalLine(g, "STAMINA", champion.stamina(), champion.maxStamina(), y + 8);
-        vitalLine(g, "MANA", champion.mana(), champion.maxMana(), y + 16);
+    /** DM's F292: name and title at (3, 7), the title a cell further on unless it starts with , ; or -. */
+    private void drawNameAndTitle(Graphics2D g, Party party) {
+        Color colour = party.leader() == champion ? LEADER : TEXT;
+        print(g, champion.name(), 3, 7, colour);
+        int x = 6 * champion.name().length() + 3;
+        char first = champion.title().isEmpty() ? ' ' : champion.title().charAt(0);
+        if (first != ',' && first != ';' && first != '-') {
+            x += 6;
+        }
+        print(g, champion.title(), x, 7, colour);
     }
 
-    private static void vitalLine(Graphics2D g, String label, int value, int max, int y) {
-        PixelFont.draw(g, label, 5, y, TEXT);
-        String v = value + "/" + max;
-        PixelFont.draw(g, v, 92 - PixelFont.width(v), y, TEXT);
+    /** DM's F355 labels and F287 values ("%3d/%3d"), then F292's load line beside MANA. */
+    private void drawVitals(Graphics2D g, Party party) {
+        vitalLine(g, "HEALTH", champion.health(), champion.maxHealth(), VITALS_Y);
+        vitalLine(g, "STAMINA", champion.stamina(), champion.maxStamina(), VITALS_Y + 8);
+        vitalLine(g, "MANA", champion.mana(), champion.maxMana(), VITALS_Y + 16);
+        int load = party.load(champion);
+        int max = champion.maxLoad();
+        Color colour = loadColour(load, max);
+        print(g, "LOAD ", LOAD_X, VITALS_Y + 16, colour);
+        print(g, loadText(load, max), LOAD_VALUE_X, VITALS_Y + 16, colour);
     }
 
-    /** Up to 4 skill lines and 6 stat lines must fit between y=52 and the buttons at y=123. */
+    private void vitalLine(Graphics2D g, String label, int value, int max, int y) {
+        print(g, label, 5, y, TEXT);
+        print(g, pad(value), 55, y, TEXT);
+        print(g, "/", 73, y, TEXT);
+        print(g, pad(max), 79, y, TEXT);
+    }
+
+    /** F292: red over the maximum load, yellow over five eighths of it, otherwise lightest grey. */
+    static Color loadColour(int load, int max) {
+        if (load > max) {
+            return RED;
+        }
+        return ((long) load << 3) > (long) max * 5 ? YELLOW : TEXT;
+    }
+
+    /** F292's "%3d.%d/%3d KG": the load in tenths of a kilogram, the maximum rounded to whole ones. */
+    static String loadText(int load, int max) {
+        return pad(load / 10) + "." + (load % 10) + "/" + pad((max + 5) / 10) + " KG";
+    }
+
+    /** DM's F288 with padding: right-aligned in 3 characters. */
+    private static String pad(int value) {
+        return String.format("%3d", value);
+    }
+
+    /**
+     * DM's F347 on the empty panel: each base skill above level 1 (no
+     * temporary experience, at most 16) as "LEVEL SKILL", then the
+     * statistics, the current value red below its maximum and light green
+     * above it.
+     */
     private void drawSkillsAndStats(Graphics2D g) {
-        int y = 52;
+        BufferedImage panel = art.keyed(PANEL_EMPTY, 8);
+        if (panel != null) {
+            g.drawImage(panel, PANEL.x, PANEL.y, null);
+        }
+        int y = SKILLS_Y;
         for (int s = 0; s < Champion.BASE_SKILLS.size(); s++) {
-            String title = champion.skillTitle(s);
-            if (title != null) {
-                PixelFont.draw(g, Champion.BASE_SKILLS.get(s) + " " + title, TEXT_X, y, HEADING);
-                y += SKILL_LINE;
+            int level = champion.lastingSkillLevel(s);
+            if (level > 1) {
+                print(g, Champion.LEVEL_NAMES.get(level - 2) + " " + Champion.BASE_SKILLS.get(s), SKILLS_X, y, TEXT);
+                y += PANEL_LINE;
             }
         }
-        y += 2;
+        y = STATS_Y;
         for (Champion.Stat stat : SHOWN_STATS) {
-            PixelFont.draw(g, stat.label(), TEXT_X, y, TEXT);
-            String v = champion.stat(stat) + "/" + champion.maxStat(stat);
-            PixelFont.draw(g, v, TEXT_RIGHT - PixelFont.width(v), y, TEXT);
-            y += STAT_LINE;
+            int value = champion.stat(stat);
+            int max = champion.maxStat(stat);
+            print(g, stat.label(), SKILLS_X, y, TEXT);
+            print(g, pad(value), STATS_VALUE_X, y, value < max ? RED : value > max ? LIGHT_GREEN : TEXT);
+            print(g, "/" + pad(max), STATS_MAX_X, y, TEXT);
+            y += PANEL_LINE;
         }
     }
 
@@ -733,12 +794,6 @@ public final class CharacterSheet {
         button(g, RESURRECT_BUTTON, "RESUR", Art.PALETTE[4], Art.PALETTE[14]);
         button(g, REINCARNATE_BUTTON, "REINC", Art.PALETTE[4], Art.PALETTE[14]);
         button(g, CANDIDATE_CANCEL, "CANCEL", Art.PALETTE[11], Art.PALETTE[8]);
-    }
-
-    private void drawButtons(Graphics2D g) {
-        if (candidate == null) {
-            button(g, CANCEL_BUTTON, "CLOSE", Art.PALETTE[11], Art.PALETTE[8]);
-        }
     }
 
     private static void button(Graphics2D g, Rectangle r, String label, Color text, Color border) {

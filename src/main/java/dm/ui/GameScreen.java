@@ -377,6 +377,55 @@ public final class GameScreen {
         }
     }
 
+    /**
+     * Handles a right-button press at screen point (x, y), from DM's mouse
+     * tables (#47): on a status box (G0447, x 69i to 69i + 66, y 0-28) it
+     * toggles that champion's sheet; with a sheet open anywhere else closes
+     * it (G0449); with none, anywhere from y 33 down opens the leader's
+     * (G0448). Asleep it wakes the party like a left click (G0450). Nothing
+     * toggles while a mirror candidate is shown, the eye is held, or a
+     * champion is dead (F355). The item on the pointer stays in hand.
+     */
+    public void rightPress(int x, int y) {
+        pointer = new Point(x, y);
+        if (menu.isOpen() || inputBlocked()) {
+            return;
+        }
+        if (party.sleeping()) {
+            if (x < 224 && y >= 33 && y <= 168) {
+                party.wakeUp();
+            }
+            return;
+        }
+        if (sheet.candidate() != null || sheet.pressingEye()) {
+            return;
+        }
+        int box = x / 69;
+        if (y <= 28 && x % 69 <= 66) {
+            if (box < party.members().size()) {
+                toggleSheet(party.members().get(box));
+            }
+            return;
+        }
+        if (sheet.isOpen()) {
+            sheet.close();
+        } else if (y >= 33 && party.leader() != null) {
+            sheet.openMember(party.leader());
+        }
+    }
+
+    /** DM's F355: opens a living champion's sheet, or closes it if it is the one shown. */
+    private void toggleSheet(Champion champion) {
+        if (champion.health() <= 0) {
+            return;
+        }
+        if (sheet.champion() == champion) {
+            sheet.close();
+        } else {
+            sheet.openMember(champion);
+        }
+    }
+
     private void pressWithSheetOpen(int x, int y) {
         if (ViewRenderer.VIEWPORT.contains(x, y)) {
             switch (sheet.click(x, y)) {
@@ -802,6 +851,9 @@ public final class GameScreen {
             case STRAFE_LEFT -> Party.Move.LEFT;
             case STRAFE_RIGHT -> Party.Move.RIGHT;
         };
+        if (step != null && !party.canStep(step)) {
+            return; // DM's F380 drops a move while movement is disabled
+        }
         boolean moved = true;
         if (step != null) {
             DungeonMap.StepResult result = party.step(step);
@@ -946,10 +998,6 @@ public final class GameScreen {
     /** DM fades every colour but white to dark blue for the ending (ST 0x002). */
     private static final int END_BLUE = 0x000044;
 
-    /** DM's G428 skill level names; the masters' first word is a power symbol of the font (characters 96-101). */
-    private static final String[] LEVEL_NAMES = {
-            "NEOPHYTE", "NOVICE", "APPRENTICE", "JOURNEYMAN", "CRAFTSMAN", "ARTISAN", "ADEPT", "EXPERT",
-            "` MASTER", "a MASTER", "b MASTER", "c MASTER", "d MASTER", "e MASTER", "ARCHMASTER"};
     /** The champion mirror's frame (wall decoration 43's front picture), as F444 draws it. */
     private static final int MIRROR_FRAME = 346;
 
@@ -984,7 +1032,7 @@ public final class GameScreen {
                 int level = c.lastingSkillLevel(skill);
                 if (level > 1) {
                     y += 8;
-                    endgameText(g, LEVEL_NAMES[level - 2] + " " + Champion.BASE_SKILLS.get(skill), 105, y,
+                    endgameText(g, Champion.LEVEL_NAMES.get(level - 2) + " " + Champion.BASE_SKILLS.get(skill), 105, y,
                             Art.PALETTE[13]);
                 }
             }

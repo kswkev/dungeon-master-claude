@@ -64,6 +64,11 @@ public final class Party implements Serializable {
     /** DM's game clock, one per game tick, and when the party last moved (rest speeds recovery). */
     private long time;
     private long lastMove;
+    /** DM's G0310: ticks before the party may step again, set by its slowest living champion (F310). */
+    private int movementTicks;
+    /** DM's G0311/G0312: ticks the party may not step the way it just threw, shot or cast something. */
+    private int projectileTicks;
+    private Direction projectileDirection;
 
     /** A party on a single map; its stairs lead nowhere and block like walls. */
     public Party(DungeonMap map, int x, int y, Direction facing) {
@@ -657,7 +662,33 @@ public final class Party implements Serializable {
             turnTo(exit.facing());
             result = result.and(moveTo(stairs.map(), exit.x(), exit.y()));
         }
-        return result.and(settle());
+        result = result.and(settle());
+        movementTicks = 1;
+        for (Champion c : members) {
+            if (c.health() > 0) {
+                movementTicks = Math.max(movementTicks, c.movementTicks(load(c)));
+            }
+        }
+        projectileTicks = 0;
+        return result;
+    }
+
+    /**
+     * Whether DM would take {@code move} now (its F380 command check): not
+     * while a step's movement ticks last, nor the way the party sent a
+     * projectile in the last 4 ticks. Turning is always allowed.
+     */
+    public boolean canStep(Move move) {
+        if (movementTicks > 0) {
+            return false;
+        }
+        return projectileTicks == 0 || Direction.fromIndex(facing.ordinal() + move.turns) != projectileDirection;
+    }
+
+    /** DM's F326/F328: after a champion's throw, shot or spell the party can't follow it for 4 ticks. */
+    void sentProjectile(Direction direction) {
+        projectileTicks = 4;
+        projectileDirection = direction;
     }
 
     /**
@@ -1173,6 +1204,12 @@ public final class Party implements Serializable {
      */
     public Tick tick() {
         time++;
+        if (movementTicks > 0) {
+            movementTicks--;
+        }
+        if (projectileTicks > 0) {
+            projectileTicks--;
+        }
         if (freezeLifeTicks > 0) {
             freezeLifeTicks--;
         }

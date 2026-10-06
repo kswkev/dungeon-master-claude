@@ -94,6 +94,11 @@ public final class GameWindow extends JFrame {
                         game.press(p[0], p[1]);
                         updateCursor();
                         repaint();
+                    } else if (e.getButton() == MouseEvent.BUTTON3) {
+                        int[] p = toScreen(e.getX(), e.getY());
+                        game.rightPress(p[0], p[1]);
+                        updateCursor();
+                        repaint();
                     }
                 }
 

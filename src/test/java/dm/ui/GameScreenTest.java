@@ -316,11 +316,47 @@ class GameScreenTest {
         screen.key(MovementPanel.Action.BACKWARD); // from (1,1) facing north to (1,2)
         assertEquals(2, party.y());
         screen.keyReleased();
+        screen.tick(); // DM's movement ticks: at least 1 after a step
         screen.key(MovementPanel.Action.TURN_LEFT);
         assertEquals(Direction.WEST, party.facing());
         screen.key(MovementPanel.Action.FORWARD); // into the wall
         assertEquals(1, bumps, "a bump, as with the arrow");
         render();
+    }
+
+    @Test
+    void aStepWaitsForTheSlowestChampionsMovementTicks() {
+        recruitElija();
+        screen.key(MovementPanel.Action.BACKWARD); // (1,1) to (1,2)
+        screen.keyReleased();
+        screen.key(MovementPanel.Action.FORWARD);
+        screen.keyReleased();
+        assertEquals(2, party.y(), "dropped: still 2 ticks to go");
+        screen.key(MovementPanel.Action.TURN_LEFT);
+        assertEquals(Direction.WEST, party.facing(), "turning is never held up");
+        screen.key(MovementPanel.Action.TURN_RIGHT);
+        screen.tick();
+        screen.key(MovementPanel.Action.FORWARD);
+        assertEquals(2, party.y(), "1 tick to go");
+        screen.keyReleased();
+        screen.tick();
+        screen.key(MovementPanel.Action.FORWARD);
+        assertEquals(1, party.y());
+    }
+
+    @Test
+    void thePartyCannotFollowWhatItThrewFor4Ticks() {
+        recruitElija();
+        party.setHeld(ItemCatalog.item(Item.Category.WEAPON, 10));
+        assertTrue(party.throwHeld(false)); // north
+        assertFalse(party.canStep(Party.Move.FORWARD));
+        assertTrue(party.canStep(Party.Move.BACKWARD), "only the projectile's way is blocked");
+        for (int i = 0; i < 3; i++) {
+            party.tick();
+        }
+        assertFalse(party.canStep(Party.Move.FORWARD));
+        party.tick();
+        assertTrue(party.canStep(Party.Move.FORWARD));
     }
 
     @Test
@@ -351,6 +387,88 @@ class GameScreenTest {
 
     private static Item last(List<Item> pile) {
         return pile.get(pile.size() - 1);
+    }
+
+    @Test
+    void rightClickOnAStatusBoxTogglesThatSheet() {
+        recruitElija();
+        ChampionMirror second = new ChampionMirror(2, 0, Direction.SOUTH, Champion.parse(ELIJA, 1));
+        party.recruit(second);
+        screen.rightPress(66, 20); // G0447: the whole box, hands too, out to x 66
+        assertSame(party.members().get(0), screen.sheet().champion());
+        render();
+        screen.rightPress(69 + 30, 4);
+        assertSame(party.members().get(1), screen.sheet().champion(), "switches to the other member");
+        screen.rightPress(69 + 30, 4);
+        assertFalse(screen.sheet().isOpen(), "the one shown closes");
+        screen.rightPress(67, 4); // the gap between boxes
+        assertFalse(screen.sheet().isOpen());
+    }
+
+    @Test
+    void rightClickInsideTheSheetClosesItKeepingTheHeldItem() {
+        recruitElija();
+        screen.press(NAME_X, NAME_Y);
+        Item held = ItemCatalog.item(Item.Category.JUNK, 0);
+        party.setHeld(held);
+        screen.rightPress(VIEW.x + 100, VIEW.y + 60);
+        assertFalse(screen.sheet().isOpen());
+        assertSame(held, party.held());
+        screen.press(NAME_X, NAME_Y);
+        screen.rightPress(300, 190); // anywhere on the screen, as G0449
+        assertFalse(screen.sheet().isOpen());
+    }
+
+    @Test
+    void rightClickBelowTheBarsOpensTheLeadersSheet() {
+        screen.rightPress(VIEW.x + 100, VIEW.y + 60);
+        assertFalse(screen.sheet().isOpen(), "no leader yet");
+        recruitElija();
+        screen.rightPress(VIEW.x + 100, VIEW.y + 60);
+        assertSame(party.members().get(0), screen.sheet().champion());
+        screen.rightPress(VIEW.x + 100, VIEW.y + 60);
+        assertFalse(screen.sheet().isOpen());
+        screen.rightPress(290, 10); // the formation box: nothing for the right button
+        assertFalse(screen.sheet().isOpen());
+    }
+
+    @Test
+    void rightClickLeavesACandidateAlone() {
+        clickPortrait();
+        assertNotNull(screen.sheet().candidate());
+        screen.rightPress(VIEW.x + 100, VIEW.y + 60);
+        screen.rightPress(NAME_X, NAME_Y);
+        assertNotNull(screen.sheet().candidate(), "only DM's CANCEL closes it");
+    }
+
+    @Test
+    void rightClickIgnoresADeadChampionAndWakesTheParty() {
+        recruitElija();
+        ChampionMirror second = new ChampionMirror(2, 0, Direction.SOUTH, Champion.parse(ELIJA, 1));
+        party.recruit(second);
+        Champion first = party.members().get(0);
+        first.takeDamage(first.health());
+        party.bury();
+        screen.rightPress(NAME_X, NAME_Y);
+        assertFalse(screen.sheet().isOpen());
+        assertTrue(party.sleep());
+        screen.rightPress(VIEW.x + 100, VIEW.y + 60);
+        assertFalse(party.sleeping());
+        assertFalse(screen.sheet().isOpen(), "waking opens nothing");
+    }
+
+    @Test
+    void theSheetHasNoCloseButtonButShowsTheLoad() {
+        assertEquals(" 12.5/ 45 KG", CharacterSheet.loadText(125, 445));
+        assertEquals("  0.0/  1 KG", CharacterSheet.loadText(0, 5));
+        assertEquals(Art.PALETTE[13], CharacterSheet.loadColour(25, 40));
+        assertEquals(Art.PALETTE[11], CharacterSheet.loadColour(26, 40), "over five eighths");
+        assertEquals(Art.PALETTE[8], CharacterSheet.loadColour(41, 40), "over the maximum");
+        recruitElija();
+        screen.press(NAME_X, NAME_Y);
+        screen.press(VIEW.x + 190, VIEW.y + 128); // where ours had CLOSE
+        assertTrue(screen.sheet().isOpen());
+        render();
     }
 
     @Test

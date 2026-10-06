@@ -474,6 +474,7 @@ final class Combat {
         int cell = (((party.cellOf(c) - dir + 1) & 2) >> 1) + dir;
         Flight.launch(party, item, party.map(), party.x(), party.y(), cell, c.facing(), kineticEnergy, attack,
                 stepEnergy);
+        party.sentProjectile(c.facing());
     }
 
     /**
@@ -529,6 +530,7 @@ final class Combat {
         int stepEnergy = Math.max(5, 11 - level);
         Flight.launch(party, item, party.map(), party.x(), party.y(), party.facing().ordinal() + side,
                 party.facing(), kineticEnergy, attack, stepEnergy);
+        party.sentProjectile(party.facing());
         return true;
     }
 

@@ -32,6 +32,10 @@ public final class Champion implements Serializable {
     }
 
     public static final List<String> BASE_SKILLS = List.of("FIGHTER", "NINJA", "PRIEST", "WIZARD");
+    /** DM's G428 skill level names (levels 2-16); the masters' first word is a power symbol of the font (characters 96-101). */
+    public static final List<String> LEVEL_NAMES = List.of(
+            "NEOPHYTE", "NOVICE", "APPRENTICE", "JOURNEYMAN", "CRAFTSMAN", "ARTISAN", "ADEPT", "EXPERT",
+            "` MASTER", "a MASTER", "b MASTER", "c MASTER", "d MASTER", "e MASTER", "ARCHMASTER");
 
     /** Skill titles from level 2 up; level 1 means unskilled. */
     private static final List<String> SKILL_TITLES = List.of(
@@ -687,6 +691,34 @@ public final class Champion implements Serializable {
     /** DM's wound bits ({@link #WOUND_HEAD} and so on). */
     public int wounds() {
         return wounds;
+    }
+
+    /**
+     * DM's F310 movement ticks: how long this champion keeps the party from
+     * stepping again, carrying {@code load}. 2 ticks, 3 over five eighths of
+     * the maximum load, 4 + 4 × the excess / maximum over it; a wounded foot
+     * adds 1 (2 overloaded), Boots of Speed take 1 off. DM's BUG0_72 (a load
+     * exactly at the maximum counted as over) is fixed, as in ScummVM.
+     */
+    public int movementTicks(int load) {
+        int max = maxLoad();
+        int ticks;
+        int woundTicks;
+        if (max >= load) {
+            ticks = ((long) load << 3) > (long) max * 5 ? 3 : 2;
+            woundTicks = 1;
+        } else {
+            ticks = 4 + ((load - max) << 2) / max;
+            woundTicks = 2;
+        }
+        if (isWounded(Slot.FEET)) {
+            ticks += woundTicks;
+        }
+        Item feet = items.get(Slot.FEET);
+        if (feet != null && feet.name().equals("BOOTS OF SPEED")) {
+            ticks--;
+        }
+        return ticks;
     }
 
     /** Whether the body part {@code slot} (hands, head, torso, legs or feet) is wounded. */
