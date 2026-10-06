@@ -195,6 +195,7 @@ Spells came in Sprint 19; the magic in items' action menus (a staff's fireball a
 - **Restart:** five seconds after THE END, RESTART THIS GAME loads your newest save, and NEW GAME goes back to the entrance.
 - **The entrance:** the game opens at the dungeon's doors, as the original does. ENTER opens them with their rattle and the game begins, RESUME loads a saved game, and QUIT quits. The testing options (`-Ddm.start` and so on) skip it.
 - **Entrance music:** with the PC version's `SONG.DAT` in `data/`, its music loops at the entrance and fades as the doors open.
+- **Knocking on walls (not in the original):** clicking the wall ahead with an empty hand thumps. An illusionary wall makes no sound, so you can tell the two apart.
 
 ## Requirements
 

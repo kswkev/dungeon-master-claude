@@ -84,6 +84,35 @@ class GameScreenTest {
     }
 
     @Test
+    void anEmptyHandKnockingOnAWallThumps() {
+        recruitElija();
+        party.turnLeft(); // the plain wall at (0,1)
+        render();
+        int before = soundsPlayed;
+        Point face = new Point(GameScreen.WALL_FACE.x + 80, GameScreen.WALL_FACE.y + 50);
+        screen.press(face.x, face.y);
+        assertEquals(before + 1, soundsPlayed, "the thump");
+        assertEquals(0, bumps, "a knock isn't a bump: no flash, no damage");
+        party.setHeld(ItemCatalog.item(Item.Category.WEAPON, 8));
+        screen.press(GameScreen.PILE_BOXES[0].x + 5, GameScreen.PILE_BOXES[0].y + 5); // dropped, not knocked
+        assertEquals(before + 1, soundsPlayed);
+    }
+
+    @Test
+    void anIllusionaryWallMakesNoSound() {
+        Party p = new Party(DungeonMap.fromAscii(0, "#F#", "#.#", "###"), 1, 1, Direction.NORTH);
+        p.recruit(new ChampionMirror(0, 1, Direction.EAST, Champion.parse(ELIJA, 0)));
+        GameScreen s = new GameScreen(p, Art.none(), sound -> soundsPlayed++, false);
+        BufferedImage img = new BufferedImage(GameScreen.WIDTH, GameScreen.HEIGHT, BufferedImage.TYPE_INT_RGB);
+        Graphics2D g = img.createGraphics();
+        s.render(g);
+        g.dispose();
+        int before = soundsPlayed;
+        s.press(GameScreen.WALL_FACE.x + 80, GameScreen.WALL_FACE.y + 50);
+        assertEquals(before, soundsPlayed);
+    }
+
+    @Test
     void bumpWithNoPartyOnlyPlaysTheThud() {
         pressForward(); // the mirror wall is straight ahead
         assertEquals(1, soundsPlayed);

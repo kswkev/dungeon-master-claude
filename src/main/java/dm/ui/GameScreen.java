@@ -875,6 +875,10 @@ public final class GameScreen {
                     return;
                 }
             }
+            // Not in DM: knocking on the wall ahead thumps; an illusionary (fake) wall makes no sound.
+            if (map.get(aheadX, aheadY).type() == SquareType.WALL && WALL_FACE.contains(x, y)) {
+                sounds.play(dmSound(WOODEN_THUD)); // the thud, GRAPHICS.DAT 674
+            }
             return;
         }
         Square ahead = map.get(aheadX, aheadY);
@@ -895,6 +899,9 @@ public final class GameScreen {
             }
         }
     }
+
+    /** The front face of the wall straight ahead (the D1 wall zone, 160×111 at viewport (32,9)), in screen coordinates. */
+    static final Rectangle WALL_FACE = new Rectangle(ViewRenderer.VIEWPORT.x + 32, ViewRenderer.VIEWPORT.y + 9, 160, 111);
 
     /** F0373: the top object of view cell {@code viewCell}'s pile into the hand. */
     private void grab(int viewCell, int aheadX, int aheadY) {
