@@ -182,6 +182,7 @@ Spells came in Sprint 19; the magic in items' action menus (a staff's fireball a
 
 **Sprint 24: done.** More improvements:
 - **Skill progress (not in the original):** holding the eye lists all four skills (fighter, ninja, priest and wizard), including ones not yet learnt. Under each is a green bar that fills toward the next level.
+- **The map (not in the original):** click the scroll under the formation box to open a map of everything the party has seen: walls, doors, pits, teleporters and stairs, with the party as a green arrow pointing the way it faces. The arrows page through the floors you've been on. The game pauses while the map is open; click anywhere else or press Esc to close it.
 
 ## Requirements
 

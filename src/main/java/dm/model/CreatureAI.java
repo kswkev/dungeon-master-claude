@@ -61,7 +61,7 @@ public final class CreatureAI implements Serializable {
             {0, 1, 3, 2}, {1, 0, 2, 3}, {1, 2, 0, 3}, {2, 1, 3, 0},
             {3, 2, 0, 1}, {2, 3, 1, 0}, {0, 3, 1, 2}, {3, 0, 2, 1}};
     /** DM's door info attribute: creatures can see through the door (G254, by door design). */
-    private static final int[] DOOR_SEE_THROUGH = {1, 0, 0, 1};
+    static final int[] DOOR_SEE_THROUGH = {1, 0, 0, 1};
 
     /** DM's sounds (sound index, as in its table). */
     public static final int SOUND_BUZZ = 17;

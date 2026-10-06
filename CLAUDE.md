@@ -38,7 +38,7 @@ A Java/Swing remake of FTL's *Dungeon Master* (1988), built sprint by sprint.
 
 - Sprint 23 (improvements): the character sheet's text in DM's font with the LOAD line and no CLOSE button (#46), the right mouse button (#47), DM's movement delay by load, spell symbols on scrolls (not in DM), items picked up from and dropped onto the square ahead, and armour defense and weapon ratings and actions in item descriptions (not in DM).
 
-- Sprint 24 (improvements): the eye panel lists all four skills with a bar filling toward each one's next level (not in DM).
+- Sprint 24 (improvements): the eye panel lists all four skills with a bar filling toward each one's next level, and a map of what the party has seen, opened from a scroll under the formation box (neither is in DM).
 
 Not implemented yet: wall sensors 6 (countdown) and 7-10, 14-15 (projectile launchers), floor sensors 4 and 8, and DM's RESTART on the end screens.
 
@@ -372,6 +372,14 @@ Code lives under `src/main/java/dm/`, in three layers.
   - A file is the text DMREMAKE-SAVE, a version int, a `Header` (level, game time, saved-at, champion names) for the slot buttons, then the whole `Party` by Java serialization. Every model class it reaches is `Serializable`, so new model state is saved automatically; keep new fields serializable, and bump `VERSION` when old saves can't be read.
   - Saves go to a temp file that is then moved into place. Loading accepts only `dm.*` and `java.*` classes (an `ObjectInputFilter`).
   - About 1 MB, as a save holds the whole parsed dungeon.
+- **Map** (Sprint 24, not in DM; `AutoMap`, `Party.explore`, `DungeonMap.markSeen`/`seen`/`explored`/`blocksView`):
+  - **Seeing:** `Party.explore` runs after every step and turn, each tick, and when the map opens. It looks down the party's column up to 3 squares, stopping at the first square that `blocksView` (walls and fake walls; doors 3/4 or closed unless see-through, as F197). The squares either side of each open square in that column count as seen. The two columns beside the party are looked down the same way, but no deeper than the middle column reaches. Darkness is ignored.
+  - **Storage:** the seen squares live on each `DungeonMap` (a lazy `boolean[][]`), so they are saved; an old save loads with none.
+  - **Button:** the scroll icon (scroll item, cropped to the free strip) at `AutoMap.BUTTON` (233,29,16,13), between the formation box and the spell tabs. It works unless the party is asleep, the game is over or the menu is open.
+  - **Paused:** while the map is open, `tick()` does nothing; the arrows, movement keys, spell keys and Return are ignored. A left or right click anywhere but the paging arrows closes it, and so does Esc (which then doesn't open the menu).
+  - **Drawing:** a parchment over the viewport, drawn after the menu and before the sheet. The squares fill `MAP_AREA` (132×128, tiles 2-8 px fitted to the seen bounding box). A floor can span several maps, so each map is placed at its dungeon-wide offset.
+  - **What shows:** walls and fake walls in ink, floor lighter than the parchment; doors as a bar across the passage, pale when open or broken; open, non-invisible pits black; open, visible teleporters blue; stairs grey with step lines (light up, dark down). The party, when on the floor shown, is a green arrow (`partyArrow`) pointing its way.
+  - **Paging:** `UP`/`DOWN` (at viewport (160,24) and (160,52), 40×22) page through the floors with a seen square, plus the party's own; an arrow with no floor that way is faded. A legend sits underneath.
 - **Keyboard** (`KeyMap`, `GameScreen.key`): keys go through the same path as the arrow buttons, lighting the arrow while held. The PC numpad works (7/8/9 turn left, forward, turn right; 4/5/6 left, back, right), with Num Lock off too: keypad keys are told apart by `KEY_LOCATION_NUMPAD`, so the keypad's Left sidesteps while the arrow key's Left turns. The arrow keys work (up/down move, left/right turn), and so do W/A/S/D with Q/E to turn. Movement keys are ignored while a sheet is open or after the end; the spell keys (1-6, Enter, Backspace) work with a sheet open, like the spell area (see **Spell area**).
 - Screen regions match the original layout:
   - the dungeon view is the `ViewRenderer.VIEWPORT` rectangle (the character sheet replaces it while open);
