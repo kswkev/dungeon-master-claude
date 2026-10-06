@@ -5,11 +5,13 @@ import dm.data.Sound;
 import dm.model.Actions;
 import dm.model.Champion;
 import dm.model.ChampionMirror;
+import dm.model.CreatureType;
 import dm.model.Decorations;
 import dm.model.Difficulty;
 import dm.model.Direction;
 import dm.model.DungeonMap;
 import dm.model.FloorSensor;
+import dm.model.Group;
 import dm.model.Item;
 import dm.model.ItemCatalog;
 import dm.model.Party;
@@ -932,14 +934,21 @@ class GameScreenTest {
         screen.release();
     }
 
-    /** Upper part of the view, clear of the mirror portrait in the middle. */
+    /** DM's throw zone (screen y 47-102), clear of the mirror portrait in the middle. */
     private void clickAir(boolean right) {
-        screen.press(VIEW.x + (right ? 210 : 14), VIEW.y + 20);
+        screen.press(VIEW.x + (right ? 185 : 40), VIEW.y + 20);
+        screen.release();
+    }
+
+    /** DM's drop boxes for the near row of the square ahead (screen y 122-147). */
+    private void clickAhead(boolean right) {
+        screen.press(right ? 150 : 70, 135);
         screen.release();
     }
 
     @Test
     void clickingTheFloorPicksUpTheTopItemAndDropsTheHeldOne() {
+        recruitElija(); // DM's F373 needs a leader's hand
         DungeonMap map = party.map();
         map.addItem(1, 1, Direction.NORTH.cellOf(1), SWORD);
         map.addItem(1, 1, Direction.NORTH.cellOf(1), APPLE);
@@ -1009,16 +1018,65 @@ class GameScreenTest {
     }
 
     @Test
-    void throwingAtTheWallAheadDropsTheItemOnTheThrowersSquare() {
+    void withAWallAheadNothingIsThrownOrDroppedBeyondIt() {
         recruitElija();
         party.setHeld(SWORD);
+        clickAir(false);
+        assertSame(SWORD, party.held(), "DM's F377 doesn't throw at a wall straight ahead");
+        assertTrue(party.map().projectiles().isEmpty());
+        clickAhead(false);
+        assertSame(SWORD, party.held(), "nor drops into it");
+        clickFloor(false);
+        assertEquals(List.of(SWORD), party.map().itemsAt(1, 1, 0), "only on the party's own square");
+    }
+
+    @Test
+    void itemsGoOnAndComeOffTheNearRowOfTheSquareAhead() {
+        recruitElija();
+        party.turnRight();
+        party.turnRight(); // face south: (1,2) is ahead
+        DungeonMap map = party.map();
+        party.setHeld(SWORD);
+        clickAhead(false);
+        assertNull(party.held());
+        int nearLeft = Direction.SOUTH.cellOf(3);
+        assertEquals(List.of(SWORD), map.itemsAt(1, 2, nearLeft), "facing south the near-left cell is north-east");
+        render(); // records the pile's box
+        Rectangle pile = screen.view().pileHit(3);
+        screen.press(pile.x + pile.width / 2, pile.y + pile.height / 2);
+        assertSame(SWORD, party.held());
+        assertTrue(map.itemsAt(1, 2, nearLeft).isEmpty());
+    }
+
+    @Test
+    void aCreatureOnTheGroundGuardsTheCellAhead() {
+        recruitElija();
+        party.turnRight();
+        party.turnRight();
+        DungeonMap map = party.map();
+        int nearLeft = Direction.SOUTH.cellOf(3);
+        map.addItem(1, 2, nearLeft, APPLE);
+        map.addGroup(new Group(CreatureType.MUMMY, 1, 2, Group.CENTRED, new int[] {200, 0, 0, 0}, 1,
+                Direction.NORTH, List.of()));
+        render();
+        Rectangle pile = screen.view().pileHit(3);
+        screen.press(pile.x + pile.width / 2, pile.y + pile.height / 2);
+        assertNull(party.held(), "DM: not from under a creature that walks");
+        assertEquals(List.of(APPLE), map.itemsAt(1, 2, nearLeft));
+    }
+
+    @Test
+    void aThrowFromTheAirZoneOnly() {
+        recruitElija();
+        party.turnRight();
+        party.turnRight();
+        party.setHeld(SWORD);
+        screen.press(VIEW.x + 14, VIEW.y + 20); // left of DM's zone
+        assertSame(SWORD, party.held());
         clickAir(false);
         assertNull(party.held());
         assertEquals(1, party.map().projectiles().size());
         render(); // drawn in flight
-        assertTrue(screen.tick());
-        assertTrue(party.map().projectiles().isEmpty());
-        assertEquals(List.of(SWORD), party.map().itemsAt(1, 1, 0), "north-west: far-left facing north");
     }
 
     @Test

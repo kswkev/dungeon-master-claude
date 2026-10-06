@@ -36,7 +36,7 @@ A Java/Swing remake of FTL's *Dungeon Master* (1988), built sprint by sprint.
 
 - Sprint 22: FUSE and the Lord Chaos endgame (DM's fuse sequence and end screen), wall sensors 16 and 17 (the Firestaff takes the Power Gem), the VI altar's rebirth, creatures walking into projectiles (F266 for groups), DM's drinkable potions, and testing options to start anywhere.
 
-- Sprint 23 (improvements): the character sheet's text in DM's font with the LOAD line and no CLOSE button (#46), the right mouse button (#47), DM's movement delay by load, and spell symbols on scrolls (not in DM).
+- Sprint 23 (improvements): the character sheet's text in DM's font with the LOAD line and no CLOSE button (#46), the right mouse button (#47), DM's movement delay by load, spell symbols on scrolls (not in DM), and items picked up from and dropped onto the square ahead.
 
 Not implemented yet: wall sensors 6 (countdown) and 7-10, 14-15 (projectile launchers), floor sensors 4 and 8, and DM's RESTART on the end screens.
 
@@ -393,7 +393,7 @@ Code lives under `src/main/java/dm/`, in three layers.
     - a poisoned champion's food/water panel shows the POISONED label (graphic 32 at (112,105));
     - an empty slot shows F291's outline: hands and body 212 + 2×slot, neck 208, pouch 1 209, quiver 1 210, the first backpack cell 211 (#43);
     - in the status boxes an empty hand shows DM's hand outline (icon 212 ready, 214 action); a wounded hand gets box 34, and the wounded outline (213/215) when it is empty.
-  - With no sheet open, a click in the bottom of the view (`GameScreen.FLOOR_CLICK_Y` and below) picks up from or drops onto the party square's left or right cell ahead. A click higher up with an item in hand throws it from that side (`Party.throwHeld`, F329: the leader throws, so an empty party can't).
+  - **The floor** (Sprint 23, DM's F377 and F0373-F0375, `GameScreen.clickView`; nothing without a leader): an empty hand grabs the top object of the pile clicked. `TexturedViewRenderer` records a box per view cell around the objects it draws on the party square's far cells (0, 1) and the square ahead's near cells (3 left, 2 right) (`ViewRenderer.pileHit`, DM's G0291: the first object's box at least 14 rows tall, the others added); `FlatViewRenderer` returns DM's drop boxes instead. A cell ahead with a creature on the ground (not levitating; a centred one covers all four) can't be grabbed from. A held item: with a wall ahead (`Square.looksSolid`, so closed fake walls too, as DM sees them) it can only be dropped on the party's own square, never thrown; otherwise a click in DM's throw zone (screen y 47-102, x 32-191, or 64-163 with a door seen head-on ahead) throws it from that half (`Party.throwHeld`, F329), else DM's drop boxes (`GameScreen.PILE_BOXES`, G0462: y 148-168 x 24-111 / 112-199 for the party square, y 122-147 x 40-111 / 112-183 for the square ahead) drop it there, onto stairs or a closed door too, as in DM.
   - While an item is held, `GameWindow` hides the OS cursor and `GameScreen` draws `Art.iconSprite` (the icon with background colour 12 transparent) centred on the pointer, on top of everything. Most text uses `PixelFont`, a hand-made 5×5 font, from before DM's own font (entry 695) was found in Sprint 19; the spell area uses `DmFont`.
 - Blocked moves go through `GameScreen.bump()`:
   - it plays the thud through the injected `SoundPlayer` (`javaSound()` in the game, `silent()` or a lambda in tests);

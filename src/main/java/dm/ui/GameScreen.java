@@ -7,12 +7,16 @@ import dm.model.Actions;
 import dm.model.Champion;
 import dm.model.ChampionMirror;
 import dm.model.Difficulty;
+import dm.model.Direction;
 import dm.model.DungeonMap;
+import dm.model.Group;
 import dm.model.Item;
 import dm.model.Party;
 import dm.model.Slot;
 import dm.model.Sounds;
 import dm.model.Spells;
+import dm.model.Square;
+import dm.model.SquareType;
 
 import java.awt.BasicStroke;
 import java.awt.Color;
@@ -45,8 +49,14 @@ public final class GameScreen {
     public static final int DAMAGE_SHOWN_MS = 900;
     /** Length of a game tick: doors move one of their 4 steps per tick, roughly as fast as in DM. */
     public static final int TICK_MS = 170;
-    /** Viewport rows from here down are the floor of the party's own square (pick up and drop); above is for throwing. */
-    static final int FLOOR_CLICK_Y = 100;
+    /**
+     * DM's G0462 drop boxes (screen coordinates), by view cell: the party
+     * square's far left and right cells along the bottom of the view, and
+     * the near right and left cells of the square ahead above them.
+     */
+    static final Rectangle[] PILE_BOXES = {
+            new Rectangle(24, 148, 88, 21), new Rectangle(112, 148, 88, 21),
+            new Rectangle(112, 122, 72, 26), new Rectangle(40, 122, 72, 26)};
 
     /** The game being played; loading a saved game replaces it ({@link #restore}). */
     private Party party;
@@ -367,7 +377,7 @@ public final class GameScreen {
             return;
         }
         if (ViewRenderer.VIEWPORT.contains(x, y)) {
-            clickView(x - ViewRenderer.VIEWPORT.x, y - ViewRenderer.VIEWPORT.y);
+            clickView(x, y);
             return;
         }
         MovementPanel.Action action = arrows.hitTest(x, y);
@@ -681,31 +691,105 @@ public final class GameScreen {
      * up the top item or drops the held one. Above that, a click with an item
      * in hand throws it from that side.
      */
-    private void clickView(int vx, int vy) {
-        boolean right = vx >= ViewRenderer.VIEWPORT.width / 2;
+    /**
+     * DM's F377 for the floor (EVENTS.C G0462, F0373-F0375). An empty hand
+     * grabs the top object of the pile clicked: the party square's far cells
+     * or the near cells of the square ahead, where no creature on the ground
+     * stands ({@link ViewRenderer#pileHit}). A held item is thrown from DM's
+     * throw zone, or dropped in one of {@link #PILE_BOXES}; with a wall
+     * ahead only on the party's own square, and never thrown.
+     */
+    private void clickView(int x, int y) {
+        if (party.leader() == null) {
+            return;
+        }
         DungeonMap map = party.map();
+        Direction fwd = party.facing();
+        int aheadX = party.x() + fwd.dx;
+        int aheadY = party.y() + fwd.dy;
         Item held = party.held();
-        if (vy >= FLOOR_CLICK_Y) {
-            int cell = party.facing().cellOf(right ? 1 : 0);
-            if (held == null) {
-                DungeonMap.Pickup pickup = map.pickUpItem(party.x(), party.y(), cell);
-                party.setHeld(pickup.item());
-                arrived(pickup.result());
-                if (pickup.item() != null && debug) {
-                    System.out.println("Picked up " + pickup.item().name() + " from the floor");
-                }
-            } else {
-                party.setHeld(null);
-                arrived(map.dropItem(party.x(), party.y(), cell, held));
-                if (debug) {
-                    System.out.println("Dropped " + held.name());
+        if (held == null) {
+            for (int viewCell = 0; viewCell < 4; viewCell++) {
+                Rectangle pile = view.pileHit(viewCell);
+                if (pile != null && pile.contains(x, y)) {
+                    grab(viewCell, aheadX, aheadY);
+                    return;
                 }
             }
-        } else if (held != null && party.throwHeld(right)) {
-            if (debug) {
-                System.out.println("Threw " + held.name() + (right ? " from the right" : " from the left"));
+            return;
+        }
+        Square ahead = map.get(aheadX, aheadY);
+        boolean wallAhead = ahead.looksSolid();
+        if (!wallAhead && throwHeld(x, y, ahead.type() == SquareType.DOOR && ahead.facesAlong(fwd))) {
+            return;
+        }
+        for (int viewCell = 0; viewCell < (wallAhead ? 2 : 4); viewCell++) {
+            if (PILE_BOXES[viewCell].contains(x, y)) {
+                boolean onAhead = viewCell >= 2;
+                int cell = fwd.cellOf(viewCell);
+                party.setHeld(null);
+                arrived(map.dropItem(onAhead ? aheadX : party.x(), onAhead ? aheadY : party.y(), cell, held));
+                if (debug) {
+                    System.out.println("Dropped " + held.name() + (onAhead ? " on the square ahead" : ""));
+                }
+                return;
             }
         }
+    }
+
+    /** F0373: the top object of view cell {@code viewCell}'s pile into the hand. */
+    private void grab(int viewCell, int aheadX, int aheadY) {
+        DungeonMap map = party.map();
+        int cell = party.facing().cellOf(viewCell);
+        boolean onAhead = viewCell >= 2;
+        if (onAhead && creatureOnCell(map.groupAt(aheadX, aheadY), cell)) {
+            return; // DM: not from under a creature on the ground
+        }
+        DungeonMap.Pickup pickup = map.pickUpItem(onAhead ? aheadX : party.x(), onAhead ? aheadY : party.y(), cell);
+        party.setHeld(pickup.item());
+        arrived(pickup.result());
+        if (pickup.item() != null && debug) {
+            System.out.println("Picked up " + pickup.item().name() + " from the floor");
+        }
+    }
+
+    /** F0176: whether a creature of {@code group} that doesn't levitate stands on {@code cell}. */
+    private static boolean creatureOnCell(Group group, int cell) {
+        if (group == null || group.type().levitates()) {
+            return false;
+        }
+        if (group.centred()) {
+            return true;
+        }
+        for (int i = 0; i < group.count(); i++) {
+            if (group.cellOf(i) == cell) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    /**
+     * F0377's throw zone: screen rows 47-102, the left half from x 32 (64
+     * with a door ahead seen head-on) to 111, the right half from 112 to 191
+     * (163). Returns whether the click was in it and the item flew.
+     */
+    private boolean throwHeld(int x, int y, boolean doorAhead) {
+        if (y < 47 || y > 102) {
+            return false;
+        }
+        boolean right = x > 111;
+        if (right ? x > (doorAhead ? 163 : 191) : x < (doorAhead ? 64 : 32)) {
+            return false;
+        }
+        Item held = party.held();
+        if (!party.throwHeld(right)) {
+            return false;
+        }
+        if (debug) {
+            System.out.println("Threw " + held.name() + (right ? " from the right" : " from the left"));
+        }
+        return true;
     }
 
     /** True while an item rides on the mouse pointer, which the window then hides. */

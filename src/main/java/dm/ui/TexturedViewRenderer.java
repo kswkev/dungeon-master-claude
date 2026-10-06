@@ -106,6 +106,14 @@ public final class TexturedViewRenderer implements ViewRenderer {
         return doorButtonHit;
     }
 
+    /** DM's G0291 boxes around the grabbable piles, by view cell. */
+    private final Rectangle[] pileHits = new Rectangle[4];
+
+    @Override
+    public Rectangle pileHit(int viewCell) {
+        return pileHits[viewCell];
+    }
+
     @Override
     public boolean animated() {
         return fieldDrawn;
@@ -120,6 +128,7 @@ public final class TexturedViewRenderer implements ViewRenderer {
         portraitHit = null;
         wallHit = null;
         doorButtonHit = null;
+        java.util.Arrays.fill(pileHits, null);
         fieldDrawn = false;
         viewer = party;
         // With a thieves' eye the view is drawn off-screen, so the wall ahead can show what is behind it.
@@ -963,8 +972,13 @@ public final class TexturedViewRenderer implements ViewRenderer {
             if (at == null) {
                 continue;
             }
+            // F0115: objects on the party's square and the near row ahead can be grabbed.
+            boolean grabbable = l == 0 && (d == 0 || d == 1 && viewCell >= 2);
             for (Item item : map.itemsAt(mx, my, fwd.cellOf(viewCell))) {
-                drawObject(g, item, at, OBJECT_SCALE[d][viewCell >= 2 ? 0 : 1], true);
+                Rectangle drawn = drawObject(g, item, at, OBJECT_SCALE[d][viewCell >= 2 ? 0 : 1], true);
+                if (grabbable && drawn != null) {
+                    addPileHit(viewCell, drawn);
+                }
             }
         }
         if (!far) {
@@ -982,14 +996,39 @@ public final class TexturedViewRenderer implements ViewRenderer {
         }
     }
 
-    private void drawObject(Graphics2D g, Item item, Point at, int scale32, boolean onFloor) {
+    /**
+     * F0115: the first object's box, at least 14 rows tall (a small one grows
+     * upward, and a little downward when tiny), then every further object's
+     * box added; the bottom is clipped to the viewport's last row.
+     */
+    private void addPileHit(int viewCell, Rectangle drawn) {
+        int top = drawn.y;
+        int bottom = Math.min(drawn.y + drawn.height - 1, VIEWPORT.height - 1);
+        Rectangle box = pileHits[viewCell];
+        if (box == null) {
+            int height = bottom - top;
+            if (height < 14) {
+                height >>= 1;
+                top += height - 7;
+                if (height < 4) {
+                    bottom -= height - 3;
+                }
+            }
+            pileHits[viewCell] = new Rectangle(drawn.x + VIEWPORT.x, top + VIEWPORT.y, drawn.width, bottom - top + 1);
+        } else {
+            box.add(new Rectangle(drawn.x + VIEWPORT.x, top + VIEWPORT.y, drawn.width, bottom - top + 1));
+        }
+    }
+
+    /** Draws {@code item} at zone point {@code at}; returns where (viewport coordinates), or null if not drawn. */
+    private Rectangle drawObject(Graphics2D g, Item item, Point at, int scale32, boolean onFloor) {
         int graphic = ItemCatalog.floorGraphic(item);
         BufferedImage img = graphic < 0 ? null : art.sprite(graphic);
         boolean own = img != null;
         if (img == null) {
             BufferedImage icon = art.iconSprite(item);
             if (icon == null) {
-                return;
+                return null;
             }
             img = icon;
         }
@@ -1000,6 +1039,7 @@ public final class TexturedViewRenderer implements ViewRenderer {
         }
         int y = onFloor ? at.y - h : at.y - h / 2;
         g.drawImage(img, at.x - w / 2, y, w, h, null);
+        return new Rectangle(at.x - w / 2, y, w, h);
     }
 
     // ---- distance colours -----------------------------------------------------
