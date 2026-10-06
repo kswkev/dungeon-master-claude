@@ -232,6 +232,57 @@ class GameScreenTest {
         assertFalse(screen.sheet().isOpen(), "back to the dungeon, where it was opened");
     }
 
+    private void dieOfABump() {
+        Champion elija = party.members().get(0);
+        elija.takeDamage(elija.health() - 1);
+        pressForward(); // the fatal bump
+        assertTrue(screen.gameOver());
+    }
+
+    private static Point centre(Rectangle r) {
+        return new Point(r.x + r.width / 2, r.y + r.height / 2);
+    }
+
+    @Test
+    void fiveSecondsAfterTheEndRestartLoadsTheNewestSave() {
+        screen.setSaveGames(new SaveGames(saveDir));
+        recruitElija();
+        screen.escape();
+        clickMenu(GameMenu.Choice.SAVE);
+        clickMenu(GameMenu.Choice.SLOT, 2);
+        clickMenu(GameMenu.Choice.OK);
+        dieOfABump();
+        Point restart = centre(GameScreen.RESTART_BOX);
+        screen.press(restart.x, restart.y);
+        assertTrue(screen.gameOver(), "not offered yet");
+        assertFalse(screen.tick());
+        now += GameScreen.RESTART_DELAY_MS;
+        assertTrue(screen.tick(), "a repaint as the buttons appear");
+        assertTrue(screen.restartShown());
+        render();
+        screen.press(restart.x, restart.y);
+        assertFalse(screen.gameOver(), "the saved game is back");
+        assertEquals(1, screen.party().members().size());
+        assertTrue(screen.party().members().get(0).health() > 0);
+    }
+
+    @Test
+    void newGameStartsAgainAndRestartNeedsASave() {
+        screen.setSaveGames(new SaveGames(saveDir)); // empty
+        Party fresh = new Party(DungeonMap.fromAscii(0, "###", "#.#", "###"), 1, 1, Direction.NORTH);
+        screen.setNewGame(() -> fresh);
+        recruitElija();
+        dieOfABump();
+        now += GameScreen.RESTART_DELAY_MS;
+        Point restart = centre(GameScreen.RESTART_BOX);
+        screen.press(restart.x, restart.y);
+        assertTrue(screen.gameOver(), "no save to restart from");
+        Point newGame = centre(GameScreen.NEW_GAME_BOX);
+        screen.press(newGame.x, newGame.y);
+        assertFalse(screen.gameOver());
+        assertSame(fresh, screen.party());
+    }
+
     @Test
     void afterTheEndEscapeStillOffersALoad() {
         screen.setSaveGames(new SaveGames(saveDir));

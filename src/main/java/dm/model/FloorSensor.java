@@ -21,6 +21,10 @@ public final class FloorSensor implements Serializable {
     public static final int TYPE_ANY = 1;
     public static final int TYPE_PARTY_OR_CREATURE = 2;
     public static final int TYPE_PARTY = 3;
+    /** F276's C004: pressed while an object of the inventory icon in its data lies on the square. */
+    public static final int TYPE_OBJECT = 4;
+    /** F276's C008: the party coming or going sets it off if it carries an object of the icon in its data. */
+    public static final int TYPE_PARTY_POSSESSION = 8;
     /** Creates a creature group on its square when an effect reaches it (see {@link DungeonMap}). */
     public static final int TYPE_GENERATOR = 6;
     public static final int TYPE_CREATURE = 7;
@@ -81,6 +85,16 @@ public final class FloorSensor implements Serializable {
 
     public int value() {
         return value;
+    }
+
+    /** Word 3 bits 4-5: the cell its effect names on a wall square (a gate's input, a launcher's side; F272). */
+    public int targetCell() {
+        return (action >>> 4) & 3;
+    }
+
+    /** The ticks its effect takes to reach its target (DM's Value, F272); a generator's value is its count instead. */
+    public int delay() {
+        return type == TYPE_GENERATOR ? 0 : value;
     }
 
     public int action() {

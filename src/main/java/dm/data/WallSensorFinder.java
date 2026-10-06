@@ -54,7 +54,7 @@ final class WallSensorFinder {
         int attributes = words[2];
         int target = words[3];
         boolean local = (attributes & 0x0800) != 0;
-        return new WallSensor(x, y, side,
+        WallSensor sensor = new WallSensor(x, y, side,
                 words[1] & 0x7F,
                 words[1] >>> 7,
                 SensorBits.effect(attributes),
@@ -67,6 +67,8 @@ final class WallSensorFinder {
                 target >>> 11,
                 (target >>> 4) & 3,
                 OrnamentLists.global(wallOrnaments, attributes >>> 12));
+        sensor.setTiming((attributes >>> 7) & 0xF, target >>> 4);
+        return sensor;
     }
 
     /** Whether a wall side holds a champion mirror, whose items belong to the champion. */

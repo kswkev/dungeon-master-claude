@@ -428,14 +428,19 @@ public final class DungeonMap implements Serializable {
         this.party = party;
         Outcome out = new Outcome();
         updateSensors(fromX, fromY, out);
+        if (fromX != party.x() || fromY != party.y()) {
+            partyPossessionSensors(fromX, fromY, out);
+            partyPossessionSensors(party.x(), party.y(), out);
+        }
         updateSensors(party.x(), party.y(), out);
         return out.result();
     }
 
     /** The party has left this map from (x, y): sensors there are released. */
     public StepResult partyLeft(int x, int y) {
-        party = null;
         Outcome out = new Outcome();
+        partyPossessionSensors(x, y, out);
+        party = null;
         updateSensors(x, y, out);
         return out.result();
     }
@@ -457,11 +462,105 @@ public final class DungeonMap implements Serializable {
     }
 
     private boolean pressedNow(FloorSensor s) {
+        if (s.type() == FloorSensor.TYPE_OBJECT) {
+            return s.enabled() && hasItemWithIcon(s.x(), s.y(), s.data());
+        }
         boolean partyOn = party != null && party.map() == this && party.x() == s.x() && party.y() == s.y()
                 && s.triggeredBy(party);
         Group g = groupAt(s.x(), s.y());
         boolean creatureOn = g != null && !g.type().levitates() && s.acceptsCreatures();
         return partyOn || creatureOn || s.acceptsItems() && hasItems(s.x(), s.y());
+    }
+
+    /** F276's C004: an object of inventory icon {@code icon} lies anywhere on (x, y). */
+    private boolean hasItemWithIcon(int x, int y, int icon) {
+        if (dungeon == null) {
+            return false;
+        }
+        for (int cell = 0; cell < 4; cell++) {
+            for (Item item : itemsAt(x, y, cell)) {
+                if (dungeon.iconOf(item) == icon) {
+                    return true;
+                }
+            }
+        }
+        return false;
+    }
+
+    /**
+     * F276's C008 for the party arriving on or leaving (x, y): each such
+     * sensor there goes off if the party carries an object of its icon
+     * ({@link Party#possesses}), coming or going alike, as in DM.
+     */
+    private void partyPossessionSensors(int x, int y, Outcome out) {
+        if (party == null) {
+            return;
+        }
+        for (FloorSensor s : sensors) {
+            if (s.x() != x || s.y() != y || !s.enabled() || s.type() != FloorSensor.TYPE_PARTY_POSSESSION) {
+                continue;
+            }
+            boolean trigger = party.possesses(s.data()) != s.revert();
+            FloorSensor.Effect effect;
+            if (s.effect() == FloorSensor.Effect.HOLD) {
+                effect = trigger ? FloorSensor.Effect.SET : FloorSensor.Effect.CLEAR;
+            } else if (trigger) {
+                effect = s.effect();
+            } else {
+                continue;
+            }
+            out.sound |= s.audible();
+            s.used();
+            send(s.delay(), s.targetX(), s.targetY(), s.targetCell(), effect, out, 0);
+        }
+    }
+
+    // ---- DM's timeline for sensor effects (F272's events 5-10) ----------------
+
+    /** A sensor effect on its way to (x, y), due at game tick {@code time}. */
+    private record Pending(int x, int y, int cell, FloorSensor.Effect effect, long time) implements Serializable {
+    }
+
+    /** Sensor effects still on their way; null in games saved before Sprint 25. */
+    private List<Pending> pending;
+
+    /**
+     * F272: a sensor's effect goes to its target after the sensor's delay
+     * in ticks. With none it arrives at once (DM queues it for the same
+     * tick, which comes to the same).
+     */
+    private void send(int delay, int x, int y, int cell, FloorSensor.Effect effect, Outcome out, int depth) {
+        Party p = dungeon == null ? null : dungeon.party();
+        if (delay <= 0 || p == null) {
+            applyEffect(x, y, cell, effect, out, depth);
+            return;
+        }
+        if (pending == null) {
+            pending = new ArrayList<>();
+        }
+        pending.add(new Pending(x, y, cell, effect, p.time() + delay));
+    }
+
+    /** Delivers the sensor effects due by {@code time}, in the order sent. Returns whether there were any. */
+    public boolean runSensorEvents(long time) {
+        if (pending == null || pending.isEmpty()) {
+            return false;
+        }
+        List<Pending> due = new ArrayList<>();
+        for (Pending p : pending) {
+            if (p.time() <= time) {
+                due.add(p);
+            }
+        }
+        if (due.isEmpty()) {
+            return false;
+        }
+        pending.removeAll(due);
+        Outcome out = new Outcome();
+        for (Pending p : due) {
+            applyEffect(p.x(), p.y(), p.cell(), p.effect(), out, 0);
+        }
+        return true;
     }
 
     /**
@@ -491,7 +590,7 @@ public final class DungeonMap implements Serializable {
             } else {
                 continue;
             }
-            applyEffect(s.targetX(), s.targetY(), 0, effect, out, 0);
+            send(s.delay(), s.targetX(), s.targetY(), s.targetCell(), effect, out, 0);
             out.sound |= s.audible();
             if (trigger) {
                 s.used();
@@ -559,8 +658,24 @@ public final class DungeonMap implements Serializable {
             }
             case WALL -> {
                 for (Direction side : Direction.values()) {
-                    for (WallSensor gate : wallSensors(x, y, side)) {
-                        if (gate.type() != WallSensor.TYPE_AND_OR_GATE || !gate.enabled()) {
+                    for (WallSensor gate : new ArrayList<>(wallSensors(x, y, side))) {
+                        if (!gate.enabled()) {
+                            continue;
+                        }
+                        if (gate.type() == WallSensor.TYPE_COUNTDOWN) {
+                            countDown(gate, effect, out, depth);
+                            continue;
+                        }
+                        if (gate.isLauncher()) {
+                            if (side.ordinal() == (cell & 3)) { // F248: only the launcher on the cell the effect names
+                                launch(gate);
+                                if (gate.onceOnly()) {
+                                    gate.disable();
+                                }
+                            }
+                            continue;
+                        }
+                        if (gate.type() != WallSensor.TYPE_AND_OR_GATE) {
                             continue;
                         }
                         // Like a plate: satisfied is pressed, revert swaps the two, HOLD clears on leaving.
@@ -598,9 +713,112 @@ public final class DungeonMap implements Serializable {
                 rotate.add(s);
             }
         } else {
-            applyEffect(s.targetX(), s.targetY(), s.targetCell(), effect, out, depth);
+            send(s.delay(), s.targetX(), s.targetY(), s.targetCell(), effect, out, depth);
         }
         s.used();
+    }
+
+    /**
+     * F248's countdown: an effect reaching it counts it (SET up, anything
+     * else down) while it is above 0. A HOLD countdown then sets its target
+     * while at 0 and clears it otherwise (revert swaps them); any other
+     * fires its effect as it reaches 0.
+     */
+    private void countDown(WallSensor s, FloorSensor.Effect effect, Outcome out, int depth) {
+        if (!s.countDown(effect)) {
+            return;
+        }
+        boolean zero = s.count() == 0;
+        if (s.effect() == FloorSensor.Effect.HOLD) {
+            fire(s, zero != s.revert() ? FloorSensor.Effect.SET : FloorSensor.Effect.CLEAR, out, depth + 1, null);
+        } else if (zero) {
+            fire(s, s.effect(), out, depth + 1, null);
+        }
+    }
+
+    /**
+     * F247: a launcher fires out of its wall side into the square beyond,
+     * heading away from the wall: a new object (7, 9; its data an inventory
+     * icon, F167), a spell (8, 10; its data the explosion type), or the
+     * objects lying on its side of the wall (14, 15). One projectile goes on
+     * a random one of the two cells nearer the wall, or two side by side.
+     * They start with the sensor's kinetic energy and attack 100, never
+     * lose energy (DM 1.x's BUG0_21: step energy 0), and can hit at once.
+     */
+    private void launch(WallSensor s) {
+        Party p = dungeon == null ? null : dungeon.party();
+        if (p == null) {
+            return;
+        }
+        int cell = s.side().ordinal();
+        int type = s.type();
+        boolean single = s.singleLauncher();
+        boolean spell = type == WallSensor.TYPE_LAUNCHER_SPELL || type == WallSensor.TYPE_LAUNCHER_SPELL_DOUBLE;
+        Item first = null;
+        Item second = null;
+        if (type == WallSensor.TYPE_LAUNCHER_WALL_OBJECT || type == WallSensor.TYPE_LAUNCHER_WALL_OBJECT_DOUBLE) {
+            first = takeWallObject(s.x(), s.y(), cell);
+            if (first == null) {
+                return;
+            }
+            if (!single && (second = takeWallObject(s.x(), s.y(), cell)) == null) {
+                single = true;
+            }
+        } else if (!spell) {
+            first = launcherObject(s.data());
+            if (first == null) {
+                return;
+            }
+            second = first;
+        }
+        int projectileCell = (cell + 2) & 3;
+        if (single) {
+            projectileCell = (projectileCell + p.random().nextInt(2)) & 3;
+        }
+        Direction direction = s.side();
+        int x = s.x() + direction.dx;
+        int y = s.y() + direction.dy;
+        launchProjectile(p, first, spell ? s.data() : -1, x, y, projectileCell, direction, s.kineticEnergy());
+        if (!single) {
+            launchProjectile(p, second, spell ? s.data() : -1, x, y, (projectileCell + 1) & 3, direction,
+                    s.kineticEnergy());
+        }
+    }
+
+    private void launchProjectile(Party p, Item item, int spell, int x, int y, int cell, Direction direction,
+                                  int kineticEnergy) {
+        Projectile projectile = item != null
+                ? new Projectile(item, x, y, cell, direction, kineticEnergy, 100, 0, p.time() + 1)
+                : new Projectile(spell, x, y, cell, direction, kineticEnergy, 100, 0, p.time() + 1);
+        projectile.ignoreImpacts = false; // F212: a launcher's projectile can hit on its first move
+        projectiles.add(projectile);
+        dungeon.creatures().changed(p);
+    }
+
+    /** F247 for 14/15: the first object lying on wall cell {@code cell} of (x, y), or on the next cell. */
+    private Item takeWallObject(int x, int y, int cell) {
+        for (int c : new int[] {cell, (cell + 1) & 3}) {
+            List<Item> pile = pile(x, y, c, false);
+            if (pile != null && !pile.isEmpty()) {
+                return pile.remove(0);
+            }
+        }
+        return null;
+    }
+
+    /** DM's F167: the new object a launcher makes from an inventory icon, or null for any other icon. */
+    static Item launcherObject(int icon) {
+        return switch (icon) {
+            case 54 -> ItemCatalog.item(Item.Category.WEAPON, 30); // rock
+            case 128 -> ItemCatalog.item(Item.Category.JUNK, 25); // boulder
+            case 51 -> ItemCatalog.item(Item.Category.WEAPON, 27); // arrow
+            case 52 -> ItemCatalog.item(Item.Category.WEAPON, 28); // slayer
+            case 55 -> ItemCatalog.item(Item.Category.WEAPON, 31); // poison dart
+            case 56 -> ItemCatalog.item(Item.Category.WEAPON, 32); // throwing star
+            case 32 -> ItemCatalog.item(Item.Category.WEAPON, 8); // dagger
+            case 4, 5, 6, 7 -> ItemCatalog.item(Item.Category.WEAPON, 2, 0); // an unlit torch (BUG0_65: no charges)
+            default -> null;
+        };
     }
 
     // ---- stairs and levels -------------------------------------------------

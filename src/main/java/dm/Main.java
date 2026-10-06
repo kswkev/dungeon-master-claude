@@ -2,6 +2,7 @@ package dm;
 
 import dm.data.DungeonFile;
 import dm.data.GraphicsFile;
+import dm.data.SongFile;
 import dm.data.Sound;
 import dm.model.Champion;
 import dm.model.ChampionMirror;
@@ -17,6 +18,7 @@ import dm.ui.SoundPlayer;
 
 import javax.swing.JOptionPane;
 import javax.swing.SwingUtilities;
+import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.List;
 
@@ -72,7 +74,36 @@ public final class Main {
         }
 
         SoundPlayer sounds = SoundPlayer.javaSound();
-        SwingUtilities.invokeLater(() -> new GameWindow(party, art, sounds, debug).setVisible(true));
+        // The testing options go straight into the game; otherwise it starts at DM's entrance.
+        boolean testing = System.getProperty("dm.start") != null || System.getProperty("dm.recruit") != null
+                || System.getProperty("dm.give") != null;
+        Sound song = song(path);
+        SwingUtilities.invokeLater(() -> new GameWindow(party, art, sounds, debug, () -> newGame(path), !testing, song)
+                .setVisible(true));
+    }
+
+    /** The PC version's entrance music, SONG.DAT beside DUNGEON.DAT, or null when it isn't there. */
+    static Sound song(Path dungeonPath) {
+        Path songPath = dungeonPath.resolveSibling("SONG.DAT");
+        if (!Files.exists(songPath)) {
+            return null;
+        }
+        try {
+            return SongFile.load(songPath);
+        } catch (Exception e) {
+            System.err.println("Warning: could not read " + songPath + " (" + e.getMessage() + "), no music");
+            return null;
+        }
+    }
+
+    /** THE END's NEW GAME (not in DM): the dungeon read afresh, the party at its start with nobody recruited. */
+    static Party newGame(Path path) {
+        try {
+            DungeonFile fresh = DungeonFile.load(path);
+            return new Party(fresh.maps(), 0, fresh.startX(), fresh.startY(), fresh.startFacing());
+        } catch (Exception e) {
+            throw new IllegalStateException("Could not reload the dungeon: " + e.getMessage(), e);
+        }
     }
 
     /**

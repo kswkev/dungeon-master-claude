@@ -53,6 +53,13 @@ class RealDungeonTest {
         }
     }
 
+    /** Sensor effects take their delay (up to 15 ticks, F272) to arrive. */
+    private static void arrive(Party p) {
+        for (int i = 0; i < 16; i++) {
+            p.tick();
+        }
+    }
+
     /** #14: the button at (6,4) north reveals an alcove with a falchion, which then stays. */
     @Test
     void theRevealedAlcoveStays() {
@@ -75,8 +82,10 @@ class RealDungeonTest {
         DungeonMap map = p.map();
         assertTrue(map.isPitOpen(7, 8));
         map.clickWall(6, 8, Direction.NORTH, p, i -> 0);
+        arrive(p);
         assertFalse(map.isPitOpen(7, 8));
         map.clickWall(6, 8, Direction.NORTH, p, i -> 0);
+        arrive(p);
         assertTrue(map.isPitOpen(7, 8));
     }
 
@@ -87,9 +96,11 @@ class RealDungeonTest {
         DungeonMap map = p.map();
         boolean was = map.isPassable(5, 9);
         map.clickWall(4, 10, Direction.SOUTH, p, i -> 0);
+        arrive(p);
         settleDoors(map);
         assertEquals(!was, map.isPassable(5, 9));
         map.clickWall(4, 10, Direction.SOUTH, p, i -> 0);
+        arrive(p);
         settleDoors(map);
         assertEquals(was, map.isPassable(5, 9));
     }
@@ -144,17 +155,21 @@ class RealDungeonTest {
             p.tick();
         }
         assertTrue(map.hasItems(14, 14), "teleported onto the plate");
+        arrive(p);
         assertFalse(map.isPitOpen(13, 15));
     }
 
     /** #20's sensor bits: the HOLD + revert plate at (25,3) keeps the pit at (24,5) shut while an item is on it. */
     @Test
     void anItemOnThePlateHoldsThePitShut() {
-        DungeonMap map = level2(25, 4, Direction.NORTH).map();
+        Party p = level2(25, 4, Direction.NORTH);
+        DungeonMap map = p.map();
         assertTrue(map.isPitOpen(24, 5));
         map.dropItem(25, 3, 0, ItemCatalog.item(Item.Category.WEAPON, 10));
+        arrive(p);
         assertFalse(map.isPitOpen(24, 5));
         map.pickUpItem(25, 3, 0);
+        arrive(p);
         assertTrue(map.isPitOpen(24, 5));
     }
 
@@ -195,6 +210,7 @@ class RealDungeonTest {
         Party p = level2(6, 7, Direction.SOUTH);
         p.recruit(dungeon.maps().get(0).mirrors().get(0));
         p.map().clickWall(6, 8, Direction.NORTH, p, i -> 0);
+        arrive(p);
         assertFalse(p.map().isPitOpen(7, 8));
         for (int i = 0; i < 200; i++) {
             p.tick();
@@ -209,6 +225,7 @@ class RealDungeonTest {
         assertFalse(loaded.map().isPitOpen(7, 8), "the lever's work survives");
         assertEquals(p.members().get(0).food(), loaded.members().get(0).food());
         loaded.map().clickWall(6, 8, Direction.NORTH, loaded, i -> 0);
+        arrive(loaded);
         assertTrue(loaded.map().isPitOpen(7, 8), "and the lever still works");
     }
 
