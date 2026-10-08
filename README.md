@@ -205,7 +205,7 @@ Spells came in Sprint 19; the magic in items' action menus (a staff's fireball a
 
 ## Game data
 
-The original game data is copyrighted and is **not** included. Copy your own files to:
+The original game data is copyrighted and is **not** included. Dungeon Master is now abandonware and can be downloaded from [My Abandonware](https://www.myabandonware.com/game/dungeon-master-n0). Copy your own files to:
 
 ```
 data/DUNGEON.DAT
