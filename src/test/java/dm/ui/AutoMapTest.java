@@ -1,5 +1,7 @@
 package dm.ui;
 
+import dm.model.Champion;
+import dm.model.ChampionMirror;
 import dm.model.Direction;
 import dm.model.DungeonMap;
 import dm.model.Party;
@@ -28,10 +30,27 @@ class AutoMapTest {
         DungeonMap bottom = DungeonMap.fromAscii(1, "###", "#.#", "#.#", "###");
         DungeonMap unseen = DungeonMap.fromAscii(2, "###", "#.#", "###");
         party = new Party(List.of(top, bottom, unseen), 0, 1, 2, Direction.NORTH);
+        party.recruit(new ChampionMirror(1, 0, Direction.SOUTH, Champion.parse(
+                "ELIJA\nLION OF YAITOPYA\n\nM\nAADMACEEAABG\nDCCKCICKCEDFCI\nBBCAAAAACBECAAAA", 1))); // #58
         screen = new GameScreen(party, Art.none(), sound -> { }, false);
         party.explore();
         screen.press(MovementPanel.AREA.x + 40, MovementPanel.AREA.y + 10); // forward, into the pit
         assertEquals(1, party.level());
+    }
+
+    @Test
+    void wallsBeyondTheMapsEdgeAreShownBesideSeenSquares() {
+        // A corridor along the map's west edge: x = -1 is the wall beyond it.
+        DungeonMap edge = DungeonMap.fromAscii(0, "..", "..");
+        edge.markSeen(0, 0);
+        edge.markSeen(1, 1);
+        List<DungeonMap> floor = List.of(edge);
+        assertTrue(AutoMap.shown(floor, edge, -1, 0), "#59: the wall beyond a seen square");
+        assertTrue(AutoMap.shown(floor, edge, 0, -1));
+        assertFalse(AutoMap.shown(floor, edge, -1, 1), "beside an unseen square");
+        assertFalse(AutoMap.shown(floor, edge, -1, -1), "corners touch no square");
+        assertTrue(AutoMap.shown(floor, edge, 2, 1));
+        assertFalse(AutoMap.shown(floor, edge, 0, 1), "inside, only what was seen");
     }
 
     private void clickButton() {

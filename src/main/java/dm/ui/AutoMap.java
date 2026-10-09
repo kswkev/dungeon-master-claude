@@ -179,9 +179,9 @@ final class AutoMap {
         int maxX = Integer.MIN_VALUE;
         int maxY = Integer.MIN_VALUE;
         for (DungeonMap m : maps) {
-            for (int x = 0; x < m.width(); x++) {
-                for (int y = 0; y < m.height(); y++) {
-                    if (m.seen(x, y)) {
+            for (int x = -1; x <= m.width(); x++) {
+                for (int y = -1; y <= m.height(); y++) {
+                    if (shown(maps, m, x, y)) {
                         minX = Math.min(minX, x + m.offsetX());
                         maxX = Math.max(maxX, x + m.offsetX());
                         minY = Math.min(minY, y + m.offsetY());
@@ -201,9 +201,9 @@ final class AutoMap {
         Rectangle clip = g.getClipBounds();
         g.clipRect(MAP_AREA.x, MAP_AREA.y, MAP_AREA.width, MAP_AREA.height);
         for (DungeonMap m : maps) {
-            for (int x = 0; x < m.width(); x++) {
-                for (int y = 0; y < m.height(); y++) {
-                    if (m.seen(x, y)) {
+            for (int x = -1; x <= m.width(); x++) {
+                for (int y = -1; y <= m.height(); y++) {
+                    if (shown(maps, m, x, y)) {
                         square(g, m, x, y, left + (x + m.offsetX() - minX) * tile,
                                 top + (y + m.offsetY() - minY) * tile, tile);
                     }
@@ -217,6 +217,34 @@ final class AutoMap {
             partyArrow(g, cx, cy, Math.max(4, tile * 2 / 3), party.facing());
         }
         g.setClip(clip);
+    }
+
+    /**
+     * Whether (x, y) of {@code m} is drawn: a seen square, or (#59) a square
+     * just outside the map, which is wall, next to a seen open square inside
+     * it, unless another map of the floor lies there.
+     */
+    static boolean shown(List<DungeonMap> maps, DungeonMap m, int x, int y) {
+        if (m.inBounds(x, y)) {
+            return m.seen(x, y);
+        }
+        boolean nextToSeen = false;
+        for (Direction d : Direction.values()) {
+            int nx = x + d.dx;
+            int ny = y + d.dy;
+            if (m.inBounds(nx, ny) && m.seen(nx, ny) && !m.blocksView(nx, ny)) {
+                nextToSeen = true;
+            }
+        }
+        if (!nextToSeen) {
+            return false;
+        }
+        for (DungeonMap other : maps) {
+            if (other != m && other.inBounds(x + m.offsetX() - other.offsetX(), y + m.offsetY() - other.offsetY())) {
+                return false;
+            }
+        }
+        return true;
     }
 
     /** One square as the party saw it: hidden pits and teleporters are floor, fake walls are walls. */

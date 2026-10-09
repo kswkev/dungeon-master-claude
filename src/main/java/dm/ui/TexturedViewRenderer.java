@@ -300,6 +300,10 @@ public final class TexturedViewRenderer implements ViewRenderer {
      */
     static final int FIRST_WALL_ORNAMENT_ZONE = 3000;
 
+    /** The torch holder with its torch (46) and empty (38), as the PC dungeon's storage sensors show them. */
+    static final int TORCH_HOLDER = 46;
+    static final int EMPTY_TORCH_HOLDER = 38;
+
     /** Draws a front-view decoration on {@code face} and returns where it went (viewport coordinates), or null. */
     private Rectangle drawFrontDecoration(Graphics2D g, int ornament, Rectangle face, int d, int l) {
         int graphic = FIRST_WALL_ORNAMENT + 2 * ornament + 1;
@@ -311,6 +315,15 @@ public final class TexturedViewRenderer implements ViewRenderer {
         int w = (int) Math.round(img.getWidth() * scale);
         int h = (int) Math.round(img.getHeight() * scale);
         img = distant(graphic, w, h, wallOrnamentChanges(d), false);
+        int anchorH = h;
+        if (ornament == EMPTY_TORCH_HOLDER) {
+            // #56: the empty holder's picture (54 rows) shares the full one's top-left (53 rows),
+            // so centre it as the full one, or the bracket rides up as the torch is taken.
+            BufferedImage full = art.sprite(FIRST_WALL_ORNAMENT + 2 * TORCH_HOLDER + 1);
+            if (full != null) {
+                anchorH = (int) Math.round(full.getHeight() * scale);
+            }
+        }
         int x;
         int y;
         Point centre = d == 1 && l != 0 ? null
@@ -320,10 +333,10 @@ public final class TexturedViewRenderer implements ViewRenderer {
             y = face.y;
         } else if (centre != null) {
             x = centre.x - w / 2;
-            y = centre.y - h / 2;
+            y = centre.y - anchorH / 2;
         } else {
             x = face.x + (face.width - w) / 2;
-            y = (int) Math.round(face.y + face.height / 2.0 - h / 2.0 - 6 * scale);
+            y = (int) Math.round(face.y + face.height / 2.0 - anchorH / 2.0 - 6 * scale);
         }
         if (standsOnFloor(ornament, art.sprite(graphic))) {
             y = face.y + face.height - h;
@@ -397,12 +410,39 @@ public final class TexturedViewRenderer implements ViewRenderer {
         int y = SIDE_FACE_CENTRE[d][1] - h / 2;
         BufferedImage front = art.sprite(index + 1);
         if (front != null && standsOnFloor(ornament, front)) {
-            y = SIDE_FACE_CENTRE[d][1] + SIDE_FACE_HEIGHT[d] / 2 - h;
+            y = onSideFloor(img, cx - w / 2, rightSide, SIDE_FACE_CENTRE[d][1] + SIDE_FACE_HEIGHT[d] / 2 - h);
         } else if (level(ornament) > 0) {
             int top = SIDE_FACE_CENTRE[d][1] - SIDE_FACE_HEIGHT[d] / 2;
             y = (int) Math.round(top + level(ornament) * SIDE_FACE_HEIGHT[d] - h / 2.0);
         }
         g.drawImage(img, cx - w / 2, y, w, h, null);
+    }
+
+    /**
+     * The side walls' floor edge (#54): on every left side face (pieces 94,
+     * 96, 101 and 106 in their zones) the wall's lowest row at viewport
+     * column x is this minus x; right faces mirror it.
+     */
+    private static final int SIDE_FLOOR_EDGE = 150;
+
+    /**
+     * Where a floor-level side decoration's top goes so that it stands on the
+     * sloping floor edge: its lowest pixel in some column touches the wall's
+     * last row there, and none goes below it. {@code fallback} if it has no pixels.
+     */
+    static int onSideFloor(BufferedImage img, int left, boolean rightSide, int fallback) {
+        int top = Integer.MAX_VALUE;
+        for (int col = 0; col < img.getWidth(); col++) {
+            int vx = left + col;
+            int edge = SIDE_FLOOR_EDGE - (rightSide ? VIEWPORT.width - 1 - vx : vx);
+            for (int row = img.getHeight() - 1; row >= 0; row--) {
+                if ((img.getRGB(col, row) >>> 24) != 0) {
+                    top = Math.min(top, edge - row);
+                    break;
+                }
+            }
+        }
+        return top == Integer.MAX_VALUE ? fallback : top;
     }
 
     /** Height of each depth's side face at its centre: halfway between the front faces it joins. */
@@ -732,51 +772,127 @@ public final class TexturedViewRenderer implements ViewRenderer {
     /** DM's G215 projectile scales: D3 back/front, D2 back/front, D1 back/front, D0 back. */
     private static final int[] PROJECTILE_SCALE = {13, 16, 19, 22, 25, 28, 32};
 
+    /** G210's graphic info: bits 0-1 the aspect type, 0x10 a side picture, 0x100 scaled by kinetic energy. */
+    private static final int ASPECT_BACK_AND_ROTATION = 0;
+    private static final int ASPECT_BACK = 1;
+    private static final int ASPECT_ROTATION = 2;
+    private static final int ASPECT_NONE = 3;
+    private static final int ASPECT_SIDE = 0x10;
+    private static final int ASPECT_SCALES_WITH_ENERGY = 0x100;
+
     /**
-     * A spell in flight, as F0115 draws projectile aspects: centred on the
-     * flight point, scaled by the distance and by its energy (a spell at full
-     * energy on the party's own square is drawn as is), in the distance
-     * colours of objects. A lightning bolt seen side-on uses its side picture,
-     * turned the way it flies; head-on it is mirrored on the right.
+     * DM's G210 projectile aspects by ordinal (1-14): the first picture
+     * (relative to 454) and the graphic info. Arrow, dagger, axe, lightning,
+     * slayer, stone club, club, poison dart, the swords, throwing star, then
+     * the spells (fireball, default, slime, poison).
      */
-    private void drawSpell(Graphics2D g, Projectile p, Point at, int d, int l, int viewCell, Direction fwd) {
-        int spell = p.spell();
-        int graphic = FIRST_PROJECTILE + switch (spell) {
-            case Explosion.FIREBALL -> PROJECTILE_FIREBALL;
-            case Explosion.SLIME -> PROJECTILE_SLIME;
-            case Explosion.LIGHTNING_BOLT -> PROJECTILE_LIGHTNING;
-            case Explosion.POISON_BOLT, Explosion.POISON_CLOUD -> PROJECTILE_POISON;
-            default -> PROJECTILE_DEFAULT;
-        };
-        boolean flip = false;
-        if (spell == Explosion.LIGHTNING_BOLT) {
-            boolean sideOn = (p.direction().ordinal() & 1) != (fwd.ordinal() & 1);
-            if (sideOn) {
-                graphic++;
-                flip = fwd.turnRight() == p.direction();
-            } else {
-                flip = !(l > 0 || (l == 0 && (viewCell == 1 || viewCell == 2)));
-            }
+    private static final int[][] PROJECTILE_ASPECTS = {
+            {0, 0x11}, {3, 0x11}, {6, 0x10}, {PROJECTILE_LIGHTNING, 0x112}, {11, 0x11}, {14, 0x10}, {17, 0x10},
+            {20, 0x11}, {23, 0x11}, {26, 0x12},
+            {PROJECTILE_FIREBALL, 0x103}, {PROJECTILE_DEFAULT, 0x103}, {PROJECTILE_SLIME, 0x103}, {PROJECTILE_POISON, 0x103}};
+
+    /**
+     * G238's projectile aspect ordinal per weapon type (attribute bits 8-12; #57), 0 for a weapon that
+     * flies as its floor picture: the dagger 2, axes 3, swords 9, clubs 6/7, arrow 1, slayer 5, dart 8, star 10.
+     */
+    private static final int[] WEAPON_PROJECTILE_ASPECT = {
+            0, 0, 0, 0, 0, 9, 9, 0, 2, 9, 9, 9, 9, 9, 9, 9, 0, 9, 3, 3, 0, 0, 0, 7, 6, 0, 0, 1, 5, 0, 0, 8, 10};
+
+    /** DM's F0142: a thing in flight's projectile aspect ordinal, or 0 to draw it as an object. */
+    static int projectileAspect(Projectile p) {
+        if (p.isSpell()) {
+            return switch (p.spell()) {
+                case Explosion.FIREBALL -> 11;
+                case Explosion.SLIME -> 13;
+                case Explosion.LIGHTNING_BOLT -> 4;
+                case Explosion.POISON_BOLT, Explosion.POISON_CLOUD -> 14;
+                default -> 12;
+            };
         }
+        Item item = p.item();
+        return item.category() == Item.Category.WEAPON && item.type() < WEAPON_PROJECTILE_ASPECT.length
+                ? WEAPON_PROJECTILE_ASPECT[item.type()] : 0;
+    }
+
+    /**
+     * A thing in flight drawn with its projectile aspect, as F0115 does:
+     * centred on the flight point, scaled by the distance (and, for spells,
+     * by their energy; at full energy on the party's own square drawn as is),
+     * in the distance colours of objects. The picture is chosen by the way
+     * it flies against the party's facing: head-on its front, or its back
+     * when it flies away; side-on its side picture, turned the way it flies.
+     * Weapons with rotation (axes, clubs) turn over on every other square.
+     */
+    private void drawProjectile(Graphics2D g, Projectile p, int ordinal, Point at, int d, int l, int viewCell,
+                                Direction fwd) {
+        int[] aspect = PROJECTILE_ASPECTS[ordinal - 1];
+        int graphic = FIRST_PROJECTILE + aspect[0];
+        int type = aspect[1] & 3;
+        Direction dir = p.direction();
+        boolean rotated = type == ASPECT_BACK_AND_ROTATION && ((p.x() + p.y()) & 1) != 0;
+        // DM's view cells: front-left, front-right, back-right, back-left = our 3, 2, 1, 0.
+        boolean leftCell = viewCell == 3 || viewCell == 0;
+        boolean frontCell = viewCell >= 2;
+        int delta;
+        boolean flipH;
+        boolean flipV;
+        if (type == ASPECT_NONE) {
+            delta = 0;
+            flipH = false;
+            flipV = false;
+        } else if ((dir.ordinal() & 1) != (fwd.ordinal() & 1)) { // side-on
+            delta = type == ASPECT_ROTATION ? 1 : 2;
+            if (type == ASPECT_BACK_AND_ROTATION) {
+                flipV = rotated;
+                flipH = rotated == leftCell;
+            } else {
+                flipV = false;
+                flipH = fwd.turnRight() == dir;
+            }
+        } else {
+            boolean front = type >= ASPECT_ROTATION || (type == ASPECT_BACK && dir != fwd) || rotated;
+            delta = front ? 0 : 1;
+            flipV = type == ASPECT_BACK_AND_ROTATION && frontCell;
+            flipH = (aspect[1] & ASPECT_SIDE) != 0 && !(l > 0 || (l == 0 && (viewCell == 1 || viewCell == 2)));
+        }
+        graphic += delta;
         IndexedImage src = art.indexed(graphic);
         if (src == null) {
             return;
         }
         int w = src.width();
         int h = src.height();
-        int scaleIndex = Math.min(PROJECTILE_SCALE.length - 1, (MAX_DEPTH - d) * 2 + (viewCell >= 2 ? 1 : 0));
+        boolean byEnergy = (aspect[1] & ASPECT_SCALES_WITH_ENERGY) != 0;
+        int scaleIndex = Math.min(PROJECTILE_SCALE.length - 1, (MAX_DEPTH - d) * 2 + (frontCell ? 1 : 0));
         int[] changes = null;
-        if (!(p.kineticEnergy() == 255 && d == 0 && l == 0)) {
-            int scale = (PROJECTILE_SCALE[scaleIndex] * Math.max(96, p.kineticEnergy() + 1)) >> 8;
+        if (!((!byEnergy || p.kineticEnergy() == 255) && d == 0 && l == 0)) {
+            int scale = PROJECTILE_SCALE[scaleIndex];
+            if (byEnergy) {
+                scale = (scale * Math.max(96, p.kineticEnergy() + 1)) >> 8;
+            }
             w = Math.max(1, Bitmaps.scaled(w, scale));
             h = Math.max(1, Bitmaps.scaled(h, scale));
             changes = (scaleIndex >> 1) == 0 ? PAL_CHANGES_OBJECT_D3
                     : (scaleIndex >> 1) == 1 ? PAL_CHANGES_OBJECT_D2 : null;
         }
-        BufferedImage img = distant(graphic, w, h, changes, flip);
-        if (img != null) {
-            g.drawImage(img, at.x - w / 2, at.y - h / 2, null);
+        BufferedImage img = distant(graphic, w, h, changes, flipH);
+        if (img == null) {
+            return;
         }
+        if (flipV) {
+            img = flippedVertically(img);
+        }
+        g.drawImage(img, at.x - w / 2, at.y - h / 2, null);
+    }
+
+    private static BufferedImage flippedVertically(BufferedImage img) {
+        BufferedImage out = new BufferedImage(img.getWidth(), img.getHeight(), BufferedImage.TYPE_INT_ARGB);
+        for (int y = 0; y < img.getHeight(); y++) {
+            for (int x = 0; x < img.getWidth(); x++) {
+                out.setRGB(x, img.getHeight() - 1 - y, img.getRGB(x, y));
+            }
+        }
+        return out;
     }
 
     // ---- creatures -----------------------------------------------------------
@@ -986,8 +1102,9 @@ public final class TexturedViewRenderer implements ViewRenderer {
                 if (p.x() == mx && p.y() == my) {
                     int viewCell = fwd.viewCellOf(p.cell());
                     Point at = art.zone(Zones.FLYING_OBJECTS + square * 4 + viewCell);
-                    if (at != null && p.isSpell()) {
-                        drawSpell(g, p, at, d, l, viewCell, fwd);
+                    int aspect = projectileAspect(p);
+                    if (at != null && aspect > 0) {
+                        drawProjectile(g, p, aspect, at, d, l, viewCell, fwd);
                     } else if (at != null) {
                         drawObject(g, p.item(), at, OBJECT_SCALE[d][viewCell >= 2 ? 0 : 1], false);
                     }

@@ -114,9 +114,11 @@ final class DecorationFinder {
                 if (ordinal > 0) {
                     deco.setWall(x, y, side, OrnamentLists.global(lists.wall(), ordinal), null);
                 }
-            } else if (t.type() == Thing.TEXT && (t.words()[1] & 1) != 0) {
+            } else if (t.type() == Thing.TEXT) {
+                // A hidden text (visible bit 0 clear) is kept too: sensor effects can show it (#55).
                 String inscription = TextDecoder.decode(text, t.words()[1] >>> 3);
                 deco.setWall(x, y, side, OrnamentLists.global(lists.wall(), lists.inscriptionOrdinal()), inscription);
+                deco.setTextVisible(x, y, side, (t.words()[1] & 1) != 0);
             }
         }
     }

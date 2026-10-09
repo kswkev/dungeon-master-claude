@@ -43,7 +43,8 @@ class TeleporterTest {
         Party p = new Party(List.of(m), 0, 1, 1, Direction.EAST);
         DungeonMap.StepResult r = p.step(Party.Move.FORWARD);
         assertTrue(r.teleported());
-        assertTrue(r.click(), "an audible teleporter");
+        assertTrue(r.buzz(), "#53: an audible teleporter buzzes");
+        assertFalse(r.click(), "#53: not the switch click");
         assertFalse(r.levelChanged());
         assertEquals(6, p.x());
         assertEquals(Direction.SOUTH, p.facing(), "a quarter-turn clockwise from east");
@@ -158,7 +159,9 @@ class TeleporterTest {
         DungeonMap m = level(0, 2, OPEN);
         m.addTeleporter(to(2, 0, 2, 2, false, BOTH));
         Party p = new Party(List.of(m), 0, 1, 1, Direction.EAST);
-        assertTrue(p.step(Party.Move.FORWARD).teleported());
+        DungeonMap.StepResult r = p.step(Party.Move.FORWARD);
+        assertTrue(r.teleported());
+        assertFalse(r.buzz(), "#53: a spinner is silent");
         assertEquals(2, p.x());
         assertEquals(Direction.WEST, p.facing(), "turned round once, not spun forever");
     }

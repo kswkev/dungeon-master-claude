@@ -196,9 +196,9 @@ public final class DungeonFile {
             GroupFinder.find(squareThings, store, items).forEach(map::addGroup);
             map.setCreatureTypes(Arrays.stream(lists.creatures()).mapToObj(CreatureType::of)
                     .filter(Objects::nonNull).toList());
-            map.initSensors();
             map.setDecorations(new DecorationFinder(lists, ornamentSeed, m, text)
                     .find(squares, squareThings));
+            map.initSensors(); // after the decorations: plates holding texts set them (#55)
             if (squareThings.length > 0 && !squareThings[0].isEmpty()) {
                 map.setEndgameTexts(squareThings[0].get(0).stream().filter(t -> t.type() == Thing.TEXT)
                         .map(t -> TextDecoder.decode(text, t.words()[1] >>> 3)).toList());

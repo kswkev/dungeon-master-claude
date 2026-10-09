@@ -475,6 +475,14 @@ public final class ItemCatalog {
         return MISSILES.contains(type);
     }
 
+    /** Weapon type of the dagger, which every quiver cell takes (#52). */
+    public static final int DAGGER = 8;
+
+    /** Whether weapon {@code type} fits quiver cells 2-4: the missiles and the dagger (#52, not in DM). */
+    static boolean fitsQuiver(int type) {
+        return MISSILES.contains(type) || type == DAGGER;
+    }
+
     /**
      * G237's pouch bit (the same bit as {@link #passesThroughDoors}): scrolls,
      * potions, small weapons such as daggers and darts, and small junk such as
