@@ -57,13 +57,17 @@ class AutoMapTest {
 
     @Test
     void anIllusionaryWallIsKnownOnceThePartyStepsIntoIt() {
-        DungeonMap m = DungeonMap.fromAscii(0, "#####", "#.F.#", "#####");
+        DungeonMap m = DungeonMap.fromAscii(0, "######", "#.I.f#", "######");
         Party p = new Party(m, 1, 1, Direction.EAST);
         assertFalse(m.knownIllusion(2, 1));
         p.step(Party.Move.FORWARD);
         assertEquals(2, p.x());
         assertTrue(m.knownIllusion(2, 1));
         assertFalse(m.knownIllusion(1, 1), "floor is no illusion");
+        p.step(Party.Move.FORWARD);
+        p.step(Party.Move.FORWARD);
+        assertEquals(4, p.x());
+        assertFalse(m.knownIllusion(4, 1), "#65: an open fake wall is floor, not an illusion");
     }
 
     @Test

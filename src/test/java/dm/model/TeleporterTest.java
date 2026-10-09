@@ -92,6 +92,28 @@ class TeleporterTest {
     }
 
     @Test
+    void itemsLyingOnATeleporterGoThroughWhenItOpens() {
+        // #64, Level 3's chest puzzle: a closed teleporter holds a chest until a button opens it (DM's F249).
+        DungeonMap m = level(0, 3, CLOSED, 6, CLOSED);
+        m.addTeleporter(to(3, 0, 6, 0, false, BOTH));
+        m.addTeleporter(to(6, 0, 6, 0, false, BOTH)); // aimed at itself: nothing may loop
+        m.dropItem(3, 1, 3, SWORD);
+        m.dropItem(6, 1, 0, SWORD);
+        assertEquals(List.of(SWORD), m.itemsAt(3, 1, 3), "a closed teleporter holds it");
+        m.addWallSensor(new WallSensor(3, 0, Direction.SOUTH, WallSensor.TYPE_CLICK, 0, FloorSensor.Effect.SET,
+                false, false, false, false, 0, 3, 1, 0, -1));
+        m.addWallSensor(new WallSensor(6, 0, Direction.SOUTH, WallSensor.TYPE_CLICK, 0, FloorSensor.Effect.SET,
+                false, false, false, false, 0, 6, 1, 0, -1));
+        Party p = new Party(List.of(m), 0, 1, 1, Direction.EAST);
+        m.clickWall(3, 0, Direction.SOUTH, p, i -> 0);
+        assertFalse(m.hasItems(3, 1), "sent on as it opens");
+        assertEquals(List.of(SWORD), m.itemsAt(6, 1, 3), "onto the closed teleporter beyond, which keeps it");
+        m.clickWall(6, 0, Direction.SOUTH, p, i -> 0);
+        assertEquals(List.of(SWORD), m.itemsAt(6, 1, 0), "a spinner moves each thing once");
+        assertEquals(List.of(SWORD), m.itemsAt(6, 1, 3));
+    }
+
+    @Test
     void anItemsOnlyTeleporterLetsThePartyThroughButMovesItems() {
         DungeonMap m = level(0, 3, OPEN);
         m.addTeleporter(to(3, 0, 6, 0, false, Teleporter.SCOPE_ITEMS));

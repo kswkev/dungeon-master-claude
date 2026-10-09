@@ -463,6 +463,21 @@ public final class ItemCatalog {
                 : item.withVariant(variant);
     }
 
+    /** Junk type of the compass, whose icons 0-3 point north, east, south and west. */
+    public static final int COMPASS = 0;
+
+    /**
+     * The item as DM's F033 draws it while the party faces {@code facing}: a
+     * compass shows the icon for that direction (#63); anything else is unchanged.
+     */
+    public static Item pointing(Item item, Direction facing) {
+        if (item.category() != Item.Category.JUNK || item.type() != COMPASS
+                || item.nameVariant() == facing.ordinal()) {
+            return item;
+        }
+        return item.withVariant(facing.ordinal());
+    }
+
     /** How much food eating {@code item} gives, or 0 if it isn't food. */
     public static int foodValue(Item item) {
         int t = item.type();

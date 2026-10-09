@@ -3,7 +3,9 @@ package dm.ui;
 import dm.data.GraphicsFile;
 import dm.data.IndexedImage;
 import dm.data.Sound;
+import dm.model.Direction;
 import dm.model.Item;
+import dm.model.ItemCatalog;
 
 import java.awt.Color;
 import java.awt.Point;
@@ -208,9 +210,20 @@ public final class Art {
                 k -> findIcon(gfx.objectNames(), item.name(), item.nameVariant()));
     }
 
-    /** The 16x16 inventory icon for an item, found by its name in GRAPHICS.DAT's object name list. */
+    /** The way the party faces, which a compass's icon points (DM's F033 reads it too, #63). */
+    private Direction partyFacing = Direction.NORTH;
+
+    /** Sets the party's facing for the compass's icon; {@link GameScreen} sets it before each frame. */
+    public void setPartyFacing(Direction facing) {
+        partyFacing = facing;
+    }
+
+    /**
+     * The 16x16 inventory icon for an item, found by its name in GRAPHICS.DAT's
+     * object name list; a compass points the party's way.
+     */
     public BufferedImage icon(Item item) {
-        return icon(iconIndex(item));
+        return icon(iconIndex(ItemCatalog.pointing(item, partyFacing)));
     }
 
     /**
@@ -240,7 +253,8 @@ public final class Art {
         if (src == null) {
             return null;
         }
-        return iconSprites.computeIfAbsent(item.name() + "#" + item.nameVariant(), k -> {
+        Item shown = ItemCatalog.pointing(item, partyFacing);
+        return iconSprites.computeIfAbsent(shown.name() + "#" + shown.nameVariant(), k -> {
             BufferedImage out = new BufferedImage(src.getWidth(), src.getHeight(), BufferedImage.TYPE_INT_ARGB);
             int background = PALETTE[ICON_BACKGROUND].getRGB();
             for (int y = 0; y < src.getHeight(); y++) {

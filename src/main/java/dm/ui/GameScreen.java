@@ -872,8 +872,9 @@ public final class GameScreen {
                     return;
                 }
             }
-            // Not in DM: knocking on the wall ahead thumps; an illusionary (fake) wall makes no sound.
-            if (map.get(aheadX, aheadY).type() == SquareType.WALL && WALL_FACE.contains(x, y)) {
+            // Not in DM: knocking on the wall ahead thumps; an illusionary (imaginary) wall makes no sound.
+            Square knocked = map.get(aheadX, aheadY);
+            if (knocked.looksSolid() && !knocked.isIllusion() && WALL_FACE.contains(x, y)) {
                 sounds.play(dmSound(WOODEN_THUD)); // the thud, GRAPHICS.DAT 674
             }
             return;
@@ -1419,6 +1420,7 @@ public final class GameScreen {
         }
         g.setColor(Color.BLACK);
         g.fillRect(0, 0, WIDTH, HEIGHT);
+        art.setPartyFacing(party.facing()); // a compass's icon points the party's way (#63)
         ChampionMirror viewed = sheet.candidate();
         int shields = (party.shieldDefense() > 0 ? ChampionBars.PARTY_SHIELD : 0)
                 | (party.spellShieldDefense() > 0 ? ChampionBars.SPELL_SHIELD : 0)

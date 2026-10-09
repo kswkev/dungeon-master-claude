@@ -72,17 +72,38 @@ public record Square(int raw) implements Serializable {
         return (raw & 0x04) != 0;
     }
 
+    /** Fake walls: bit 2 set means the wall is open, drawn and walked as floor (#65; live, set by sensors). */
+    public boolean fakeWallOpen() {
+        return (raw & 0x04) != 0;
+    }
+
+    /** Fake walls: bit 0 set means the wall is imaginary: drawn as a wall while closed, but walked through. */
+    public boolean fakeWallImaginary() {
+        return (raw & 0x01) != 0;
+    }
+
+    /** This fake wall with its open bit set or cleared. */
+    public Square withFakeWallOpen(boolean open) {
+        return new Square(open ? raw | 0x04 : raw & ~0x04);
+    }
+
     public boolean isPassable() {
         return switch (type()) {
             case WALL -> false;
             case DOOR -> isDoorOpen();
+            case FAKEWALL -> fakeWallOpen() || fakeWallImaginary(); // F267: a closed real one blocks (#65)
             default -> true;
         };
     }
 
-    /** Squares the renderer draws as a full wall block. */
+    /** Squares the renderer draws as a full wall block: walls, and fake walls unless open (DM's F172). */
     public boolean looksSolid() {
         SquareType t = type();
-        return t == SquareType.WALL || t == SquareType.FAKEWALL;
+        return t == SquareType.WALL || t == SquareType.FAKEWALL && !fakeWallOpen();
+    }
+
+    /** A wall the party can walk through: an imaginary fake wall that is closed (open ones look like floor). */
+    public boolean isIllusion() {
+        return type() == SquareType.FAKEWALL && fakeWallImaginary() && !fakeWallOpen();
     }
 }

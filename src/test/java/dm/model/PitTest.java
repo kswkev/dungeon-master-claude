@@ -126,6 +126,20 @@ class PitTest {
     }
 
     @Test
+    void itemsLyingOnAPitFallWhenItOpens() {
+        DungeonMap upper = level(0, 3, CLOSED_PIT);
+        DungeonMap lower = level(1);
+        Party p = party(List.of(upper, lower), 1, Direction.EAST);
+        upper.dropItem(3, 1, 2, SWORD);
+        assertEquals(List.of(SWORD), upper.itemsAt(3, 1, 2), "a closed pit holds it");
+        upper.addWallSensor(new WallSensor(3, 0, Direction.SOUTH, WallSensor.TYPE_CLICK, 0, FloorSensor.Effect.SET,
+                false, false, false, false, 0, 3, 1, 0, -1));
+        upper.clickWall(3, 0, Direction.SOUTH, p, i -> 0);
+        assertTrue(upper.itemsAt(3, 1, 2).isEmpty(), "#64: DM's F249");
+        assertEquals(List.of(SWORD), lower.itemsAt(2, 1, 2));
+    }
+
+    @Test
     void droppedAndThrownItemsFallToo() {
         DungeonMap upper = level(0, 3, OPEN_PIT, 5, OPEN_PIT);
         DungeonMap lower = level(1);
