@@ -35,8 +35,8 @@ final class AutoMap {
     static final Rectangle DOWN = new Rectangle(V.x + 160, V.y + 52, 40, 22);
     private static final int PANEL_CENTRE = V.x + 180;
     private static final int LEGEND_X = V.x + 144;
-    private static final int LEGEND_Y = V.y + 86;
-    private static final int LEGEND_LINE = 9;
+    private static final int LEGEND_Y = V.y + 82;
+    private static final int LEGEND_LINE = 7;
 
     static final Color PARCHMENT = new Color(0xD8C49A);
     static final Color FLOOR = new Color(0xF0E4C4);
@@ -50,6 +50,7 @@ final class AutoMap {
     private static final Color STAIRS_DOWN = new Color(0x707070);
     private static final Color STEP = new Color(0x404040);
     static final Color PARTY = new Color(0x00C000);
+    static final Color BUTTON_DOT = new Color(0xE8C020);
 
     private boolean open;
     /** The floor shown, as {@link DungeonMap#level()}. */
@@ -168,6 +169,13 @@ final class AutoMap {
         stairs(g, true, LEGEND_X, LEGEND_Y + 3 * LEGEND_LINE - 4, 6);
         legend(g, art, 4, "STAIRS DOWN", null, null);
         stairs(g, false, LEGEND_X, LEGEND_Y + 4 * LEGEND_LINE - 4, 6);
+        legend(g, art, 5, "BUTTON", INK, null);
+        button(g, Direction.EAST, LEGEND_X, LEGEND_Y + 5 * LEGEND_LINE - 4, 6);
+        legend(g, art, 6, "ILLUSION", INK, null);
+        int iy = LEGEND_Y + 6 * LEGEND_LINE - 4;
+        g.setColor(FLOOR);
+        g.drawLine(LEGEND_X, iy, LEGEND_X + 5, iy + 5);
+        g.drawLine(LEGEND_X + 5, iy, LEGEND_X, iy + 5);
     }
 
     /** Every seen square of the shown floor (which may span several maps), fitted to {@link #MAP_AREA}. */
@@ -252,7 +260,20 @@ final class AutoMap {
         Square sq = m.get(x, y);
         int inset = t >= 4 ? Math.max(1, t / 5) : 0;
         switch (sq.type()) {
-            case WALL, FAKEWALL -> fill(g, INK, px, py, t, t);
+            case WALL, FAKEWALL -> {
+                fill(g, INK, px, py, t, t);
+                if (m.knownIllusion(x, y)) { // a light cross corner to corner
+                    g.setColor(FLOOR);
+                    g.drawLine(px, py, px + t - 1, py + t - 1);
+                    g.drawLine(px + t - 1, py, px, py + t - 1);
+                }
+                for (Direction side : Direction.values()) {
+                    if (m.hasWallButton(x, y, side) && m.seen(x + side.dx, y + side.dy)
+                            && !m.blocksView(x + side.dx, y + side.dy)) {
+                        button(g, side, px, py, t);
+                    }
+                }
+            }
             case DOOR -> {
                 fill(g, FLOOR, px, py, t, t);
                 int state = m.doorState(x, y);
@@ -279,6 +300,14 @@ final class AutoMap {
             case STAIRS -> stairs(g, sq.stairsUp(), px, py, t);
             default -> fill(g, FLOOR, px, py, t, t);
         }
+    }
+
+    /** A wall button: a dot centred on the wall square's edge that faces {@code side}, just inside the wall. */
+    private static void button(Graphics2D g, Direction side, int px, int py, int t) {
+        int d = Math.max(1, t / 3);
+        int cx = px + (t - d) / 2 + side.dx * ((t - d) / 2);
+        int cy = py + (t - d) / 2 + side.dy * ((t - d) / 2);
+        fill(g, BUTTON_DOT, cx, cy, d, d);
     }
 
     /** Stairs: grey, light going up and dark going down, with a step line every other row. */

@@ -81,6 +81,8 @@ public final class DungeonMap implements Serializable {
     private Decorations decorations;
     /** The squares the party has seen, for the map (not in DM); null until one is (and in older saves). */
     private boolean[][] seen;
+    /** The squares the party has stood on, for illusionary walls on the map (not in DM); null as {@link #seen}. */
+    private boolean[][] walked;
 
     public DungeonMap(int level, Square[][] squares) {
         this(level, squares, List.of());
@@ -170,6 +172,40 @@ public final class DungeonMap implements Serializable {
     /** Whether the party has seen (x, y). */
     public boolean seen(int x, int y) {
         return seen != null && inBounds(x, y) && seen[x][y];
+    }
+
+    /** Marks (x, y) as stood on by the party, so an illusionary wall there is known; off the map is ignored. */
+    public void markWalked(int x, int y) {
+        if (!inBounds(x, y)) {
+            return;
+        }
+        if (walked == null) {
+            walked = new boolean[width][height];
+        }
+        walked[x][y] = true;
+    }
+
+    /** Whether the party has stood on (x, y). */
+    public boolean walked(int x, int y) {
+        return walked != null && inBounds(x, y) && walked[x][y];
+    }
+
+    /** Whether the map shows an illusionary wall at (x, y): a fake wall the party has stepped into. */
+    public boolean knownIllusion(int x, int y) {
+        return get(x, y).type() == SquareType.FAKEWALL && walked(x, y);
+    }
+
+    /** Whether a wall side has a button to click: a click sensor that shows a decoration. */
+    public boolean hasWallButton(int x, int y, Direction side) {
+        if (wallOrnament(x, y, side) < 0) {
+            return false;
+        }
+        for (WallSensor s : wallSensors(x, y, side)) {
+            if (s.type() == WallSensor.TYPE_CLICK) {
+                return true;
+            }
+        }
+        return false;
     }
 
     /** Whether the party has seen any square of this map. */

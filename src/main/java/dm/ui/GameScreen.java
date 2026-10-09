@@ -478,6 +478,11 @@ public final class GameScreen {
         if (clickHand(x, y)) {
             return;
         }
+        int named = bars.nameAt(x, y);
+        if (named >= 0 && named < party.members().size()) { // not in DM's way: the name picks the active champion
+            party.setLeader(party.members().get(named));
+            return;
+        }
         if (ActionArea.AREA.contains(x, y)) { // works with the sheet open, as in DM
             clickActionArea(x, y);
             return;
@@ -1419,7 +1424,7 @@ public final class GameScreen {
                 | (party.spellShieldDefense() > 0 ? ChampionBars.SPELL_SHIELD : 0)
                 | (party.fireShieldDefense() > 0 ? ChampionBars.FIRE_SHIELD : 0);
         bars.draw(g, party.members(), sheet.champion(), viewed == null ? null : viewed.champion(),
-                clock.getAsLong(), shields);
+                clock.getAsLong(), shields, party.leader());
         formation.draw(g, party);
         if (!party.members().isEmpty()) { // #58: hidden until the first champion joins
             automap.drawButton(g, art);

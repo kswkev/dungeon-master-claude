@@ -62,6 +62,8 @@ public final class Party implements Serializable {
     private Direction facing;
     /** The item on the mouse pointer (DM's leader hand), shared by the whole party. */
     private Item held;
+    /** The member chosen as leader by clicking their name; 0 (the first) in older saves. */
+    private int leaderIndex;
     /** DM's game clock, one per game tick, and when the party last moved (rest speeds recovery). */
     private long time;
     private long lastMove;
@@ -779,6 +781,7 @@ public final class Party implements Serializable {
         Flight.partyMoves(this, from, fromX, fromY, to == from ? nx : -10, to == from ? ny : -10); // F266
         x = nx;
         y = ny;
+        to.markWalked(nx, ny);
         leaveScent(from, fromX, fromY, to, nx, ny);
         Group squashed = to.groupAt(nx, ny);
         if (squashed != null) { // DM deletes a group the party lands on (by teleporter)
@@ -1407,14 +1410,29 @@ public final class Party implements Serializable {
         return load;
     }
 
-    /** DM's leader, whose hand is the pointer: the first living member, or null. */
+    /**
+     * DM's leader, whose hand is the pointer and who throws: the member chosen
+     * by clicking their name while they live, otherwise the first living
+     * member, or null.
+     */
     public Champion leader() {
+        if (leaderIndex < members.size() && members.get(leaderIndex).health() > 0) {
+            return members.get(leaderIndex);
+        }
         for (Champion c : members) {
             if (c.health() > 0) {
                 return c;
             }
         }
         return null;
+    }
+
+    /** Makes a living member the leader (the active champion); a dead one or a stranger is ignored. */
+    public void setLeader(Champion c) {
+        int i = members.indexOf(c);
+        if (i >= 0 && c.health() > 0) {
+            leaderIndex = i;
+        }
     }
 
     // ---- death --------------------------------------------------------------

@@ -197,6 +197,21 @@ Spells came in Sprint 19; the magic in items' action menus (a staff's fireball a
 - **Entrance music:** with the PC version's `SONG.DAT` in `data/`, its music loops at the entrance and fades as the doors open.
 - **Knocking on walls (not in the original):** clicking the wall ahead with an empty hand thumps. An illusionary wall makes no sound, so you can tell the two apart.
 
+**Sprint 26: done.** Bug fixes (#52-#60):
+- Daggers fit in every quiver cell (#52, not in the original).
+- Teleporters that move the party buzz, as in the original (#53).
+- Floor-level decorations such as moss stand on the floor on side walls too (#54).
+- Wall texts appear and disappear when switches and plates tell them to (#55).
+- Torch holders no longer jump when their torch is taken (#56).
+- Weapons in flight use the original's projectile pictures: arrows, daggers, axes turning over and so on (#57).
+- The map and spell-list scrolls only appear once the first champion joins (#58).
+- The map shows the walls at the edge of a level (#59).
+- A left click on a champion's box no longer opens their sheet; the right button does (#60).
+
+**Sprint 27: in progress.** Improvements, not in the original:
+- **The map:** wall buttons, levers and switches show as a yellow dot on the edge they're on, once you've seen them. An illusionary wall you've walked through is marked with a cross. Both are in the map's legend.
+- **The active champion:** champions' names in the boxes along the top are grey. Left-click a name to make that champion the active one; their name turns to their own colour. The active champion throws what you throw into the view, carries the item on the pointer, and their sheet opens when you right-click the view. At first, and whenever the active champion dies, it's the first living champion.
+
 ## Requirements
 
 - JDK 17 or newer
@@ -257,7 +272,8 @@ The tests cover:
 - champion parsing, skill levels and where starting items go;
 - recruiting, the click flow of portrait → sheet → Resurrect/Reincarnate/Cancel, and the rename keyboard;
 - sleeping and waking;
-- wall bumps, the formation box, pressure plates and door animation;
+- wall bumps, the formation box, the active champion, pressure plates and door animation;
+- the map (seen squares, wall buttons, illusionary walls) and the spell lists;
 - decoration placement (including DM's random formula), inscriptions and the screen-layout table;
 - moving items between inventory slots, floor items, picking up, dropping and throwing;
 - chest contents and scroll text, the open chest's cells, item descriptions, and how far sounds carry;
