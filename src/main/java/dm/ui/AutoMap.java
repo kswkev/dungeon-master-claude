@@ -260,7 +260,11 @@ final class AutoMap {
         Square sq = m.get(x, y);
         int inset = t >= 4 ? Math.max(1, t / 5) : 0;
         switch (sq.type()) {
-            case WALL, FAKEWALL -> {
+            case FAKEWALL, WALL -> {
+                if (!sq.looksSolid()) { // an open fake wall is floor (#65)
+                    fill(g, FLOOR, px, py, t, t);
+                    break;
+                }
                 fill(g, INK, px, py, t, t);
                 if (m.knownIllusion(x, y)) { // a light cross corner to corner
                     g.setColor(FLOOR);

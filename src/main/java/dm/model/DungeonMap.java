@@ -190,9 +190,9 @@ public final class DungeonMap implements Serializable {
         return walked != null && inBounds(x, y) && walked[x][y];
     }
 
-    /** Whether the map shows an illusionary wall at (x, y): a fake wall the party has stepped into. */
+    /** Whether the map shows an illusionary wall at (x, y): an imaginary fake wall the party has stepped into. */
     public boolean knownIllusion(int x, int y) {
-        return get(x, y).type() == SquareType.FAKEWALL && walked(x, y);
+        return get(x, y).isIllusion() && walked(x, y);
     }
 
     /** Whether a wall side has a button to click: a click sensor that shows a decoration. */
@@ -685,6 +685,9 @@ public final class DungeonMap implements Serializable {
                     case TOGGLE -> !pitOpen[x][y];
                 };
                 settleCreatures(x, y);
+                if (pitOpen[x][y]) {
+                    moveObjectsThrough(x, y, out, depth);
+                }
             }
             case TELEPORTER -> {
                 teleporterOpen[x][y] = switch (effect) {
@@ -693,6 +696,28 @@ public final class DungeonMap implements Serializable {
                     case TOGGLE -> !teleporterOpen[x][y];
                 };
                 settleCreatures(x, y);
+                if (teleporterOpen[x][y]) {
+                    moveObjectsThrough(x, y, out, depth);
+                }
+            }
+            case FAKEWALL -> { // F242 (#65)
+                boolean open = switch (effect) {
+                    case SET, HOLD -> true;
+                    case CLEAR -> false;
+                    case TOGGLE -> !squares[x][y].fakeWallOpen();
+                };
+                Group group = groupAt(x, y);
+                boolean occupied = party != null && party.map() == this && party.x() == x && party.y() == y
+                        || group != null && !group.type().nonMaterial();
+                if (!open && occupied && dungeon != null && dungeon.party() != null) {
+                    // It won't close on the party or a material creature: DM tries again next tick.
+                    if (pending == null) {
+                        pending = new ArrayList<>();
+                    }
+                    pending.add(new Pending(x, y, cell, FloorSensor.Effect.CLEAR, dungeon.party().time() + 1));
+                } else {
+                    squares[x][y] = squares[x][y].withFakeWallOpen(open);
+                }
             }
             case CORRIDOR -> {
                 for (FloorSensor s : new ArrayList<>(sensors)) {
@@ -1454,6 +1479,35 @@ public final class DungeonMap implements Serializable {
         updateSensors(x, y, out);
     }
 
+    /**
+     * DM's F249 for objects (#64): a teleporter or pit that opens sends on
+     * the objects already lying on it, each once (CSB's fix of BUG0_22, so a
+     * teleporter aimed at itself can't loop). The group there is settled
+     * first by the caller, and the party by its next {@link Party#settle()}.
+     */
+    private void moveObjectsThrough(int x, int y, Outcome out, int depth) {
+        List<List<Item>> piles = new ArrayList<>();
+        boolean any = false;
+        for (int cell = 0; cell < 4; cell++) {
+            List<Item> pile = pile(x, y, cell, false);
+            List<Item> taken = pile == null ? List.of() : new ArrayList<>(pile);
+            if (pile != null) {
+                pile.clear();
+            }
+            piles.add(taken);
+            any |= !taken.isEmpty();
+        }
+        if (!any) {
+            return;
+        }
+        for (int cell = 0; cell < 4; cell++) {
+            for (Item item : piles.get(cell)) { // bottom first, so a pile that stays keeps its order
+                drop(x, y, cell, item, out, depth + 1);
+            }
+        }
+        updateSensors(x, y, out);
+    }
+
     /** What picking an item up took, and what that set off (a plate released). */
     public record Pickup(Item item, StepResult result) {
     }
@@ -1527,7 +1581,7 @@ public final class DungeonMap implements Serializable {
             case STAIRS -> 'S';
             case DOOR -> s.isDoorOpen() ? 'd' : 'D';
             case TELEPORTER -> 'T';
-            case FAKEWALL -> 'F';
+            case FAKEWALL -> s.fakeWallOpen() ? 'f' : s.fakeWallImaginary() ? 'I' : 'F';
         };
     }
 
@@ -1538,12 +1592,14 @@ public final class DungeonMap implements Serializable {
             case 'S' -> 3;
             case 'D', 'd' -> 4;
             case 'T' -> 5;
-            case 'F' -> 6;
+            case 'F', 'f', 'I' -> 6;
             default -> 0;
         };
         int attrs = switch (c) {
             case 'D' -> 4; // closed door state
             case 'O' -> 8; // open pit
+            case 'f' -> 4; // open fake wall
+            case 'I' -> 1; // imaginary fake wall: an illusion
             default -> 0;
         };
         return new Square((element << 5) | attrs);

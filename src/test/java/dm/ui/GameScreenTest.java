@@ -100,7 +100,18 @@ class GameScreenTest {
 
     @Test
     void anIllusionaryWallMakesNoSound() {
-        Party p = new Party(DungeonMap.fromAscii(0, "#F#", "#.#", "###"), 1, 1, Direction.NORTH);
+        assertEquals(0, knock("#I#"));
+    }
+
+    @Test
+    void aClosedFakeWallThudsLikeAWall() {
+        assertEquals(1, knock("#F#"), "#65: a hidden wall is solid until opened");
+        assertEquals(0, knock("#f#"), "an open one is floor: nothing to knock on");
+    }
+
+    /** The sounds a knock on the square north of (1,1) plays, with {@code top} as the map's first row. */
+    private int knock(String top) {
+        Party p = new Party(DungeonMap.fromAscii(0, top, "#.#", "###"), 1, 1, Direction.NORTH);
         p.recruit(new ChampionMirror(0, 1, Direction.EAST, Champion.parse(ELIJA, 0)));
         GameScreen s = new GameScreen(p, Art.none(), sound -> soundsPlayed++, false);
         BufferedImage img = new BufferedImage(GameScreen.WIDTH, GameScreen.HEIGHT, BufferedImage.TYPE_INT_RGB);
@@ -109,7 +120,7 @@ class GameScreenTest {
         g.dispose();
         int before = soundsPlayed;
         s.press(GameScreen.WALL_FACE.x + 80, GameScreen.WALL_FACE.y + 50);
-        assertEquals(before, soundsPlayed);
+        return soundsPlayed - before;
     }
 
     @Test

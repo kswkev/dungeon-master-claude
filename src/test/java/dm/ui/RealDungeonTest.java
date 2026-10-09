@@ -61,6 +61,45 @@ class RealDungeonTest {
         }
     }
 
+    /** A party on Level 3 (map 2). */
+    private Party level3(int x, int y, Direction facing) {
+        return new Party(dungeon.maps(), 2, x, y, facing);
+    }
+
+    /** #64: Level 3's buttons along (13,24)-(0,24), pressed in the right order, bring the chest to the corridor. */
+    @Test
+    void theButtonsTeleportTheChestToTheCorridor() {
+        Party p = level3(1, 24, Direction.SOUTH);
+        DungeonMap map = p.map();
+        assertEquals("CHEST", map.itemsAt(0, 26, 3).get(0).name());
+        for (int button : new int[] {1, 7, 13, 3, 9, 5, 11}) { // (0,26) → 6 → 12 → 2 → 8 → 4 → 10 → (0,24)
+            map.clickWall(button, 25, Direction.NORTH, p, i -> 0);
+            arrive(p);
+            assertFalse(map.isTeleporterOpen(button - 1, 26), "each button opens its teleporter only briefly");
+        }
+        assertFalse(map.hasItems(0, 26));
+        assertEquals("CHEST", map.itemsAt(0, 24, 3).get(0).name());
+    }
+
+    /** #65: Level 3's hidden walls are solid until their buttons open them. */
+    @Test
+    void theButtonsOpenTheHiddenWalls() {
+        Party p = level3(9, 30, Direction.NORTH);
+        DungeonMap map = p.map();
+        assertFalse(map.isPassable(10, 29));
+        map.clickWall(9, 29, Direction.SOUTH, p, i -> 0);
+        arrive(p);
+        assertTrue(map.isPassable(10, 29));
+        map.clickWall(9, 29, Direction.SOUTH, p, i -> 0); // a toggle
+        arrive(p);
+        assertFalse(map.isPassable(10, 29));
+
+        assertFalse(map.isPassable(29, 25));
+        map.clickWall(28, 26, Direction.WEST, p, i -> 0);
+        arrive(p);
+        assertTrue(map.isPassable(29, 25));
+    }
+
     /** #14: the button at (6,4) north reveals an alcove with a falchion, which then stays. */
     @Test
     void theRevealedAlcoveStays() {

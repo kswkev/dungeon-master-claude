@@ -21,7 +21,7 @@ public record ItemDescription(String name, List<String> lines) {
     private static final String[] WATERSKIN = {"(EMPTY)", "(ALMOST EMPTY)", "(ALMOST FULL)", "(FULL)"};
     private static final String[] ATTRIBUTES = {"CONSUMABLE", "POISONED", "BROKEN", "CURSED"};
     private static final int CONSUMABLE = 1;
-    private static final int COMPASS = 0;
+    private static final int COMPASS = ItemCatalog.COMPASS;
     private static final int WATERSKIN_TYPE = ItemCatalog.WATERSKIN;
 
     /** Whether DM describes {@code item} (scrolls and chests open their own panels instead). */

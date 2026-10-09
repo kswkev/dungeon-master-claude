@@ -208,8 +208,12 @@ Spells came in Sprint 19; the magic in items' action menus (a staff's fireball a
 - The map shows the walls at the edge of a level (#59).
 - A left click on a champion's box no longer opens their sheet; the right button does (#60).
 
-**Sprint 27: in progress.** Improvements, not in the original:
+**Sprint 27: done.** Improvements (not in the original) and fixes:
 - **The map:** wall buttons, levers and switches show as a yellow dot on the edge they're on, once you've seen them. An illusionary wall you've walked through is marked with a cross. Both are in the map's legend.
+- **Bug fixes:**
+  - The compass's needle points the way the party faces, as in the original (#63).
+  - When a teleporter or pit opens, things already lying on it go through. On Level 3, the row of buttons along the corridor now teleports the chest, so the puzzle can be solved (#64).
+  - Hidden walls are solid until their button opens them, as in the original. Before, you could walk through them as if they were illusions. Only true illusions can be walked through, and only they stay silent when you knock (#65).
 - **The active champion:** champions' names in the boxes along the top are grey. Left-click a name to make that champion the active one; their name turns to their own colour. The active champion throws what you throw into the view, carries the item on the pointer, and their sheet opens when you right-click the view. At first, and whenever the active champion dies, it's the first living champion.
 
 ## Requirements
