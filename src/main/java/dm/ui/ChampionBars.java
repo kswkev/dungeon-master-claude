@@ -71,6 +71,15 @@ public final class ChampionBars {
         return i < Party.MAX_MEMBERS && x - i * PITCH < BOX_W ? i : -1;
     }
 
+    /** The name's text colour, DM's lightest grey, except for the active champion's. */
+    public static final Color NAME_TEXT = Art.PALETTE[13];
+
+    /** Index of the box whose name strip (above the hands, left of the bars) is at screen point (x, y), or -1. */
+    public int nameAt(int x, int y) {
+        int box = hitTest(x, y);
+        return box >= 0 && y < HAND_Y && x - box * PITCH < BAR_X[0] ? box : -1;
+    }
+
     /** A hand box in a champion's status box: which box, and which hand. */
     public record Hand(int box, Slot slot) {
     }
@@ -119,6 +128,12 @@ public final class ChampionBars {
 
     /** As {@link #draw(Graphics2D, List, Champion, Champion, long)}, with the party's {@code shields} bits. */
     public void draw(Graphics2D g, List<Champion> members, Champion shown, Champion candidate, long now, int shields) {
+        draw(g, members, shown, candidate, now, shields, null);
+    }
+
+    /** Names are in {@link #NAME_TEXT}, the active champion's ({@code leader}) in their own colour. */
+    public void draw(Graphics2D g, List<Champion> members, Champion shown, Champion candidate, long now, int shields,
+                     Champion leader) {
         for (int i = 0; i < Party.MAX_MEMBERS; i++) {
             int x = i * PITCH;
             Champion c = i < members.size() ? members.get(i)
@@ -146,7 +161,7 @@ public final class ChampionBars {
                     Placeholders.portrait(g, c, r);
                 }
             } else {
-                PixelFont.draw(g, c.name(), x + 2, 2, COLORS[i]);
+                PixelFont.draw(g, c.name(), x + 2, 2, c == leader ? COLORS[i] : NAME_TEXT);
                 drawHand(g, c, Slot.READY_HAND, x + READY_HAND_X, HAND_Y);
                 drawHand(g, c, Slot.ACTION_HAND, x + ACTION_HAND_X, HAND_Y);
             }

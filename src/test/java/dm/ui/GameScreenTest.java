@@ -516,6 +516,53 @@ class GameScreenTest {
     }
 
     @Test
+    void clickingANameMakesThatChampionActive() {
+        recruitElija();
+        party.recruit(new ChampionMirror(2, 0, Direction.SOUTH, Champion.parse(ELIJA, 1)));
+        Champion first = party.members().get(0);
+        Champion second = party.members().get(1);
+        assertSame(first, party.leader());
+        screen.press(69 + NAME_X, NAME_Y);
+        assertSame(second, party.leader(), "the name picks the active champion");
+        assertFalse(screen.sheet().isOpen(), "a left click still opens no sheet");
+        screen.rightPress(VIEW.x + 100, VIEW.y + 60);
+        assertSame(second, screen.sheet().champion(), "the right button opens the active champion's sheet");
+        screen.rightPress(VIEW.x + 100, VIEW.y + 60);
+        screen.press(NAME_X, NAME_Y);
+        assertSame(first, party.leader(), "another name takes it back");
+        second.takeDamage(second.health());
+        screen.press(69 + NAME_X, NAME_Y);
+        assertSame(first, party.leader(), "the dead can't lead");
+    }
+
+    @Test
+    void onlyTheActiveChampionsNameIsInTheirColour() {
+        ChampionBars bars = new ChampionBars(Art.none());
+        recruitElija();
+        party.recruit(new ChampionMirror(2, 0, Direction.SOUTH, Champion.parse(ELIJA, 1)));
+        BufferedImage img = new BufferedImage(GameScreen.WIDTH, GameScreen.HEIGHT, BufferedImage.TYPE_INT_RGB);
+        Graphics2D g = img.createGraphics();
+        bars.draw(g, party.members(), null, null, 0, 0, party.members().get(1));
+        g.dispose();
+        assertTrue(nameHas(img, 0, ChampionBars.NAME_TEXT), "an inactive name is plain text");
+        assertFalse(nameHas(img, 0, ChampionBars.COLORS[0]));
+        assertTrue(nameHas(img, 69, ChampionBars.COLORS[1]), "the active name is in its colour");
+        assertFalse(nameHas(img, 69, ChampionBars.NAME_TEXT));
+    }
+
+    /** Whether the name strip of the box at x0 has a pixel of colour c. */
+    private static boolean nameHas(BufferedImage img, int x0, java.awt.Color c) {
+        for (int x = x0; x < x0 + 44; x++) {
+            for (int y = 0; y < 9; y++) {
+                if ((img.getRGB(x, y) & 0xFFFFFF) == (c.getRGB() & 0xFFFFFF)) {
+                    return true;
+                }
+            }
+        }
+        return false;
+    }
+
+    @Test
     void rightClickLeavesACandidateAlone() {
         clickPortrait();
         assertNotNull(screen.sheet().candidate());

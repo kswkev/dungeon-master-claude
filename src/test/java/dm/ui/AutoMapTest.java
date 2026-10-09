@@ -4,7 +4,9 @@ import dm.model.Champion;
 import dm.model.ChampionMirror;
 import dm.model.Direction;
 import dm.model.DungeonMap;
+import dm.model.FloorSensor;
 import dm.model.Party;
+import dm.model.WallSensor;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
@@ -51,6 +53,42 @@ class AutoMapTest {
         assertFalse(AutoMap.shown(floor, edge, -1, -1), "corners touch no square");
         assertTrue(AutoMap.shown(floor, edge, 2, 1));
         assertFalse(AutoMap.shown(floor, edge, 0, 1), "inside, only what was seen");
+    }
+
+    @Test
+    void anIllusionaryWallIsKnownOnceThePartyStepsIntoIt() {
+        DungeonMap m = DungeonMap.fromAscii(0, "#####", "#.F.#", "#####");
+        Party p = new Party(m, 1, 1, Direction.EAST);
+        assertFalse(m.knownIllusion(2, 1));
+        p.step(Party.Move.FORWARD);
+        assertEquals(2, p.x());
+        assertTrue(m.knownIllusion(2, 1));
+        assertFalse(m.knownIllusion(1, 1), "floor is no illusion");
+    }
+
+    @Test
+    void aClickSensorWithADecorationIsAWallButton() {
+        DungeonMap m = DungeonMap.fromAscii(0, "###", "#.#", "###");
+        m.addWallSensor(new WallSensor(1, 0, Direction.SOUTH, WallSensor.TYPE_CLICK, 0, FloorSensor.Effect.SET,
+                false, false, false, true, 1, 0, 0, 0, 10));
+        m.addWallSensor(new WallSensor(1, 2, Direction.NORTH, WallSensor.TYPE_CLICK, 0, FloorSensor.Effect.SET,
+                false, false, false, true, 1, 0, 0, 0, -1));
+        m.addWallSensor(new WallSensor(0, 1, Direction.EAST, WallSensor.TYPE_CLICK_WITH_ITEM_USED_UP, 184,
+                FloorSensor.Effect.SET, false, false, false, true, 1, 0, 0, 0, 4));
+        assertTrue(m.hasWallButton(1, 0, Direction.SOUTH));
+        assertFalse(m.hasWallButton(1, 0, Direction.NORTH), "only the side it is on");
+        assertFalse(m.hasWallButton(1, 2, Direction.NORTH), "a hidden click sensor shows nothing");
+        assertFalse(m.hasWallButton(0, 1, Direction.EAST), "a keyhole is no button");
+    }
+
+    @Test
+    void aSeenButtonIsDrawnAsADot() {
+        DungeonMap m = party.map();
+        m.addWallSensor(new WallSensor(1, 0, Direction.SOUTH, WallSensor.TYPE_CLICK, 0, FloorSensor.Effect.SET,
+                false, false, false, true, 1, 0, 0, 0, 10));
+        party.explore();
+        clickButton();
+        assertTrue(has(render(), AutoMap.MAP_AREA, AutoMap.BUTTON_DOT.getRGB()), "the button's dot");
     }
 
     private void clickButton() {
