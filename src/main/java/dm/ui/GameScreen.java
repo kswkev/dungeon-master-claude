@@ -6,6 +6,7 @@ import dm.data.Sound;
 import dm.model.Actions;
 import dm.model.Champion;
 import dm.model.ChampionMirror;
+import dm.model.CreatureAI;
 import dm.model.Difficulty;
 import dm.model.Direction;
 import dm.model.DungeonMap;
@@ -315,7 +316,7 @@ public final class GameScreen {
     }
 
     /** Whether the map or a spell list covers the view: the game is paused, as under the menu. */
-    private boolean overlayOpen() {
+    boolean overlayOpen() {
         return automap.isOpen() || spellBook.isOpen();
     }
 
@@ -362,6 +363,9 @@ public final class GameScreen {
     private boolean arrived(DungeonMap.StepResult result) {
         if (result.fell()) {
             sounds.play(screamSound); // first: it starts as the party drops
+        }
+        if (result.buzz()) {
+            sounds.play(dmSound(CreatureAI.SOUND_BUZZ)); // #53: 685, not the switch click
         }
         if (result.click()) {
             sounds.play(clickSound);
@@ -456,14 +460,15 @@ public final class GameScreen {
             }
             return;
         }
-        if (AutoMap.BUTTON.contains(x, y)) {
+        boolean recruited = !party.members().isEmpty(); // #58: the scrolls wait for the first champion
+        if (recruited && AutoMap.BUTTON.contains(x, y)) {
             party.explore();
             arrows.setPressed(null);
             sheet.setPressingEye(false);
             automap.open(party);
             return;
         }
-        int spellButton = SpellBook.buttonAt(x, y);
+        int spellButton = recruited ? SpellBook.buttonAt(x, y) : 0;
         if (spellButton != 0) {
             arrows.setPressed(null);
             sheet.setPressingEye(false);
@@ -485,12 +490,8 @@ public final class GameScreen {
             pressWithSheetOpen(x, y);
             return;
         }
-        int box = bars.hitTest(x, y);
-        if (box >= 0 && box < party.members().size()) {
-            if (party.members().get(box).health() > 0) { // a dead champion's box does nothing
-                sheet.openMember(party.members().get(box));
-            }
-            return;
+        if (bars.hitTest(x, y) >= 0) {
+            return; // #60: only the right button opens a sheet (the hands were handled above)
         }
         if (FormationBox.AREA.contains(x, y)) {
             if (formation.click(party, x, y) && debug) {
@@ -620,16 +621,7 @@ public final class GameScreen {
             }
             return;
         }
-        // Clicking party boxes switches between members (DM toggles off the one shown).
-        int box = bars.hitTest(x, y);
-        if (sheet.candidate() == null && box >= 0 && box < party.members().size()
-                && party.members().get(box).health() > 0) {
-            if (party.members().get(box) == sheet.champion()) {
-                sheet.close();
-            } else {
-                sheet.openMember(party.members().get(box));
-            }
-        }
+        // #60: a left click on a party box no longer switches sheets; the right button does.
     }
 
     /**
@@ -1429,8 +1421,10 @@ public final class GameScreen {
         bars.draw(g, party.members(), sheet.champion(), viewed == null ? null : viewed.champion(),
                 clock.getAsLong(), shields);
         formation.draw(g, party);
-        automap.drawButton(g, art);
-        spellBook.drawButtons(g, art);
+        if (!party.members().isEmpty()) { // #58: hidden until the first champion joins
+            automap.drawButton(g, art);
+            spellBook.drawButtons(g, art);
+        }
         if (menu.isOpen()) {
             menu.draw(g, saves::header,
                     new GameMenu.Settings(party.difficulty(), party.godMode(), party.deepSleep(), party.lockMaster()));

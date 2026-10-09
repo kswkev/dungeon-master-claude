@@ -1232,7 +1232,7 @@ public final class Party implements Serializable {
             Dungeon.Location below = map.dropsThrough(x, y) ? map.below(x, y) : null;
             if (below != null) {
                 result = result.and(moveTo(below.map(), below.x(), below.y()))
-                        .and(new DungeonMap.StepResult(false, false, false, true, false, fall()));
+                        .and(new DungeonMap.StepResult(false, false, false, true, false, false, fall()));
                 continue;
             }
             Teleporter t = map.activeTeleporter(x, y, Teleporter.Kind.PARTY);
@@ -1243,7 +1243,7 @@ public final class Party implements Serializable {
             turnTo(t.turn(facing));
             boolean spinner = to.map() == map && to.x() == x && to.y() == y;
             result = result.and(spinner ? DungeonMap.StepResult.NOTHING : moveTo(to.map(), to.x(), to.y()))
-                    .and(new DungeonMap.StepResult(false, t.audible(), false, false, true, null));
+                    .and(new DungeonMap.StepResult(false, false, false, false, true, t.audible() && !spinner, null));
             if (spinner) {
                 break; // a teleporter onto itself only turns the party
             }

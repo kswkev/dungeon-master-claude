@@ -22,6 +22,7 @@ import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertSame;
 import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assumptions.assumeTrue;
 
 /**
@@ -118,6 +119,22 @@ class RealDungeonTest {
         map.pickUpItem(25, 1, 0);
         settleDoors(map);
         assertFalse(map.isPassable(27, 0), "closed when the plate is empty");
+    }
+
+    /** #55: "THIS WALL SAYS NOTHING" on (21,8) east shows only while the plate at (23,8) is held down. */
+    @Test
+    void theWallSaysNothingOnlyWhileThePlateIsHeld() {
+        Party p = level2(25, 8, Direction.WEST);
+        DungeonMap map = p.map();
+        assertNull(map.decorations().inscription(21, 8, Direction.EAST), "hidden at the start");
+        assertTrue(map.decorations().hasText(21, 8, Direction.EAST));
+        map.dropItem(23, 8, 0, ItemCatalog.item(Item.Category.WEAPON, 10));
+        arrive(p);
+        assertEquals("THIS WALL SAYS\nNOTHING", map.decorations().inscription(21, 8, Direction.EAST), "shown");
+        map.pickUpItem(23, 8, 0);
+        arrive(p);
+        assertNull(map.decorations().inscription(21, 8, Direction.EAST), "hidden again");
+        assertEquals(-1, map.decorations().wall(21, 8, Direction.EAST), "bare wall while hidden");
     }
 
     /** Pits: walking into the open pit at (7,8) drops the party onto Level 3. */

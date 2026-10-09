@@ -32,14 +32,15 @@ public final class DungeonMap implements Serializable {
      * started moving, an audible sensor clicked, the party changed level,
      * fell through a pit or was teleported.
      *
+     * @param buzz an audible teleporter moved the party (DM's buzz, sound 17; #53)
      * @param damage fall damage per champion, indexed like {@link Party#members()}, or null
      */
     public record StepResult(boolean doorStarted, boolean click, boolean levelChanged, boolean fell,
-                             boolean teleported, int[] damage) {
+                             boolean teleported, boolean buzz, int[] damage) {
         public static final StepResult NOTHING = new StepResult(false, false, false);
 
         public StepResult(boolean doorStarted, boolean click, boolean levelChanged) {
-            this(doorStarted, click, levelChanged, false, false, null);
+            this(doorStarted, click, levelChanged, false, false, false, null);
         }
 
         /** Both results together; damage adds up. */
@@ -52,7 +53,7 @@ public final class DungeonMap implements Serializable {
                 }
             }
             return new StepResult(doorStarted || o.doorStarted, click || o.click, levelChanged || o.levelChanged,
-                    fell || o.fell, teleported || o.teleported, sum);
+                    fell || o.fell, teleported || o.teleported, buzz || o.buzz, sum);
         }
     }
 
@@ -458,6 +459,15 @@ public final class DungeonMap implements Serializable {
     public void initSensors() {
         for (FloorSensor s : sensors) {
             s.setPressed(pressedNow(s));
+            // #55 (not in DM): a text held by a plate starts as the plate holds it, so Level 2's
+            // "THIS WALL SAYS NOTHING" (visible in DUNGEON.DAT) shows only while something presses it.
+            if (s.effect() == FloorSensor.Effect.HOLD && s.enabled() && s.type() != FloorSensor.TYPE_GENERATOR
+                    && inBounds(s.targetX(), s.targetY()) && squares[s.targetX()][s.targetY()].type() == SquareType.WALL) {
+                Direction side = Direction.fromIndex(s.targetCell());
+                if (decorations.hasText(s.targetX(), s.targetY(), side)) {
+                    decorations.setTextVisible(s.targetX(), s.targetY(), side, s.pressed() != s.revert());
+                }
+            }
         }
     }
 
@@ -657,6 +667,14 @@ public final class DungeonMap implements Serializable {
                 }
             }
             case WALL -> {
+                Direction textSide = Direction.fromIndex(cell);
+                if (decorations.hasText(x, y, textSide)) { // F248: a text on the cell shows or hides (#55)
+                    decorations.setTextVisible(x, y, textSide, switch (effect) {
+                        case SET, HOLD -> true;
+                        case CLEAR -> false;
+                        case TOGGLE -> !decorations.textVisible(x, y, textSide);
+                    });
+                }
                 for (Direction side : Direction.values()) {
                     for (WallSensor gate : new ArrayList<>(wallSensors(x, y, side))) {
                         if (!gate.enabled()) {

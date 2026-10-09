@@ -17,6 +17,8 @@ public final class Decorations implements Serializable {
     private final int[][] floor;
     private final int[][] door;
     private final boolean[][] doorButton;
+    /** [x][y][side]: an inscription there that is hidden for now (#55); null in saves from before. */
+    private boolean[][][] hidden;
 
     public Decorations(int width, int height) {
         wall = new int[width][height][4];
@@ -41,14 +43,34 @@ public final class Decorations implements Serializable {
         return x >= 0 && y >= 0 && x < floor.length && y < floor[0].length;
     }
 
-    /** The decoration on the given side of wall square (x, y), or -1. */
+    /** The decoration on the given side of wall square (x, y), or -1 (also while its inscription is hidden). */
     public int wall(int x, int y, Direction side) {
-        return inside(x, y) ? wall[x][y][side.ordinal()] : -1;
+        return inside(x, y) && textVisible(x, y, side) ? wall[x][y][side.ordinal()] : -1;
     }
 
-    /** Inscription text on that wall side (lines separated by '\n'), or null. */
+    /** Inscription text on that wall side (lines separated by '\n'), or null (also while it is hidden). */
     public String inscription(int x, int y, Direction side) {
-        return inside(x, y) ? text[x][y][side.ordinal()] : null;
+        return inside(x, y) && textVisible(x, y, side) ? text[x][y][side.ordinal()] : null;
+    }
+
+    /** Whether that wall side has an inscription, shown or hidden. */
+    public boolean hasText(int x, int y, Direction side) {
+        return inside(x, y) && text[x][y][side.ordinal()] != null;
+    }
+
+    /** Whether that side's inscription (if any) is shown: DM's text visible bit, changed by sensor effects (#55). */
+    public boolean textVisible(int x, int y, Direction side) {
+        return hidden == null || !inside(x, y) || !hidden[x][y][side.ordinal()];
+    }
+
+    public void setTextVisible(int x, int y, Direction side, boolean visible) {
+        if (!inside(x, y)) {
+            return;
+        }
+        if (hidden == null) {
+            hidden = new boolean[floor.length][floor[0].length][4];
+        }
+        hidden[x][y][side.ordinal()] = !visible;
     }
 
     public int floor(int x, int y) {

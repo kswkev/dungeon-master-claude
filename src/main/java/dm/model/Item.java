@@ -88,7 +88,7 @@ public record Item(Category category, int type, String name, int nameVariant, Sl
     /**
      * DM's slot rules: hands and backpack take anything, body slots only what
      * is worn there, pouches small things, the first quiver slot any weapon
-     * and the other three only missiles.
+     * and the other three only missiles and daggers (#52).
      */
     public boolean fits(Slot slot) {
         if (slot == Slot.READY_HAND || slot == Slot.ACTION_HAND || slot.isBackpack()) {
@@ -101,7 +101,7 @@ public record Item(Category category, int type, String name, int nameVariant, Sl
             return category == Category.WEAPON;
         }
         if (slot.isQuiver()) {
-            return isMissile();
+            return category == Category.WEAPON && ItemCatalog.fitsQuiver(type);
         }
         return wornOn == slot;
     }

@@ -154,7 +154,7 @@ class GameScreenTest {
             recruitElija();
         }
         if (!screen.sheet().isOpen()) {
-            screen.press(NAME_X, NAME_Y);
+            screen.rightPress(NAME_X, NAME_Y);
         }
         Point disk = CharacterSheet.diskCentre();
         screen.press(disk.x, disk.y);
@@ -230,7 +230,7 @@ class GameScreenTest {
     void theWholeDiskIconOpensTheMenu() {
         screen.setSaveGames(new SaveGames(saveDir));
         recruitElija();
-        screen.press(NAME_X, NAME_Y);
+        screen.rightPress(NAME_X, NAME_Y);
         // The disk spans viewport x 180-188, y 3-11 on DM's inventory graphic.
         for (int[] p : new int[][] {{180, 3}, {188, 3}, {180, 11}, {188, 11}, {184, 7}}) {
             screen.press(VIEW.x + p[0], VIEW.y + p[1]);
@@ -344,7 +344,7 @@ class GameScreenTest {
         render();
         clickMenu(GameMenu.Choice.OK);
         assertTrue(screen.sheet().isOpen());
-        screen.press(NAME_X, NAME_Y); // close the sheet
+        screen.rightPress(NAME_X, NAME_Y); // close the sheet
 
         screen.key(MovementPanel.Action.BACKWARD);
         assertEquals(2, party.y(), "walked off after saving");
@@ -445,7 +445,7 @@ class GameScreenTest {
     @Test
     void keysAreIgnoredWhileASheetIsOpen() {
         recruitElija();
-        screen.press(NAME_X, NAME_Y);
+        screen.rightPress(NAME_X, NAME_Y);
         screen.key(MovementPanel.Action.BACKWARD);
         assertEquals(1, party.y());
     }
@@ -491,13 +491,13 @@ class GameScreenTest {
     @Test
     void rightClickInsideTheSheetClosesItKeepingTheHeldItem() {
         recruitElija();
-        screen.press(NAME_X, NAME_Y);
+        screen.rightPress(NAME_X, NAME_Y);
         Item held = ItemCatalog.item(Item.Category.JUNK, 0);
         party.setHeld(held);
         screen.rightPress(VIEW.x + 100, VIEW.y + 60);
         assertFalse(screen.sheet().isOpen());
         assertSame(held, party.held());
-        screen.press(NAME_X, NAME_Y);
+        screen.rightPress(NAME_X, NAME_Y);
         screen.rightPress(300, 190); // anywhere on the screen, as G0449
         assertFalse(screen.sheet().isOpen());
     }
@@ -548,7 +548,7 @@ class GameScreenTest {
         assertEquals(Art.PALETTE[11], CharacterSheet.loadColour(26, 40), "over five eighths");
         assertEquals(Art.PALETTE[8], CharacterSheet.loadColour(41, 40), "over the maximum");
         recruitElija();
-        screen.press(NAME_X, NAME_Y);
+        screen.rightPress(NAME_X, NAME_Y);
         screen.press(VIEW.x + 190, VIEW.y + 128); // where ours had CLOSE
         assertTrue(screen.sheet().isOpen());
         render();
@@ -573,7 +573,7 @@ class GameScreenTest {
         Champion first = party.members().get(0);
         first.takeDamage(first.health());
         party.bury();
-        screen.press(NAME_X, NAME_Y);
+        screen.rightPress(NAME_X, NAME_Y);
         assertFalse(screen.sheet().isOpen());
         assertFalse(screen.gameOver());
         render(); // the dead box
@@ -687,7 +687,8 @@ class GameScreenTest {
     @Test
     void theZzzIconPutsThePartyToSleepUntilWoken() {
         recruitElija();
-        press(new Point(NAME_X, NAME_Y)); // open Elija's sheet
+        screen.rightPress(NAME_X, NAME_Y); // open Elija's sheet
+        render();
         assertTrue(screen.sheet().isOpen());
         press(CharacterSheet.sleepCentre());
         assertTrue(party.sleeping());
@@ -786,12 +787,37 @@ class GameScreenTest {
         clickPortrait();
         press(CharacterSheet.resurrectCentre());
         render();
-        screen.press(NAME_X, NAME_Y); // first champion box
+        screen.rightPress(NAME_X, NAME_Y); // first champion box
         assertTrue(screen.sheet().isOpen());
         assertNotNull(screen.sheet().champion());
         assertEquals(null, screen.sheet().candidate());
-        screen.press(NAME_X, NAME_Y); // clicking the same box again closes it
+        screen.rightPress(NAME_X, NAME_Y); // clicking the same box again closes it
         assertFalse(screen.sheet().isOpen());
+    }
+
+    @Test
+    void aLeftClickOnAChampionBoxOpensNoSheet() {
+        clickPortrait();
+        press(CharacterSheet.resurrectCentre());
+        render();
+        screen.press(NAME_X, NAME_Y);
+        assertFalse(screen.sheet().isOpen(), "#60: only the right button opens a sheet");
+        screen.rightPress(NAME_X, NAME_Y);
+        screen.press(NAME_X, NAME_Y);
+        assertTrue(screen.sheet().isOpen(), "#60: nor closes one");
+    }
+
+    @Test
+    void theScrollButtonsWaitForTheFirstChampion() {
+        screen.press(AutoMap.BUTTON.x + 4, AutoMap.BUTTON.y + 4);
+        assertFalse(screen.overlayOpen(), "#58: no map before anyone joins");
+        screen.press(SpellBook.WIZARD_BUTTON.x + 4, SpellBook.WIZARD_BUTTON.y + 4);
+        assertFalse(screen.overlayOpen(), "#58: no spell list either");
+        clickPortrait();
+        press(CharacterSheet.resurrectCentre());
+        render();
+        screen.press(AutoMap.BUTTON.x + 4, AutoMap.BUTTON.y + 4);
+        assertTrue(screen.overlayOpen(), "the map opens once a champion has joined");
     }
 
     @Test
@@ -819,7 +845,7 @@ class GameScreenTest {
         mirror.champion().addStartingItem(SWORD);
         mirror.champion().addStartingItem(HELM);
         recruitElija();
-        screen.press(NAME_X, NAME_Y);
+        screen.rightPress(NAME_X, NAME_Y);
         return party.members().get(0);
     }
 
@@ -942,14 +968,14 @@ class GameScreenTest {
         ChampionMirror second = new ChampionMirror(2, 0, Direction.SOUTH, Champion.parse(ELIJA, 1));
         party.recruit(second);
         click(Slot.ACTION_HAND);
-        screen.press(69 + NAME_X, NAME_Y); // second champion's box
+        screen.rightPress(69 + NAME_X, NAME_Y); // second champion's box
         assertSame(second.champion(), screen.sheet().champion());
         assertSame(SWORD, party.held());
-        screen.press(69 + NAME_X, NAME_Y); // close the sheet
+        screen.rightPress(69 + NAME_X, NAME_Y); // close the sheet
         assertFalse(screen.sheet().isOpen());
         assertSame(SWORD, party.held());
 
-        screen.press(69 + NAME_X, NAME_Y);
+        screen.rightPress(69 + NAME_X, NAME_Y);
         click(Slot.READY_HAND);
         assertSame(SWORD, second.champion().items().get(Slot.READY_HAND));
         assertNull(party.held());
@@ -1191,7 +1217,7 @@ class GameScreenTest {
     void theFloorCannotBeReachedWhileASheetIsOpen() {
         recruitElija();
         party.map().addItem(1, 1, 0, APPLE);
-        screen.press(NAME_X, NAME_Y); // open Elija's sheet over the view
+        screen.rightPress(NAME_X, NAME_Y); // open Elija's sheet over the view
         screen.press(VIEW.x + 110, VIEW.y + 104);
         assertNull(party.held());
         assertEquals(List.of(APPLE), party.map().itemsAt(1, 1, 0));
@@ -1208,7 +1234,7 @@ class GameScreenTest {
     @Test
     void clickingAHandPicksUpPlacesAndSwapsWithoutOpeningTheSheet() {
         Champion elija = openElijaWithItems();          // sword in the action hand
-        screen.press(NAME_X, NAME_Y);                    // close the sheet again
+        screen.rightPress(NAME_X, NAME_Y);                    // close the sheet again
         assertFalse(screen.sheet().isOpen());
 
         clickHand(0, Slot.ACTION_HAND);
@@ -1238,9 +1264,9 @@ class GameScreenTest {
         assertSame(APPLE, second.champion().items().get(Slot.ACTION_HAND));
         assertSame(party.members().get(0), screen.sheet().champion(), "the open sheet stays");
 
-        // The open champion's own box shows their portrait, not hands: a click there toggles the sheet.
+        // The open champion's own box shows their portrait, not hands: a left click there does nothing (#60).
         clickHand(0, Slot.READY_HAND);
-        assertFalse(screen.sheet().isOpen());
+        assertTrue(screen.sheet().isOpen());
     }
 
     // ---- walls ----

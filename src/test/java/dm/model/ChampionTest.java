@@ -186,6 +186,11 @@ class ChampionTest {
         assertFalse(sword.fits(Slot.QUIVER_2));
         assertTrue(arrow.fits(Slot.QUIVER_4));
         assertFalse(potion.fits(Slot.QUIVER_1));
+        Item dagger = ItemCatalog.item(Item.Category.WEAPON, ItemCatalog.DAGGER);
+        for (Slot quiver : new Slot[] {Slot.QUIVER_1, Slot.QUIVER_2, Slot.QUIVER_3, Slot.QUIVER_4}) {
+            assertTrue(dagger.fits(quiver), "#52: a dagger fits every quiver cell");
+        }
+        assertFalse(ItemCatalog.item(Item.Category.WEAPON, 23).fits(Slot.QUIVER_2), "#52: a club only the first");
     }
 
     @Test
