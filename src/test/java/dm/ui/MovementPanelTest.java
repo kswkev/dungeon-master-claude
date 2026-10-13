@@ -34,12 +34,4 @@ class MovementPanelTest {
         g.dispose();
         assertEquals(true, (img.getRGB(276, 135) & 0xFFFFFF) != 0);
     }
-
-    @Test
-    void theMirrorHangsAtTheStraightOnMirrorsHeight() {
-        assertEquals(41.5 / 111, TexturedViewRenderer.MIRROR_LEVEL, 1e-9);
-        assertEquals(TexturedViewRenderer.MIRROR_LEVEL, TexturedViewRenderer.level(TexturedViewRenderer.MIRROR_ORNAMENT));
-        assertEquals(TexturedViewRenderer.EYE_LEVEL, TexturedViewRenderer.level(44), "a lever");
-        assertEquals(0, TexturedViewRenderer.level(1), "an alcove keeps its zone centre");
-    }
 }

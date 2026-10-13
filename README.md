@@ -216,6 +216,10 @@ Spells came in Sprint 19; the magic in items' action menus (a staff's fireball a
   - Hidden walls are solid until their button opens them, as in the original. Before, you could walk through them as if they were illusions. Only true illusions can be walked through, and only they stay silent when you knock (#65).
 - **The active champion:** champions' names in the boxes along the top are grey. Left-click a name to make that champion the active one; their name turns to their own colour. The active champion throws what you throw into the view, carries the item on the pointer, and their sheet opens when you right-click the view. At first, and whenever the active champion dies, it's the first living champion.
 
+**Sprint 28: done.** Wall decorations in the original's places (#67-#71):
+- Inscriptions show from a distance and from the side, as the original's worn, unreadable stone, cut short for texts of fewer lines (#67).
+- Every wall decoration now uses the original's own position for it, read from the game's layout table. Alcoves, the VI altar, the ghoul's head and torch holders sit a few pixels higher, as in the original (#68-#70), and the items in alcoves sit on the shelf. The slime outlet sits at the foot of the wall (#71).
+
 ## Requirements
 
 - JDK 17 or newer
