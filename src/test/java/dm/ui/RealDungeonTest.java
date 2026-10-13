@@ -439,13 +439,13 @@ class RealDungeonTest {
         }
     }
 
-    /** #15: the gold keyhole at (0,3) north is centred at eye level, row 48 of the viewport. */
+    /** #15: the gold keyhole at (0,3) north is centred at eye level: DM's set 0 box, rows 36-63 of the viewport. */
     @Test
     void theKeyholeHangsAtEyeLevel() {
         assumeTrue(Files.exists(GRAPHICS), "needs the original GRAPHICS.DAT");
         Rectangle hit = render(level2(0, 2, Direction.SOUTH)).wallHit();
         assertNotNull(hit);
-        assertEquals(48, hit.y - ViewRenderer.VIEWPORT.y + hit.height / 2, 1.0);
+        assertEquals(49.5, hit.y - ViewRenderer.VIEWPORT.y + hit.height / 2, 1.0);
     }
 
     /** #15: the lever at (4,10) south is drawn at the same height in both positions. */
@@ -459,7 +459,7 @@ class RealDungeonTest {
         assertNotNull(before);
         assertNotNull(after);
         assertEquals(before.y + before.height / 2, after.y + after.height / 2);
-        assertEquals(48, before.y - ViewRenderer.VIEWPORT.y + before.height / 2, 1.0);
+        assertEquals(49.5, before.y - ViewRenderer.VIEWPORT.y + before.height / 2, 1.0);
     }
 
     /**

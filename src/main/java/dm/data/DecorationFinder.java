@@ -31,6 +31,8 @@ final class DecorationFinder {
     private static final int SENSOR_CHAMPION_PORTRAIT = 127;
     /** The champion mirror's global wall decoration: side view 345, front view {@link GraphicsFile#MIRROR_FRONT}. */
     static final int MIRROR_ORNAMENT = (GraphicsFile.MIRROR_FRONT - 260) / 2;
+    /** The unreadable inscription, every text's decoration away from the D1 front face. */
+    static final int INSCRIPTION_ORNAMENT = 0;
 
     private final OrnamentLists lists;
     private final int seed;
@@ -116,8 +118,10 @@ final class DecorationFinder {
                 }
             } else if (t.type() == Thing.TEXT) {
                 // A hidden text (visible bit 0 clear) is kept too: sensor effects can show it (#55).
+                // Its decoration is always the unreadable inscription (global 0): DM adds it to every
+                // map's list (F0096), so texts show from afar even on maps that don't list it (#67).
                 String inscription = TextDecoder.decode(text, t.words()[1] >>> 3);
-                deco.setWall(x, y, side, OrnamentLists.global(lists.wall(), lists.inscriptionOrdinal()), inscription);
+                deco.setWall(x, y, side, INSCRIPTION_ORNAMENT, inscription);
                 deco.setTextVisible(x, y, side, (t.words()[1] & 1) != 0);
             }
         }

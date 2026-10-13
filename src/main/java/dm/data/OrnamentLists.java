@@ -45,14 +45,4 @@ record OrnamentLists(int[] creatures, int[] wall, int randomWall, int[] floor, i
     static int global(int[] list, int ordinal) {
         return ordinal > 0 && ordinal <= list.length ? list[ordinal - 1] : -1;
     }
-
-    /** The ordinal of the inscription decoration (global index 0) in the wall list, or 0. */
-    int inscriptionOrdinal() {
-        for (int i = 0; i < wall.length; i++) {
-            if (wall[i] == 0) {
-                return i + 1;
-            }
-        }
-        return 0;
-    }
 }

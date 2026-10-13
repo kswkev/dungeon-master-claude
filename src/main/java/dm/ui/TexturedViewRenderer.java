@@ -222,59 +222,105 @@ public final class TexturedViewRenderer implements ViewRenderer {
     // ---- wall decorations ---------------------------------------------------
     //
     // Decoration k has a side view (259 + 2k) and a front view (260 + 2k),
-    // both drawn for D1 and scaled down for D2/D3. Front views are centred on
-    // DM's own points from the zone table (FIRST_WALL_ORNAMENT_ZONE); without
-    // it, and for side views, positions are fitted: centred on the face
-    // slightly above its middle (like the mirrors). Full-face pictures fill the face.
+    // drawn as they are at D1 and shrunk for D2/D3 (F0107). Where they go is
+    // DM's: each decoration has a coordinate set (G0194), and the PC's zone
+    // table holds each set's points for the 15 wall faces a decoration can
+    // be seen on (FIRST_WALL_ORNAMENT_ZONE), anchored by the zone's type
+    // (centre, or bottom centre for the ones at the foot of the wall). The
+    // sizes the pictures shrink to are G0205's boxes.
 
     static final int FIRST_WALL_ORNAMENT = 259;
-    /** Centre of each depth's visible left side face (x, y), for side decorations. */
-    private static final int[][] SIDE_FACE_CENTRE = {null, {46, 59}, {68, 52}, {82, 47}};
-    private static final double[] SIDE_SCALE = {0, 1.0, 0.66, 0.44};
+
+    /**
+     * The first of the PC zone table's wall decoration points: 15 per
+     * coordinate set, in the order D3L2 and D3R2 sides, D3L and D3R sides,
+     * D3 fronts L/C/R, D2L and D2R sides, D2 fronts L/C/R, D1L and D1R sides,
+     * D1 centre front. Sets 0-6 match G0205's boxes; the two groups after
+     * them (1109, 1124) aren't used by any decoration here.
+     */
+    static final int FIRST_WALL_ORNAMENT_ZONE = 1004;
+    private static final int ZONES_PER_SET = 15;
+    /** Within a set's zones, by depth: the left side face (the right one follows), and the left front face. */
+    private static final int[] SIDE_ZONE = {-1, 12, 7, 2};
+    private static final int[] FRONT_ZONE = {-1, 13, 9, 4}; // D1 has only the centre face, at 14
+
+    /**
+     * G0194: each global wall decoration's coordinate set (ScummVM's table),
+     * except the slime outlet (12), which the original draws at the foot of
+     * the wall (#71) where the table says set 3.
+     */
+    static final int[] COORDINATE_SET = {
+            1, 1, 1, 1, 0, 0, 0, 0, 0, 0, 0, 2, 2, 0, 0, 0, 0, 0, 0, 0,
+            0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 2, 2, 1, 1, 1, 1, 1,
+            4, 4, 4, 5, 0, 0, 1, 0, 0, 0, 2, 0, 0, 0, 0, 2, 6, 6, 6, 7};
+
+    /**
+     * G0205's box sizes by set: {width, height} at D1, D2 and D3, front
+     * (the centre faces) then side. A picture shrinks by the ratio of its
+     * set's box at that depth to the D1 one.
+     */
+    private static final int[][] FRONT_BOX = {
+            {32, 28, 22, 18, 14, 12}, {96, 56, 64, 37, 47, 27}, {32, 28, 22, 18, 14, 12}, {32, 28, 22, 18, 14, 12},
+            {96, 12, 64, 8, 48, 6}, {64, 43, 43, 29, 32, 20}, {96, 111, 61, 71, 49, 51}, {160, 111, 104, 71, 76, 51}};
+    private static final int[][] SIDE_BOX = {
+            {16, 19, 11, 10, 4, 5}, {32, 48, 16, 30, 9, 20}, {16, 19, 11, 10, 4, 5}, {16, 19, 11, 10, 4, 5},
+            {32, 12, 18, 7, 16, 5}, {16, 35, 10, 23, 8, 16}, {16, 111, 10, 71, 8, 51}, {32, 111, 18, 71, 12, 51}};
+
+    /**
+     * Rows of an unreadable inscription's box kept for 1, 2 and 3 lines of
+     * text, then the box's height (G0204's bottoms less G0205 set 1's tops),
+     * by depth, for front faces (D2, D3) and side faces (D1-D3). With 4 lines
+     * the whole stone shows.
+     */
+    private static final int[][] INSCRIPTION_ROWS = {
+            null, null, {10, 17, 27, 37}, {7, 13, 20, 27}};
+    private static final int[][] INSCRIPTION_SIDE_ROWS = {
+            null, {11, 22, 33, 48}, {5, 12, 19, 30}, {5, 8, 13, 20}};
 
     private void drawWallDecorations(Graphics2D g, DungeonMap map, int d, int l, int mx, int my, Direction fwd) {
-        if (d == 0) {
+        if (d == 0 || Math.abs(l) > 1) {
             return;
         }
-        // Front face, for the centre and the visible slivers of the neighbouring squares.
-        if (Math.abs(l) <= 1) {
+        // Front face: straight ahead, and the neighbouring squares' at D2 and D3 (DM has none at D1).
+        if (l == 0 || d > 1) {
             Direction front = fwd.opposite();
             int ornament = map.wallOrnament(mx, my, front);
             String text = map.decorations().inscription(mx, my, front);
-            if (text != null && d == 1 && l == 0) {
+            if (text != null && d == 1) {
                 Inscription.draw(g, art, text, FRONT[1]);
             } else if (l == 0 && map.mirrorAt(mx, my, front) != null) {
                 // drawMirror owns the front view: frame, portrait and click target.
             } else if (ornament >= 0) {
-                Rectangle face = new Rectangle(FRONT[d]);
-                face.x += l * face.width;
-                Rectangle drawn = drawFrontDecoration(g, ornament, face, d, l);
+                Rectangle drawn = drawFrontDecoration(g, ornament, d, l, text);
                 if (DungeonMap.isAlcove(ornament)) {
                     drawAlcoveItems(g, map.itemsAt(mx, my, front.ordinal()), d, l);
                     drawRebirth(g, map, mx, my, front, d, l);
                 }
-                if (d == 1 && l == 0 && drawn != null) {
+                if (d == 1 && drawn != null) {
                     wallHit = new Rectangle(drawn.x + VIEWPORT.x, drawn.y + VIEWPORT.y, drawn.width, drawn.height);
                 }
             }
         }
         // Side face turned toward the middle of the view.
-        if (l != 0 && Math.abs(l) <= 1) {
+        if (l != 0) {
             Direction side = l < 0 ? fwd.turnRight() : fwd.turnLeft();
             int ornament = map.wallOrnament(mx, my, side);
             if (ornament >= 0) {
-                drawSideDecoration(g, ornament, d, l > 0);
+                drawSideDecoration(g, ornament, d, l > 0, map.decorations().inscription(mx, my, side));
             }
         }
     }
 
     /**
-     * Objects in an alcove, at DM's alcove points from the zone table (2548:
-     * D3 centre, left, right, D2 centre, left, right, D1 centre), standing on
-     * the alcove's shelf. Scaled for the wall face's distance, between the
-     * object scales of the cells on either side of it.
+     * Objects in an alcove, at DM's alcove points from the zone table (D3
+     * centre, left, right, D2 centre, left, right, D1 centre), standing on
+     * the alcove's shelf. The table has three such sets (2548, 2555, 2562);
+     * the second puts the objects where the original does in the square
+     * alcove and the VI altar (#68, #69), so all alcoves use it. Scaled for
+     * the wall face's distance, between the object scales of the cells on
+     * either side of it.
      */
-    private static final int FIRST_ALCOVE_ZONE = 2548;
+    private static final int FIRST_ALCOVE_ZONE = 2555;
     private static final int[] ALCOVE_SCALE = {0, 30, 19, 13};
 
     private void drawAlcoveItems(Graphics2D g, List<Item> items, int d, int l) {
@@ -291,162 +337,105 @@ public final class TexturedViewRenderer implements ViewRenderer {
         }
     }
 
-    /**
-     * First of DM's front wall decoration centres in the zone table: D3
-     * centre, left, right, D2 centre, left, right, D1 centre. A second set
-     * follows at 3007 (a few pixels lower); which decorations use it isn't
-     * known, so all use the first. With these, objects at the alcove points
-     * (2548) sit on the alcove's shelf, which confirms the reading.
-     */
-    static final int FIRST_WALL_ORNAMENT_ZONE = 3000;
-
     /** The torch holder with its torch (46) and empty (38), as the PC dungeon's storage sensors show them. */
     static final int TORCH_HOLDER = 46;
     static final int EMPTY_TORCH_HOLDER = 38;
 
-    /** Draws a front-view decoration on {@code face} and returns where it went (viewport coordinates), or null. */
-    private Rectangle drawFrontDecoration(Graphics2D g, int ornament, Rectangle face, int d, int l) {
+    /** The champion mirror's frame, as a wall decoration (side views and other front faces). */
+    static final int MIRROR_ORNAMENT = 43;
+
+    /** Decoration {@code ornament}'s coordinate set (G0194). */
+    static int coordinateSet(int ornament) {
+        return ornament >= 0 && ornament < COORDINATE_SET.length ? COORDINATE_SET[ornament] : 0;
+    }
+
+    /**
+     * The first zone of a decoration's set. The zone table has no points for
+     * set 7 (the outdoor picture, as wide as the D1 wall); it stands on the
+     * floor like set 6, the full-height pictures.
+     */
+    private static int zoneGroup(int ornament) {
+        return FIRST_WALL_ORNAMENT_ZONE + Math.min(coordinateSet(ornament), 6) * ZONES_PER_SET;
+    }
+
+    /** The zone a decoration's front view goes in at depth {@code d}, lateral {@code l}. */
+    static int frontZone(int ornament, int d, int l) {
+        return zoneGroup(ornament) + FRONT_ZONE[d] + l + 1;
+    }
+
+    /** The zone a decoration's side view goes in at depth {@code d}, on the right-hand face if {@code rightSide}. */
+    static int sideZone(int ornament, int d, boolean rightSide) {
+        return zoneGroup(ornament) + SIDE_ZONE[d] + (rightSide ? 1 : 0);
+    }
+
+    /** {@code size} shrunk from the D1 box to the depth-{@code d} box of {@code boxes} (index 0 width, 1 height). */
+    private static int shrunk(int size, int[] boxes, int d, int axis) {
+        return d == 1 ? size : Math.max(1, (int) Math.round(size * boxes[(d - 1) * 2 + axis] / (double) boxes[axis]));
+    }
+
+    /** Draws a front-view decoration and returns where it went (viewport coordinates), or null. */
+    private Rectangle drawFrontDecoration(Graphics2D g, int ornament, int d, int l, String text) {
         int graphic = FIRST_WALL_ORNAMENT + 2 * ornament + 1;
-        BufferedImage img = art.sprite(graphic);
-        if (img == null) {
+        BufferedImage pic = art.sprite(graphic);
+        if (pic == null) {
             return null;
         }
-        double scale = face.width / (double) FRONT[1].width;
-        int w = (int) Math.round(img.getWidth() * scale);
-        int h = (int) Math.round(img.getHeight() * scale);
-        img = distant(graphic, w, h, wallOrnamentChanges(d), false);
+        int[] box = FRONT_BOX[coordinateSet(ornament)];
+        int w = shrunk(pic.getWidth(), box, d, 0);
+        int h = shrunk(pic.getHeight(), box, d, 1);
+        BufferedImage img = distant(graphic, w, h, wallOrnamentChanges(d), false);
         int anchorH = h;
         if (ornament == EMPTY_TORCH_HOLDER) {
             // #56: the empty holder's picture (54 rows) shares the full one's top-left (53 rows),
-            // so centre it as the full one, or the bracket rides up as the torch is taken.
+            // so place it as the full one, or the bracket rides up as the torch is taken.
             BufferedImage full = art.sprite(FIRST_WALL_ORNAMENT + 2 * TORCH_HOLDER + 1);
             if (full != null) {
-                anchorH = (int) Math.round(full.getHeight() * scale);
+                anchorH = shrunk(full.getHeight(), box, d, 1);
             }
         }
-        int x;
-        int y;
-        Point centre = d == 1 && l != 0 ? null
-                : art.zone(FIRST_WALL_ORNAMENT_ZONE + (MAX_DEPTH - d) * 3 + (l == 0 ? 0 : l < 0 ? 1 : 2));
-        if (img.getWidth() >= FRONT[1].width * 0.9) {
-            x = face.x;            // full-face pictures
-            y = face.y;
-        } else if (centre != null) {
-            x = centre.x - w / 2;
-            y = centre.y - anchorH / 2;
-        } else {
-            x = face.x + (face.width - w) / 2;
-            y = (int) Math.round(face.y + face.height / 2.0 - anchorH / 2.0 - 6 * scale);
+        int[] at = art.coord(frontZone(ornament, d, l), w, anchorH);
+        if (at == null) {
+            return null;
         }
-        if (standsOnFloor(ornament, art.sprite(graphic))) {
-            y = face.y + face.height - h;
-        } else if (level(ornament) > 0) {
-            y = (int) Math.round(face.y + level(ornament) * face.height - h / 2.0);
-        }
-        g.drawImage(img, x, y, w, h, null);
+        int x = at[0] - at[4];
+        int y = at[1] - at[5];
+        int rows = text == null ? h : inscriptionRows(h, INSCRIPTION_ROWS[d], text);
+        g.drawImage(img, x, y, x + w, y + rows, 0, 0, w, rows, null);
         return new Rectangle(x, y, w, h);
     }
 
     /**
-     * Decorations DM hangs higher than the zone centres, at eye level (#15),
-     * all confirmed by the user against the original: the hook and ring (4, 6),
-     * the keyholes, locks and slots (5, 17-24, 26-32), the gems (15, 16,
-     * 51-53), the skull (25) and both positions of the lever (44, 45). Their
-     * centre is at row 48 of the D1 front face (40 of its 111 rows down), and
-     * at the same fraction of every other face.
+     * F0107 for an inscription seen from afar: the unreadable stone is cut
+     * short for 1-3 lines of text, keeping G0204's share of its rows.
      */
-    static final Set<Integer> EYE_LEVEL_ORNAMENTS = Set.of(
-            4, 5, 6, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30, 31, 32, 44, 45, 51, 52, 53);
-    static final double EYE_LEVEL = 40 / 111.0;
-
-    /** The champion mirror's frame, as a wall decoration (side views and other front faces). */
-    static final int MIRROR_ORNAMENT = 43;
-    /**
-     * Where the mirror's frame is centred on every wall face, as a fraction
-     * of the face's height (#30): the same as the straight-on D1 mirror,
-     * which the user confirmed against the original (frame top at the
-     * portrait zone's y 35 less the glass offset, so its centre is 41.5 of
-     * the D1 face's 111 rows down). The straight-on D2/D3 mirrors already
-     * sit there.
-     */
-    static final double MIRROR_LEVEL = (35 - GLASS_Y + MIRROR_H / 2.0 - FRONT[1].y) / FRONT[1].height;
-
-    /** The fraction of a face's height a decoration is centred on, or 0 for the default placement. */
-    static double level(int ornament) {
-        if (ornament == MIRROR_ORNAMENT) {
-            return MIRROR_LEVEL;
+    static int inscriptionRows(int h, int[] rows, String text) {
+        int lines = text.split("\n", -1).length;
+        if (rows == null || lines >= 4) {
+            return h;
         }
-        return EYE_LEVEL_ORNAMENTS.contains(ornament) ? EYE_LEVEL : 0;
+        return Math.max(1, (int) Math.round(h * rows[lines - 1] / (double) rows[3]));
     }
 
-    /**
-     * Decorations that sit at the foot of the wall rather than around its
-     * middle: the moss tuft (33) and the drain grate (34), checked against the original, and the
-     * full-height pictures (the cracked and creature walls, 56-58), which
-     * would otherwise hang below the floor line. DM keeps a coordinate set per
-     * decoration in its program; until more are known, everything else uses
-     * the zone centres.
-     */
-    private static final Set<Integer> FLOOR_LEVEL_ORNAMENTS = Set.of(33, 34);
-
-    private static boolean standsOnFloor(int ornament, BufferedImage img) {
-        return FLOOR_LEVEL_ORNAMENTS.contains(ornament) || img.getHeight() >= FRONT[1].height * 0.9;
-    }
-
-    private void drawSideDecoration(Graphics2D g, int ornament, int d, boolean rightSide) {
-        int index = FIRST_WALL_ORNAMENT + 2 * ornament;
-        BufferedImage img = rightSide ? art.spriteFlipped(index) : art.sprite(index);
-        if (img == null) {
+    /** Draws a side-view decoration on the side face at depth {@code d} (the right-hand one mirrored). */
+    private void drawSideDecoration(Graphics2D g, int ornament, int d, boolean rightSide, String text) {
+        int graphic = FIRST_WALL_ORNAMENT + 2 * ornament;
+        BufferedImage pic = art.sprite(graphic);
+        if (pic == null) {
             return;
         }
-        double scale = SIDE_SCALE[d];
-        int w = Math.max(1, (int) Math.round(img.getWidth() * scale));
-        int h = Math.max(1, (int) Math.round(img.getHeight() * scale));
-        img = distant(index, w, h, wallOrnamentChanges(d), rightSide);
-        int cx = SIDE_FACE_CENTRE[d][0];
-        if (rightSide) {
-            cx = VIEWPORT.width - cx;
+        int[] box = SIDE_BOX[coordinateSet(ornament)];
+        int w = shrunk(pic.getWidth(), box, d, 0);
+        int h = shrunk(pic.getHeight(), box, d, 1);
+        BufferedImage img = distant(graphic, w, h, wallOrnamentChanges(d), rightSide);
+        int[] at = art.coord(sideZone(ornament, d, rightSide), w, h);
+        if (img == null || at == null) {
+            return;
         }
-        int y = SIDE_FACE_CENTRE[d][1] - h / 2;
-        BufferedImage front = art.sprite(index + 1);
-        if (front != null && standsOnFloor(ornament, front)) {
-            y = onSideFloor(img, cx - w / 2, rightSide, SIDE_FACE_CENTRE[d][1] + SIDE_FACE_HEIGHT[d] / 2 - h);
-        } else if (level(ornament) > 0) {
-            int top = SIDE_FACE_CENTRE[d][1] - SIDE_FACE_HEIGHT[d] / 2;
-            y = (int) Math.round(top + level(ornament) * SIDE_FACE_HEIGHT[d] - h / 2.0);
-        }
-        g.drawImage(img, cx - w / 2, y, w, h, null);
+        int x = at[0] - at[4];
+        int y = at[1] - at[5];
+        int rows = text == null ? h : inscriptionRows(h, INSCRIPTION_SIDE_ROWS[d], text);
+        g.drawImage(img, x, y, x + w, y + rows, 0, 0, w, rows, null);
     }
-
-    /**
-     * The side walls' floor edge (#54): on every left side face (pieces 94,
-     * 96, 101 and 106 in their zones) the wall's lowest row at viewport
-     * column x is this minus x; right faces mirror it.
-     */
-    private static final int SIDE_FLOOR_EDGE = 150;
-
-    /**
-     * Where a floor-level side decoration's top goes so that it stands on the
-     * sloping floor edge: its lowest pixel in some column touches the wall's
-     * last row there, and none goes below it. {@code fallback} if it has no pixels.
-     */
-    static int onSideFloor(BufferedImage img, int left, boolean rightSide, int fallback) {
-        int top = Integer.MAX_VALUE;
-        for (int col = 0; col < img.getWidth(); col++) {
-            int vx = left + col;
-            int edge = SIDE_FLOOR_EDGE - (rightSide ? VIEWPORT.width - 1 - vx : vx);
-            for (int row = img.getHeight() - 1; row >= 0; row--) {
-                if ((img.getRGB(col, row) >>> 24) != 0) {
-                    top = Math.min(top, edge - row);
-                    break;
-                }
-            }
-        }
-        return top == Integer.MAX_VALUE ? fallback : top;
-    }
-
-    /** Height of each depth's side face at its centre: halfway between the front faces it joins. */
-    private static final int[] SIDE_FACE_HEIGHT = {0, (111 + 74) / 2, (74 + 49) / 2, (49 + 33) / 2};
 
     // ---- open squares: doors, stairs, pits, teleporters -------------------
     //

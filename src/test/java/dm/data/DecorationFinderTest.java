@@ -131,6 +131,15 @@ class DecorationFinderTest {
         assertEquals(6, lists.floor()[2]);
         assertEquals(2, lists.randomFloor());
         assertEquals(7, lists.door()[0]);
-        assertEquals(0, lists.inscriptionOrdinal(), "no inscription stone in this list");
+    }
+
+    @Test
+    void aTextIsTheInscriptionStoneEvenWhenTheListLacksIt() {
+        // #67: DM adds the unreadable inscription to every map, so a text shows from afar.
+        OrnamentLists lists = new OrnamentLists(new int[0], new int[] {7, 9}, 0, new int[0], 0, new int[0]);
+        Thing text = new Thing(Thing.TEXT, 0, Direction.EAST.ordinal(), new int[] {0xFFFE, 1});
+        Decorations d = decorate(0x0F, lists, text);
+        assertEquals(0, d.wall(1, 1, Direction.EAST));
+        assertEquals("HELLO\nWORLD", d.inscription(1, 1, Direction.EAST));
     }
 }
