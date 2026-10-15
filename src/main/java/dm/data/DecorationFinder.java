@@ -32,7 +32,7 @@ final class DecorationFinder {
     /** The champion mirror's global wall decoration: side view 345, front view {@link GraphicsFile#MIRROR_FRONT}. */
     static final int MIRROR_ORNAMENT = (GraphicsFile.MIRROR_FRONT - 260) / 2;
     /** The unreadable inscription, every text's decoration away from the D1 front face. */
-    static final int INSCRIPTION_ORNAMENT = 0;
+    static final int INSCRIPTION_ORNAMENT = Decorations.INSCRIPTION;
 
     private final OrnamentLists lists;
     private final int seed;
