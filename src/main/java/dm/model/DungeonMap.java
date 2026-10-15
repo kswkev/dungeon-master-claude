@@ -788,8 +788,12 @@ public final class DungeonMap implements Serializable {
             // F270/F271: the local action is DM's effect; CLEAR and TOGGLE rotate the side, SET doesn't
             // (Level 14's amalgam sensor). Storage (13) always rotates, through its own TOGGLE in F275.
             int action = s.localAction();
-            if (rotate != null && (action == 1 || action == 2 || s.type() == WallSensor.TYPE_STORAGE_ROTATE)) {
-                rotate.add(s);
+            if (action == 1 || action == 2 || s.type() == WallSensor.TYPE_STORAGE_ROTATE) {
+                if (rotate != null) {
+                    rotate.add(s);
+                } else {
+                    rotateSide(s.x(), s.y(), s.side()); // fired by an event (a gate, a countdown): at once (#74)
+                }
             }
         } else {
             send(s.delay(), s.targetX(), s.targetY(), s.targetCell(), effect, out, depth);
@@ -1154,19 +1158,18 @@ public final class DungeonMap implements Serializable {
     }
 
     /**
-     * The decoration shown on a wall side: as in DM, the last sensor there
-     * that carries one; without sensors, the map's (random or explicit) one.
-     * Rotating a side's sensors changes it, e.g. a lever moving or a torch
-     * holder emptying.
+     * The decoration shown on a wall side: as in DM (F172), the last sensor
+     * there sets it, even to none; without sensors, the map's (random or
+     * explicit) one. Rotating a side's sensors changes it, e.g. a lever
+     * moving, a torch holder emptying, or Level 6's hidden alcove at (13,19)
+     * appearing as its gate rotates the disabled alcove sensor last (#74).
      */
     public int wallOrnament(int x, int y, Direction side) {
-        int shown = -1;
-        for (WallSensor s : wallSensors(x, y, side)) {
-            if (s.ornament() >= 0) {
-                shown = s.ornament();
-            }
+        List<WallSensor> sensors = wallSensors(x, y, side);
+        if (sensors.isEmpty()) {
+            return decorations.wall(x, y, side);
         }
-        return shown >= 0 ? shown : decorations.wall(x, y, side);
+        return sensors.get(sensors.size() - 1).ornament();
     }
 
     /** Global wall ornaments that are alcoves (the third is the VI altar): items can be put in and taken out. */
@@ -1188,7 +1191,9 @@ public final class DungeonMap implements Serializable {
      * in order, like DM:
      * <ul>
      *   <li>click: always fires;</li>
-     *   <li>click with any item: fires when an item is held;</li>
+     *   <li>click with any item: fires when an item is held; on an alcove it
+     *       goes off as the item its data names goes in or comes out (#74,
+     *       Level 6's riddle room), HOLD giving SET or CLEAR as DM's F275 does;</li>
      *   <li>click with item: fires when the held item's icon is the sensor's
      *       data; the "used up" kind (keyholes, coin slots) also takes it;</li>
      *   <li>storage (torch holders): an empty hand takes the stored item, a
@@ -1249,7 +1254,7 @@ public final class DungeonMap implements Serializable {
             boolean wanted = s.revert() ? held != null && !match : match || picked(s, party, iconOf);
             boolean fires = switch (s.type()) {
                 case WallSensor.TYPE_CLICK -> !alcove;
-                case WallSensor.TYPE_CLICK_WITH_ANY_ITEM -> (held != null) != s.revert();
+                case WallSensor.TYPE_CLICK_WITH_ANY_ITEM -> !alcove && (held != null) != s.revert(); // alcoves: below
                 case WallSensor.TYPE_CLICK_WITH_ITEM -> wanted;
                 case WallSensor.TYPE_CLICK_WITH_ITEM_USED_UP -> {
                     if (wanted && (match || s.revert())) { // lock master uses up only the right key or coin
@@ -1281,9 +1286,14 @@ public final class DungeonMap implements Serializable {
             }
         }
         // Each local firing rotates the side once: the first sensor moves to the end.
-        List<WallSensor> list = sideSensors(x, y, side, false);
-        for (int i = 0; i < rotate.size() && list != null && !list.isEmpty(); i++) {
-            list.add(list.remove(0));
+        for (int i = 0; i < rotate.size(); i++) {
+            rotateSide(x, y, side);
+        }
+        rotate.clear();
+        List<WallSensor> answers = alcove ? alcoveSensors(x, y, side) : List.of();
+        boolean[] before = new boolean[answers.size()];
+        for (int i = 0; i < answers.size(); i++) {
+            before[i] = holds(x, y, cell, answers.get(i).data(), iconOf);
         }
         if (alcove) {
             Item held = party.held();
@@ -1302,11 +1312,60 @@ public final class DungeonMap implements Serializable {
                     out.handChanged = true;
                 }
             }
+            // An alcove's type 2 sensor goes off as its item (the data's icon) goes in or comes out (#74).
+            for (int i = 0; i < answers.size(); i++) {
+                WallSensor s = answers.get(i);
+                boolean now = holds(x, y, cell, s.data(), iconOf);
+                if (now == before[i]) {
+                    continue;
+                }
+                boolean trigger = now != s.revert();
+                if (s.effect() == FloorSensor.Effect.HOLD) {
+                    fire(s, trigger ? FloorSensor.Effect.SET : FloorSensor.Effect.CLEAR, out, 0, rotate);
+                } else if (trigger) {
+                    fire(s, s.effect(), out, 0, rotate);
+                }
+            }
+            for (int i = 0; i < rotate.size(); i++) {
+                rotateSide(x, y, side);
+            }
         }
         if (!out.fired && !out.handChanged && !drank) {
             return WallClick.NOTHING;
         }
         return new WallClick(out.fired, out.sound, out.doorStarted, out.handChanged, drank);
+    }
+
+    /** The first sensor on a side moves to the end (F271). */
+    private void rotateSide(int x, int y, Direction side) {
+        List<WallSensor> list = sideSensors(x, y, side, false);
+        if (list != null && !list.isEmpty()) {
+            list.add(list.remove(0));
+        }
+    }
+
+    /** An alcove side's enabled type 2 sensors, which watch for their item in the alcove (#74). */
+    private List<WallSensor> alcoveSensors(int x, int y, Direction side) {
+        List<WallSensor> found = new ArrayList<>();
+        for (WallSensor s : wallSensors(x, y, side)) {
+            if (s.enabled() && s.type() == WallSensor.TYPE_CLICK_WITH_ANY_ITEM) {
+                found.add(s);
+            }
+        }
+        return found;
+    }
+
+    /** Whether the pile on {@code cell} of wall square (x, y) holds an item with inventory icon {@code icon}. */
+    private boolean holds(int x, int y, int cell, int icon, ToIntFunction<Item> iconOf) {
+        List<Item> pile = pile(x, y, cell, false);
+        if (pile != null) {
+            for (Item i : pile) {
+                if (iconOf.applyAsInt(i) == icon) {
+                    return true;
+                }
+            }
+        }
+        return false;
     }
 
     /** Lock master: an item sensor that wants a key or a coin (not a revert one) opens without it. */
