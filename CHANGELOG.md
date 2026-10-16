@@ -2,9 +2,9 @@
 
 What each sprint added, newest first.
 
-## Unreleased
+## 0.1.0 (2026-10-16)
 
-Bug fixes for the ending:
+The first release: everything in Sprints 1-28 below, plus bug fixes for the ending:
 
 - The closing words run across the whole message area instead of a few words per row (#75).
 - The champions' portraits on the end screen sit inside their mirrors (#76).
