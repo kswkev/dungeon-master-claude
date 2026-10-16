@@ -581,6 +581,7 @@ final class Flight {
                             lasts = true;
                         }
                     }
+                    case Explosion.FLUXCAGE -> lasts = party.endgame() != null; // TIMELINE.C: kept once the game is won (#77)
                     default -> { }
                 }
                 if (lasts) {
