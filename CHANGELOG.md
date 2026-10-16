@@ -2,6 +2,12 @@
 
 What each sprint added, newest first.
 
+## 1.0.0 (2026-10-17)
+
+The game is complete, from the entrance to the end screen. Since 0.1.0:
+
+- The build's jar is always `target/dungeon-master.jar`, whatever the version; the release's jar still carries the version in its name.
+
 ## 0.1.0 (2026-10-16)
 
 The first release: everything in Sprints 1-28 below, plus bug fixes for the ending:

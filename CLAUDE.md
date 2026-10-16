@@ -57,15 +57,15 @@ mvn package                                   # compile, run tests, build the ja
 mvn test                                      # all tests
 mvn test -Dtest=PartyTest                     # one test class
 mvn test -Dtest=PartyTest#wallsBlock          # one test method
-java -jar target/dungeon-master-0.1.0-SNAPSHOT.jar
-java "-Ddm.debug=true" -jar target/dungeon-master-0.1.0-SNAPSHOT.jar      # print Level 1 as ASCII, log each move, show coordinates on screen
-java "-Ddm.soundtest=all" -jar target/dungeon-master-0.1.0-SNAPSHOT.jar   # play every GRAPHICS.DAT sound with its index (or =<index>)
-java "-Ddm.start=13,15,2,N" "-Ddm.recruit=all" "-Ddm.give=weapon:45" -jar target/dungeon-master-0.1.0-SNAPSHOT.jar   # testing (not in DM): start anywhere (level 1-based, x, y, N/E/S/W), recruit, give items (category:type[:charges]); Main.debugParty
+java -jar target/dungeon-master.jar
+java "-Ddm.debug=true" -jar target/dungeon-master.jar      # print Level 1 as ASCII, log each move, show coordinates on screen
+java "-Ddm.soundtest=all" -jar target/dungeon-master.jar   # play every GRAPHICS.DAT sound with its index (or =<index>)
+java "-Ddm.start=13,15,2,N" "-Ddm.recruit=all" "-Ddm.give=weapon:45" -jar target/dungeon-master.jar   # testing (not in DM): start anywhere (level 1-based, x, y, N/E/S/W), recruit, give items (category:type[:charges]); Main.debugParty
 mvn compile exec:java                         # run without packaging
 mvn package -Pdist                            # Windows zip: jpackage exe + trimmed runtime, data\, saves\, readme.txt (src/dist)
 ```
 
-The shell is PowerShell, which splits an unquoted `-Ddm.x=y` at the dot, so always quote `-D` options. The `dist` profile (maven-antrun) runs `${java.home}/bin/jpackage` for an app-image with only `java.base,java.desktop` (add modules there if new code needs them), passes `-Ddm.dungeon`/`-Ddm.saves` as `$APPDIR\..\data` / `$APPDIR\..\saves` so the exe finds its folders from any working directory, and zips it as `target/DungeonMaster-<dist.version>-windows.zip`. `dist.version` is the pom version without `-SNAPSHOT` (build-helper's parse-version), since jpackage wants it numeric. **Releases** (`.github/workflows/release.yml`, on windows-latest): a push to main (a merged PR) whose pom version isn't a SNAPSHOT and has no `v<version>` tag builds `-Pdist` and publishes a GitHub release tagged `v<version>` with the jar and the zip. To release, set the version (e.g. 0.2.0) on develop before the PR into main, then move develop on to the next SNAPSHOT. The pom targets Java 17 (`maven.compiler.release`) because only JDK 17 is installed. Java 21 was requested, so switch to 21 once it's available. No linter is configured.
+The shell is PowerShell, which splits an unquoted `-Ddm.x=y` at the dot, so always quote `-D` options. The `dist` profile (maven-antrun) runs `${java.home}/bin/jpackage` for an app-image with only `java.base,java.desktop` (add modules there if new code needs them), passes `-Ddm.dungeon`/`-Ddm.saves` as `$APPDIR\..\data` / `$APPDIR\..\saves` so the exe finds its folders from any working directory, and zips it as `target/DungeonMaster-<dist.version>-windows.zip`. `dist.version` is the pom version without `-SNAPSHOT` (build-helper's parse-version), since jpackage wants it numeric. **Releases** (`.github/workflows/release.yml`, on windows-latest): a push to main (a merged PR) whose pom version isn't a SNAPSHOT and has no `v<version>` tag builds `-Pdist` and publishes a GitHub release tagged `v<version>` with the jar (copied to `dungeon-master-<version>.jar`; the build's own is always `target/dungeon-master.jar`, `<finalName>`) and the zip. To release, set the version (e.g. 0.2.0) on develop before the PR into main, then move develop on to the next SNAPSHOT. The pom targets Java 17 (`maven.compiler.release`) because only JDK 17 is installed. Java 21 was requested, so switch to 21 once it's available. No linter is configured.
 
 ## Game data
 

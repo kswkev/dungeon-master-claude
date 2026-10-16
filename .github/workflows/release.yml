@@ -51,6 +51,7 @@ jobs:
         GH_TOKEN: ${{ github.token }}
         VERSION: ${{ steps.version.outputs.version }}
       run: |
+        cp target/dungeon-master.jar "target/dungeon-master-$VERSION.jar"
         gh release create "v$VERSION" \
           "target/dungeon-master-$VERSION.jar" \
           "target/DungeonMaster-$VERSION-windows.zip" \

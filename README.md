@@ -35,7 +35,7 @@ data/SONG.DAT      (optional: the entrance music)
 
 ```
 mvn package
-java -jar target/dungeon-master-0.1.0-SNAPSHOT.jar
+java -jar target/dungeon-master.jar
 ```
 
 Options:
@@ -51,9 +51,9 @@ Options:
 | `-Ddm.recruit=all` | For testing: recruit the Hall of Champions' first four champions (or a number) |
 | `-Ddm.give=weapon:45,junk:51` | For testing: give the first champion items, as `category:type[:charges]` (weapon 45 is the Firestaff with the Power Gem, junk 51 a Zokathra) |
 
-To try the ending: `java "-Ddm.start=13,15,2,N" "-Ddm.recruit=all" "-Ddm.give=weapon:45" -jar target/dungeon-master-0.1.0-SNAPSHOT.jar` puts the party two squares south of Lord Chaos with the complete Firestaff (FLUXCAGE and FUSE in its action menu).
+To try the ending: `java "-Ddm.start=13,15,2,N" "-Ddm.recruit=all" "-Ddm.give=weapon:45" -jar target/dungeon-master.jar` puts the party two squares south of Lord Chaos with the complete Firestaff (FLUXCAGE and FUSE in its action menu).
 
-In PowerShell, put quotes around `-D` options, e.g. `java "-Ddm.debug=true" -jar target/dungeon-master-0.1.0-SNAPSHOT.jar`. Otherwise PowerShell splits the option at the dot and Java reports `Could not find or load main class`.
+In PowerShell, put quotes around `-D` options, e.g. `java "-Ddm.debug=true" -jar target/dungeon-master.jar`. Otherwise PowerShell splits the option at the dot and Java reports `Could not find or load main class`.
 
 If DUNGEON.DAT is missing or can't be read, an error dialog explains why.
 
@@ -63,7 +63,7 @@ If DUNGEON.DAT is missing or can't be read, an error dialog explains why.
 mvn package -Pdist
 ```
 
-This builds `target/DungeonMaster-0.1.0-windows.zip` (about 22 MB). It holds `DungeonMaster.exe` with its own Java runtime, so players don't need Java installed. It also has empty `data` and `saves` folders and a `readme.txt` that explains where to put the DAT files. The exe always uses the `data` and `saves` folders next to it, wherever it is started from. The build needs a Windows JDK with `jpackage` (JDK 14 or newer).
+This builds `target/DungeonMaster-<version>-windows.zip` (about 22 MB). It holds `DungeonMaster.exe` with its own Java runtime, so players don't need Java installed. It also has empty `data` and `saves` folders and a `readme.txt` that explains where to put the DAT files. The exe always uses the `data` and `saves` folders next to it, wherever it is started from. The build needs a Windows JDK with `jpackage` (JDK 14 or newer).
 
 ### Releases
 
