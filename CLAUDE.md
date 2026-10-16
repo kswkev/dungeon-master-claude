@@ -62,9 +62,10 @@ java "-Ddm.debug=true" -jar target/dungeon-master-0.1.0-SNAPSHOT.jar      # prin
 java "-Ddm.soundtest=all" -jar target/dungeon-master-0.1.0-SNAPSHOT.jar   # play every GRAPHICS.DAT sound with its index (or =<index>)
 java "-Ddm.start=13,15,2,N" "-Ddm.recruit=all" "-Ddm.give=weapon:45" -jar target/dungeon-master-0.1.0-SNAPSHOT.jar   # testing (not in DM): start anywhere (level 1-based, x, y, N/E/S/W), recruit, give items (category:type[:charges]); Main.debugParty
 mvn compile exec:java                         # run without packaging
+mvn package -Pdist                            # Windows zip: jpackage exe + trimmed runtime, data\, saves\, readme.txt (src/dist)
 ```
 
-The shell is PowerShell, which splits an unquoted `-Ddm.x=y` at the dot, so always quote `-D` options. The pom targets Java 17 (`maven.compiler.release`) because only JDK 17 is installed. Java 21 was requested, so switch to 21 once it's available. No linter is configured.
+The shell is PowerShell, which splits an unquoted `-Ddm.x=y` at the dot, so always quote `-D` options. The `dist` profile (maven-antrun) runs `${java.home}/bin/jpackage` for an app-image with only `java.base,java.desktop` (add modules there if new code needs them), passes `-Ddm.dungeon`/`-Ddm.saves` as `$APPDIR\..\data` / `$APPDIR\..\saves` so the exe finds its folders from any working directory, and zips it as `target/DungeonMaster-<dist.version>-windows.zip`. `dist.version` must stay numeric for jpackage. The pom targets Java 17 (`maven.compiler.release`) because only JDK 17 is installed. Java 21 was requested, so switch to 21 once it's available. No linter is configured.
 
 ## Game data
 

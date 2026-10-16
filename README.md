@@ -57,6 +57,14 @@ In PowerShell, put quotes around `-D` options, e.g. `java "-Ddm.debug=true" -jar
 
 If DUNGEON.DAT is missing or can't be read, an error dialog explains why.
 
+### Windows download
+
+```
+mvn package -Pdist
+```
+
+This builds `target/DungeonMaster-0.1.0-windows.zip` (about 22 MB). It holds `DungeonMaster.exe` with its own Java runtime, so players don't need Java installed. It also has empty `data` and `saves` folders and a `readme.txt` that explains where to put the DAT files. The exe always uses the `data` and `saves` folders next to it, wherever it is started from. The build needs a Windows JDK with `jpackage` (JDK 14 or newer).
+
 ## Tests
 
 ```
