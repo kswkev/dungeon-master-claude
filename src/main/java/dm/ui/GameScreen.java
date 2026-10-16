@@ -1349,7 +1349,7 @@ public final class GameScreen {
             Champion c = party.members().get(i);
             int y = i * 48;
             if (frame != null) {
-                g.drawImage(frame, 11, 7 + y, null);
+                g.drawImage(frame, 19, 7 + y, null); // its glass, 8 and 6 in, under the portrait (#76)
             }
             BufferedImage portrait = keyedPortrait(c.portrait());
             if (portrait != null) {
