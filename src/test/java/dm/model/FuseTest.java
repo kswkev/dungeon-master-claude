@@ -97,12 +97,12 @@ class FuseTest {
         assertFalse(end.won());
         play(Endgame::won);
         assertTrue(end.won());
-        assertEquals(List.of("FIRST\nLINE", "SECOND"), printed);
+        assertEquals(List.of("FIRST LINE", "SECOND"), printed);
     }
 
     @Test
     void theClosingTextsComeInLetterOrder() {
-        assertEquals(List.of("FIRST\nLINE", "SECOND"),
+        assertEquals(List.of("FIRST LINE", "SECOND"),
                 Endgame.closingTexts(List.of("BSECOND", "AFIRST\nLINE", "DNEVER")));
         assertEquals(List.of(), Endgame.closingTexts(List.of("BNO A")));
     }
