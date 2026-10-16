@@ -4,221 +4,11 @@ A Java remake of FTL's *Dungeon Master* (1988), built one sprint at a time.
 
 ## Status
 
-**Sprint 1: done.** The first level loads from the original game data. You can explore it in the first-person 3D view by clicking DM's six-button arrow panel:
+Sprints 1-28 are done. The whole game can be played from the entrance to the end, with the original's levels, art, sounds, creatures, combat and magic, ported from the reverse-engineered original (ReDMCSB). A few things aren't in the original, such as a map, spell lists, difficulty options and some extra descriptions.
 
-| | | |
-|---|---|---|
-| ↶ Turn left | ↑ Forward | ↷ Turn right |
-| ← Strafe left | ↓ Backward | → Strafe right |
+Move with DM's six-button arrow panel, the numeric keypad, the arrow keys, or W A S D with Q and E to turn. Esc opens the game menu (save, load, options, quit).
 
-- Walls and closed doors block movement. The view gets a red border for a moment when a move is blocked.
-- Pits, stairs and teleporters are drawn but don't do anything yet (stairs work since Sprint 10, pits and teleporters since Sprint 11).
-
-**Sprint 2: done.** The Hall of Champions has its 24 champions:
-
-- Their portraits hang in the wall mirrors, drawn with the original artwork.
-- Face a mirror from the square in front of it and click the portrait to open the champion's character sheet. The sheet shows their equipment, health, stamina and mana, stats and skill levels. Hover over an item to see its name.
-- **Resurrect** adds the champion to your party (up to 4) and leaves the mirror empty. **Cancel** leaves them where they are.
-- Party members appear in the boxes across the top with their hands and health/stamina/mana bars. Click a box to reopen that champion's sheet.
-- Reincarnate came in Sprint 17, spells in Sprint 19.
-
-**Sprint 3: done.** Walking into a wall or closed door now gives the original feedback:
-- the original thud sound from GRAPHICS.DAT;
-- the two front-row champions (your first two recruits) each take 1 damage, shown by the original red damage burst with the number over their status boxes;
-- the red border flash, as before.
-
-With no party yet, you only get the sound and the flash. Health can't drop below 0; champion death came in Sprint 12. Sound is always on, and if no audio device is available the game simply stays silent.
-
-**Sprint 4: done.** The dungeon view uses the original artwork from GRAPHICS.DAT:
-- **Walls, floor and ceiling:** placed pixel-exact, as in the original. As in DM, the art is mirrored on alternate squares so walking looks like movement.
-- **Doors, stairs and pits:** the original graphics, including the right door design for each door (grate, wood, ...). DM's exact coordinates for these aren't in the data files, so their positions are fitted to the wall geometry and may be a pixel or two off the original.
-- **Not yet:** wall and floor decorations (torch holders, switches, moss...). They came in Sprint 6.
-
-Without GRAPHICS.DAT the game still uses the flat-shaded view.
-
-**Sprint 5: done.**
-- **Pressure plates:** the original pressure plates work, read from DUNGEON.DAT.
-  - The plate just inside the Hall of Champions exit opens the exit door once you step on it with at least one champion. As in DM, an empty party can't press a party plate.
-  - Plates can open, close or toggle doors. Some only work while you stand on them, some only work once, and some click.
-- **Doors:** they slide open or shut over about half a second, with the original door sound.
-- **Party formation:** use the box in the top-right corner. Click a champion's icon, then any of the four positions, to move them there (swapping with whoever stands there). New recruits fill front-left, front-right, back-right, back-left.
-- **Wall bumps:** now hurt the two champions on the side that hits the wall: the back row when backing into a wall, the left or right pair when sidestepping.
-- **Pits:** now use the original pit graphics.
-
-**Sprint 6: done.** Walls, floors and doors carry their original decorations:
-- **Placed explicitly by the dungeon:** alcoves, the VI altar, keyholes, switches and pictures, drawn where DUNGEON.DAT puts them.
-- **DM's "random" decorations:** iron rings, grates, moss, puddles, cracks and the like, chosen by the same seeded formula as the original.
-- **Inscriptions** such as "HALL OF CHAMPIONS" are carved in DM's inscription font on the wall straight ahead.
-- **Door decorations** (grilles, locks, the black entrance door) and door buttons.
-- **Not yet:** decorations are visual only. Clicking switches, buttons, keyholes and alcoves came in Sprint 9.
-- **Accuracy:** screen positions were fitted by hand at first (Sprint 9 moved front-wall decorations onto DM's own coordinates), and the random-placement rules were reconstructed from the ReDMCSB source.
-
-Run with `"-Ddm.debug=true"` to list every decoration on Level 1.
-
-**Sprint 7: done.**
-- **Stairs (#8):** up and down stairs now use the right graphics. The two sets had been swapped.
-- **Mirrors (#9):** champion mirrors now show their frame on side walls too, not only on the wall straight ahead.
-- **Inventory:** on a party member's character sheet, click an item to pick it up. Its icon becomes the mouse pointer. Click a cell to put the item down, or to swap it with the item already there.
-  - DM's slot rules apply: hands and backpack take anything, armour only goes where it's worn, pouches take potions, scrolls and small items, and the quiver takes weapons (only missiles past the first slot). An item that doesn't fit stays in your hand.
-  - The held item stays in hand when you switch champions or close the sheet. A candidate's items (before Resurrect) can't be touched.
-
-**Sprint 8: done.** Items lie on the floor:
-- **Drawing:** items on the floor are drawn where DM draws them, on each square's four cells and scaled with distance. These positions come from DM's own screen-layout table, which turned out to be in GRAPHICS.DAT (entry 696).
-- **Picking up and dropping:** click the bottom of the view to pick up the top item from the left or right cell just ahead of you on the party's square, or to drop the item in your hand there.
-- **Throwing:** with an item in hand, click higher up in the view to throw it from that side. (Since Sprint 16 it flies and hits as in the original.)
-
-**Sprint 9: done.** Walls can be used (#12):
-- **Switches and buttons:** click them to work doors and other mechanisms. Levers flip as you click them.
-- **Keyholes and coin slots:** click with the right key or coin in hand. It is used up and the mechanism fires.
-- **Torch holders:** take a torch out or put one back. The holder looks empty when it is.
-- **Alcoves:** click to take an item out of an alcove or put the held item in. Items sit on the alcove's shelf.
-- **Door buttons:** click to open or close the door.
-- **Logic:** DM's hidden AND/OR gates work, and so does the rest of the wiring that sends a switch or plate to its target. Pits can be opened and closed, but this is visual only so far.
-- **Decoration positions:** front-wall decorations are now placed at DM's own coordinates from the screen-layout table. Moss, the drain grate and full-height pictures stand at the foot of the wall.
-- **Hands in the status boxes:** clicking a champion's hand in the top boxes picks up, puts down or swaps an item, just like the hand cell on the character sheet.
-
-**Sprint 10: done.** Stairs take you between levels:
-- Step onto a staircase to go up or down a level. You arrive on the square next to the matching staircase on that level, facing away from it.
-- Every level loads from DUNGEON.DAT. The window title shows which level you're on.
-- Pressure plates fire as you leave one level and arrive on the next.
-- Stairs that don't lead anywhere block you like a wall.
-
-**Sprint 11: done.** Pits, teleporters and four Level 2 fixes:
-- **Pits:** walking into an open pit drops the party to the level below with the original scream, and every champion takes the original's fall damage (10-19, shown on their boxes). A pit opened under you by a lever drops you too. Dropped and thrown items fall through as well. Imaginary pits look real but hold you up; invisible ones don't show.
-- **Teleporters:** an active teleporter moves the party (and, depending on the teleporter, items and thrown objects) to its target, on the same level or another one, turning you as the original does. Some only spin you round on the spot. Sensors can switch teleporters on and off.
-- **Alcoves (#14):** an alcove revealed by a button stays open, and clicking it takes or gives items.
-- **Keyholes and levers (#15):** they now hang at the original's eye level, and a lever no longer jumps when pulled.
-- **Levers (#16):** every pull reverses what the lever controls: doors open and close, pits close and reopen, and gate puzzles work.
-- **Pressure plates (#17):** an item on a plate holds it down, so the door stays open after you walk off. It closes again only once the plate is empty.
-
-**Sprint 12: done.** The champions live in the dungeon. The rules are ported from the reverse-engineered original (ReDMCSB):
-- **Food and water:** champions slowly get hungry and thirsty. Stamina, mana and health come back over time, faster after a rest, and every step tires them a little. Starving champions lose stamina and then health. Their sheet shows the original FOOD and WATER bars; hold the eye to see skills and statistics instead.
-- **Eating and drinking:** click a champion's mouth with food, a waterskin or a potion in hand. Fountains refill waterskins and empty flasks, and clicking one with an empty hand lets the whole party drink its fill (an addition: the original only refills).
-- **Light:** Level 1 is always lit. Deeper levels are dark except for torches held in hands (and worn Illumulets). Torches burn down, their flames shrink, and the view darkens through the original's six light levels.
-- **Death:** a champion whose health runs out drops everything, with their bones on top, and their box shows a skull. When the whole party dies, the game ends.
-- **Keyboard:** move with the numeric keypad as on the PC (7 8 9 turn left, forward, turn right; 4 5 6 left, back, right), the arrow keys, or W A S D with Q and E to turn.
-- **Fixes:** the sensor data was being read two bits off, and teleporters that move only items were treated as moving nothing (#20). Plates, levers, keyholes and gates now follow the original's own data.
-
-**Sprint 13: done.** Save, load and quit:
-- Press Esc, or click the disk icon at the top of a champion's sheet, to open the game menu, built from the original's dialog art: SAVE, LOAD, QUIT, OPTIONS (since Sprint 18) and CANCEL.
-- There are four save slots, each showing its level and when it was saved. Saves go in a `saves/` folder next to the game (`-Ddm.saves` to change it).
-- QUIT asks whether to save first: SAVE AND QUIT, QUIT or CANCEL.
-- The game is paused while the menu is open; CANCEL or Esc goes back. Esc works even after the party has died, to load a saved game.
-
-**Sprint 14: done.** Creatures, and the view on DM's own layout:
-- The dungeon's creatures appear where DUNGEON.DAT puts them, drawn as the original draws them: front, side or back depending on which way they face, smaller and darker further away, in each level's own creature colours.
-- They stand in the way (no bump), stop thrown items, and turn to face you when they can see you. They don't move or attack yet.
-- Doors, stairs (now also seen side-on), pits (including the faint invisible ones and holes in the ceiling) and the champion mirrors are placed by the original's own screen layout data rather than by hand.
-
-**Sprint 15: done.** Creatures come alive, with the original's own behaviour (ported from ReDMCSB):
-- **They hunt you:** creatures wander, notice the party when they see it (less far in the dark) or smell it, follow its scent trail, run at it, and turn and shuffle into the front of their square to strike.
-- **They hurt:** each blow uses the original's hit roll against the champion's dexterity and luck, is softened by the armour and shields on the body part it lands on, and can wound that part. Wounded hands, head, torso, legs and feet show as red boxes, as in the original. Scorpions, wasps, worms and others poison: poison keeps hurting until it wears off or a BRO potion (antivenin) cures it, and a VI potion heals wounds. Gigglers steal from your hands instead.
-- **They're seen and heard:** each creature shows its attack picture as it strikes, its own way of mirroring and jittering, and the original's attack, footstep and "ouch" sounds play.
-- **The dungeon acts on them:** they can't pass closed doors (ghosts can), stay out of open pits (unless they fly), fall through pits that open under them, are carried by creature teleporters, and press pressure plates. A door shut on a creature hurts it and bounces back. The original's 50 creature generators make new creatures.
-- Creatures that cast spells (Vexirks, Wizard Eyes, Demons and others) only fought hand to hand until Sprint 20, when they began casting from afar.
-
-**Sprint 16: done.** The party fights back, with the original's rules (ported from ReDMCSB):
-- **The action area:** below the spell area, each champion's action-hand item shows as a black icon on cyan (a fist for an empty hand). Click one to open that champion's menu of actions, drawn on the original's panel, and click an action (or PASS). The icon is shaded while the champion recovers. After a blow, the original's starburst shows the damage for a moment, or CAN'T REACH / NEED AMMO.
-- **Melee:** swing, chop, stab, thrust, punch, kick and the rest hit the creature in front of the champion, with the original's hit roll, damage from strength, weapon and skill, critical hits, and the creature's defense. Champions in the back row can't reach past the one in front. Hit creatures turn on the party.
-- **Throwing and shooting:** THROW (and clicking the view with an item in hand) throws with the champion's strength and skill, so the item flies further and hits harder; bows and slings SHOOT the arrows or rocks in the other hand, and the next one comes from the quiver. Things in flight hit creatures, champions, doors and walls as in the original, and land where they stop.
-- **Frightening:** WAR CRY, CALM, BRANDISH and BLOW HORN can send creatures fleeing.
-- **Deaths:** a dying creature leaves smoke and drops what the original's creatures always carry (a skeleton's falchion and shield, a rat's drumsticks...) plus anything it picked up; the rest of its group may lose heart and flee.
-- **Doors:** a strong enough blow breaks a breakable door (wooden ones most easily), and so can thrown things.
-- **Experience:** every action trains its skill, faster in a fight and on deeper levels, and a new level raises the champion's statistics, health, stamina and mana, announced in the message area at the bottom of the screen ("... JUST GAINED A FIGHTER LEVEL!"). Champions turn to face whoever hits them.
-
-Spells came in Sprint 19; the magic in items' action menus (a staff's fireball and the like) and bursting bombs in Sprint 20.
-
-**Sprint 17: done.**
-- **Reincarnate:** a champion in a mirror now shows the original's panel with RESURRECT, REINCARNATE and CANCEL. REINCARNATE opens the original's keyboard: type (or click) a new name and title, then OK. The champion forgets every skill but gains 12 statistic points. Hold the eye to see a candidate's skills and statistics first. As in the original, you can only look at a candidate with room in the party and nothing in your hand.
-- **Sleeping:** click the ZZZ on a champion's sheet. The view goes dark with WAKE UP, time passes faster, and the champions recover mana, stamina and health twice as fast. Click the view or press Return to wake up; any creature attack wakes the party too, and sleepers defend poorly.
-- **Teleporters:** a visible teleporter now shimmers with the original's sparkling field, shaped like the square it fills, at every distance and to the sides.
-- **Distance colours:** wall decorations and objects two or three squares away take the original's darker, duller colours, as creatures and doors already did.
-
-**Sprint 18: done.** Options (OPTIONS in the game menu), none of them in the original:
-- **Difficulty:** EASY, NORMAL or HARD, picked with green gems. On EASY creatures do 20% less damage, the champions' blows, throws and shots do 20% more, every skill earns 20% more experience, and food and water last 20% longer. HARD is the reverse; NORMAL is the original.
-- **God mode:** the champions' health, stamina, mana, food and water never go down, and they can't be wounded. Eating, drinking and resting still raise them. Since Sprint 19 every spell cast succeeds, at no mana cost.
-- **Deep sleep:** lying down to sleep (the ZZZ on a sheet) restores every living champion's health, stamina and mana at once.
-- **Lock master:** keyholes, locks and coin slots open without their key or coin. Holding the right one still uses it up, as usual; anything else stays in hand.
-- They take effect at once and are saved with the game.
-
-**Sprint 19: done.** Spells, with the original's rules (ported from ReDMCSB):
-- **The spell area:** above the action area, the caster's name sits on a wide tab; click another champion's small tab to make them the caster. Click the original's rune symbols to build a spell one row at a time (a power, then an element, a form and a class), each costing mana as you enter it, the more the stronger the power. Click the long bar below to cast, or the arrow to take back the last rune. The keyboard works too (not in the original): the top-row keys 1-6 enter a rune from the current row, Enter casts and Backspace takes one back.
-- **Casting:** a spell needs enough skill in its magic (wizard or priest); short of it, the caster may fail and is told they NEED MORE PRACTICE. A meaningless spell is mumbled. Casting trains the skill and keeps the caster busy for a moment.
-- **Light and darkness:** FUL (a magic torch) and OH IR RA (light) light the dungeon, fading slowly when they run out; DES IR SAR darkens it for a while.
-- **Shields:** YA IR (party shield) protects every champion's body, and FUL BRO NETA (fire shield) takes the heat out of fire. Each shows as the original's coloured border around the champions' boxes.
-- **Spells that fly:** FUL IR (fireball), OH KATH RA (lightning bolt), OH VEN (poison cloud), DES VEN (poison bolt), DES EW (harm non-material: the only thing that hurts ghosts) and ZO (opens a door that has a button). They fly from the caster's side, stronger with more power and skill, and burst where they hit with the original's explosions. Fireballs and lightning burn everything on that square and can break doors that magic can break. A poison cloud hangs over a square, choking what stands in it. Black flames feed on fireballs.
-- **Careful:** as in the original, a fireball cast into the wall in front of you bursts on your own square and burns the party.
-- **God mode** now also makes every spell succeed at no mana cost.
-- Potions, invisibility, thieves' eye, magic footprints and ZO KATH RA, item magic and creatures' spells followed in Sprint 20.
-
-**Sprint 20: done.** The rest of the magic, with the original's rules (ported from ReDMCSB):
-- **Potions:** cast a potion spell (VI, YA BRO, ZO BRO RA, ...) with an empty flask in hand and it fills, stronger with more power. Every potion now works when drunk; YA shields its drinker for a while, shown by the party shield's border on their box.
-- **Every spell can be cast:** invisibility (creatures that can't see the invisible lose sight of you, briefly), thieves' eye (the wall or door ahead gets a hole to look through), magic footprints (the squares you walk show your footprints) and ZO KATH RA (a Zokathra in hand).
-- **Item magic:** staffs, wands and other magical items offer their spells in the action menu: fireball, lightning, dispell, invoke, spit, spell and fire shields, heal, light, window, freeze life (creatures stand still) and fluxcage. They cost mana and use up charges; the magical boxes are used up.
-- **Creatures cast:** vexirks, wizard eyes, swamp slimes, materializers, demons, red dragons and Lord Chaos throw their spells from afar.
-- **Projectiles:** walking into a projectile hurts. A thrown VEN potion bursts into a poison cloud and a FUL bomb into a fireball.
-- FUSE (the endgame) and creatures walking into projectiles followed in Sprint 22.
-
-**Sprint 21: done.** Chests, scrolls, looking at things, and two fixes (ported from ReDMCSB):
-- **Chests:** chests hold what the dungeon put in them. Put one in a champion's action hand with their sheet open and it opens in the panel: click its cells to take things out or put things in (not another chest). A chest weighs what it holds.
-- **Scrolls:** a scroll in the action hand opens and shows its text in the original's scroll lettering.
-- **Looking at things:** hold the eye with an item in hand to see its name, weight and the original's notes: a burnt-out torch, how full a waterskin is, which way the compass points, what can be eaten or drunk, and poisoned, broken or cursed weapons and armour. Priests above the first level also see a potion's power. A chest or scroll held over the eye shows its contents.
-- **Sounds carry as far as in the original (#37):** creatures, projectiles, explosions and doors are heard only within each sound's own distance, quieter further away.
-- **The formation box (#38)** shows the original's helmeted figures in the champions' colours on black, each turned the way its champion faces.
-
-**Sprint 22: done.** The end of the game, and the last of the original's rules (ported from ReDMCSB):
-- **The Firestaff and the Power Gem:** on Level 14, the Zokathra burns through the amalgam and the Firestaff then takes the Power Gem, as in the original.
-- **FUSE and Lord Chaos:** the complete Firestaff offers FUSE. Lord Chaos slips away through any side not closed by a fluxcage, a wall or stairs. Caught, he is fused: fireballs and spells burst on him, he flickers between Lord Chaos and Lord Order and becomes the Grey Lord, his minions vanish, and his closing words appear. Then the original's end screen shows your champions, each in a mirror with their name, title and skills. Press Esc for the menu.
-- **The VI altar:** put a dead champion's bones in a VI altar (one is in the Hall of Champions) and, after a sparkle, they come back to life with half their health and a little less maximum health.
-- **Creatures walk into projectiles** too, as the party already did.
-- **Drinking:** only what the original lets you drink can be drunk: food, water, and the ROS to VI potions. MON, UM, DES, VEN, SAR and ZO potions, bombs and empty flasks stay in hand.
-
-**Sprint 23: done.** Improvements, closer to the original and a few of our own:
-- **The character sheet (#46)** is written in the original's font at its places, with the LOAD line (yellow when heavily loaded, red when overloaded). The CLOSE button is gone; the X closes the sheet, as in the original. Holding the eye shows skills and statistics laid out as in the original.
-- **The right mouse button (#47):** right-click a champion's box to open or switch to their sheet, anywhere else to close it; with no sheet open, right-click the view to open the leader's. It also wakes a sleeping party.
-- **Walking pace:** as in the original, each step takes a moment before the next, longer for heavily loaded or overloaded champions and those with a wounded foot (Boots of Speed help). After throwing, shooting or casting, the party can't step after the projectile for a moment.
-- **Picking up and dropping** reach the row of the square ahead too: click an item lying there to pick it up, or the floor just beyond your own square to drop it there. As in the original, nothing is thrown at a wall straight ahead.
-- **Not in the original:** scrolls show the rune symbols of the spells they name; armour descriptions show their defense (and what is left of it against sharp blows); weapon descriptions show their damage rating and actions, with the skill level still needed and the charges left.
-
-**Sprint 24: done.** More improvements:
-- **Skill progress (not in the original):** holding the eye lists all four skills (fighter, ninja, priest and wizard), including ones not yet learnt. Under each is a green bar that fills toward the next level.
-- **The map (not in the original):** click the scroll under the formation box to open a map of everything the party has seen: walls, doors, pits, teleporters and stairs, with the party as a green arrow pointing the way it faces. The arrows page through the floors you've been on. The game pauses while the map is open; click anywhere else or press Esc to close it.
-- **Spell lists (not in the original):** the blue and gold scrolls beside the map list the wizard and priest spells your party has cast successfully, with their runes, the runes' names and the spell's name. Spells not yet cast show as ??? rows, so you can see how many are left to find.
-- **Magic items work as in the original:** the Crown of Nerra, Dexhelm, Powertowers, Flamebain, Cloak of Night, Jewel Symal and Moonstone raise their statistic while worn; staffs, wands and some blades add mana in the action hand; the Rabbit's Foot brings luck; and cursed things bring bad luck.
-- **Better descriptions (not in the original):** food and water show what they give, and worn or held items say what they do and where, e.g. "WORN ON HEAD: WISDOM +10".
-
-**Sprint 25: done.** The last of the original's sensors, ported from ReDMCSB:
-- **Timing:** switches, plates and the like now act after the delay the dungeon gives them, as in the original. Some doors and pits react a moment later than before.
-- **Countdowns:** some mechanisms count presses and only act on the last.
-- **Launchers:** walls shoot fireballs, lightning, poison clouds and darts, as on Levels 8, 9 and 11.
-- **Plates for things:** a plate that reacts to one particular object on it, and floors that react to what the party carries (the Firestaff, for one).
-- **Restart:** five seconds after THE END, RESTART THIS GAME loads your newest save, and NEW GAME goes back to the entrance.
-- **The entrance:** the game opens at the dungeon's doors, as the original does. ENTER opens them with their rattle and the game begins, RESUME loads a saved game, and QUIT quits. The testing options (`-Ddm.start` and so on) skip it.
-- **Entrance music:** with the PC version's `SONG.DAT` in `data/`, its music loops at the entrance and fades as the doors open.
-- **Knocking on walls (not in the original):** clicking the wall ahead with an empty hand thumps. An illusionary wall makes no sound, so you can tell the two apart.
-
-**Sprint 26: done.** Bug fixes (#52-#60):
-- Daggers fit in every quiver cell (#52, not in the original).
-- Teleporters that move the party buzz, as in the original (#53).
-- Floor-level decorations such as moss stand on the floor on side walls too (#54).
-- Wall texts appear and disappear when switches and plates tell them to (#55).
-- Torch holders no longer jump when their torch is taken (#56).
-- Weapons in flight use the original's projectile pictures: arrows, daggers, axes turning over and so on (#57).
-- The map and spell-list scrolls only appear once the first champion joins (#58).
-- The map shows the walls at the edge of a level (#59).
-- A left click on a champion's box no longer opens their sheet; the right button does (#60).
-
-**Sprint 27: done.** Improvements (not in the original) and fixes:
-- **The map:** wall buttons, levers and switches show as a yellow dot on the edge they're on, once you've seen them. An illusionary wall you've walked through is marked with a cross. Both are in the map's legend.
-- **Bug fixes:**
-  - The compass's needle points the way the party faces, as in the original (#63).
-  - When a teleporter or pit opens, things already lying on it go through. On Level 3, the row of buttons along the corridor now teleports the chest, so the puzzle can be solved (#64).
-  - Hidden walls are solid until their button opens them, as in the original. Before, you could walk through them as if they were illusions. Only true illusions can be walked through, and only they stay silent when you knock (#65).
-- **The active champion:** champions' names in the boxes along the top are grey. Left-click a name to make that champion the active one; their name turns to their own colour. The active champion throws what you throw into the view, carries the item on the pointer, and their sheet opens when you right-click the view. At first, and whenever the active champion dies, it's the first living champion.
-
-**Sprint 28: done.** Wall decorations in the original's places (#67-#71):
-- Inscriptions show from a distance and from the side, as the original's worn, unreadable stone, cut short for texts of fewer lines (#67).
-- Every wall decoration now uses the original's own position for it, read from the game's layout table. Alcoves, the VI altar, the ghoul's head and torch holders sit a few pixels higher, as in the original (#68-#70), and the items in alcoves sit on the shelf. The slime outlet sits at the foot of the wall (#71).
+See [CHANGELOG.md](CHANGELOG.md) for what each sprint added.
 
 ## Requirements
 
@@ -266,6 +56,18 @@ To try the ending: `java "-Ddm.start=13,15,2,N" "-Ddm.recruit=all" "-Ddm.give=we
 In PowerShell, put quotes around `-D` options, e.g. `java "-Ddm.debug=true" -jar target/dungeon-master-0.1.0-SNAPSHOT.jar`. Otherwise PowerShell splits the option at the dot and Java reports `Could not find or load main class`.
 
 If DUNGEON.DAT is missing or can't be read, an error dialog explains why.
+
+### Windows download
+
+```
+mvn package -Pdist
+```
+
+This builds `target/DungeonMaster-0.1.0-windows.zip` (about 22 MB). It holds `DungeonMaster.exe` with its own Java runtime, so players don't need Java installed. It also has empty `data` and `saves` folders and a `readme.txt` that explains where to put the DAT files. The exe always uses the `data` and `saves` folders next to it, wherever it is started from. The build needs a Windows JDK with `jpackage` (JDK 14 or newer).
+
+### Releases
+
+When a pull request is merged into `main` and `pom.xml` has a new release version (one that isn't a `-SNAPSHOT` and hasn't been released yet), GitHub Actions builds the jar and the Windows zip. It publishes them as a GitHub release tagged `v<version>`. Merges that keep the same version, or a SNAPSHOT, don't release anything.
 
 ## Tests
 

@@ -43,9 +43,19 @@ public final class Decorations implements Serializable {
         return x >= 0 && y >= 0 && x < floor.length && y < floor[0].length;
     }
 
-    /** The decoration on the given side of wall square (x, y), or -1 (also while its inscription is hidden). */
+    /** The unreadable inscription (global wall decoration 0), every text's decoration (#67). */
+    public static final int INSCRIPTION = 0;
+
+    /**
+     * The decoration on the given side of wall square (x, y), or -1 (also while its inscription is hidden).
+     * A side with a text is always the inscription: saves from before #67 kept -1 there on maps whose
+     * list lacks it (#73).
+     */
     public int wall(int x, int y, Direction side) {
-        return inside(x, y) && textVisible(x, y, side) ? wall[x][y][side.ordinal()] : -1;
+        if (!inside(x, y) || !textVisible(x, y, side)) {
+            return -1;
+        }
+        return text[x][y][side.ordinal()] != null ? INSCRIPTION : wall[x][y][side.ordinal()];
     }
 
     /** Inscription text on that wall side (lines separated by '\n'), or null (also while it is hidden). */

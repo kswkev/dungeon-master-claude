@@ -151,7 +151,7 @@ public final class Endgame {
 
     /**
      * F446: the texts in the order of their first letter, A, B, C ...,
-     * without it; it stops at the first letter with no text.
+     * without it and with its line breaks as spaces; it stops at the first letter with no text.
      */
     static List<String> closingTexts(List<String> texts) {
         List<String> out = new ArrayList<>();
@@ -166,7 +166,8 @@ public final class Endgame {
             if (found == null || out.size() >= texts.size()) {
                 return out;
             }
-            out.add(found.startsWith("\n") ? found.substring(1) : found);
+            // The text's line breaks are spaces; the message area wraps it across its full width (#75).
+            out.add((found.startsWith("\n") ? found.substring(1) : found).replace('\n', ' '));
         }
     }
 

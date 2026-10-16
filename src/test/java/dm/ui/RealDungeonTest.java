@@ -66,6 +66,68 @@ class RealDungeonTest {
         return new Party(dungeon.maps(), 2, x, y, facing);
     }
 
+    /** The answers to Level 6's riddles and their icons, which the alcoves' sensors name. */
+    private static final java.util.Map<String, Integer> ANSWERS = java.util.Map.of(
+            "MIRROR OF DAWN", 134, "GOLD COIN", 127, "BOW", 49, "BLUE GEM", 129);
+
+    private static Item named(String name) {
+        for (Item.Category c : Item.Category.values()) {
+            for (int t = 0; t < 128; t++) {
+                try {
+                    Item i = ItemCatalog.item(c, t);
+                    if (i != null && i.name().equals(name)) {
+                        return i;
+                    }
+                } catch (RuntimeException e) {
+                    // not a type of this category
+                }
+            }
+        }
+        throw new AssertionError(name);
+    }
+
+    private static void put(Party p, int x, int y, Direction side, Item item) {
+        p.setHeld(item);
+        p.map().clickWall(x, y, side, p, i -> ANSWERS.getOrDefault(i.name(), 0));
+        arrive(p);
+        settleDoors(p.map());
+    }
+
+    /**
+     * #74: Level 6's riddle room. Any 3 answers in their alcoves open the
+     * door at (13,20); all 4 bring out the hidden alcove at (13,19) with the
+     * iron key. Wrong items do nothing.
+     */
+    @Test
+    void theRiddleRoomOpensForItsAnswers() {
+        Party p = new Party(dungeon.maps(), 5, 11, 20, Direction.EAST);
+        DungeonMap map = p.map();
+        assertFalse(map.isPassable(13, 20), "the door starts shut");
+        assertEquals(-1, map.wallOrnament(13, 19, Direction.WEST), "the key's alcove starts hidden");
+
+        put(p, 9, 17, Direction.SOUTH, named("TORCH"));
+        put(p, 12, 17, Direction.SOUTH, named("TORCH"));
+        put(p, 12, 23, Direction.NORTH, named("TORCH"));
+        assertFalse(map.isPassable(13, 20), "wrong items do nothing");
+        for (int[] a : new int[][] {{9, 17}, {12, 17}, {12, 23}}) { // take them back
+            p.setHeld(null);
+            map.clickWall(a[0], a[1], a[1] == 17 ? Direction.SOUTH : Direction.NORTH, p, i -> 0);
+        }
+
+        put(p, 9, 17, Direction.SOUTH, named("MIRROR OF DAWN"));
+        put(p, 12, 17, Direction.SOUTH, named("GOLD COIN"));
+        assertFalse(map.isPassable(13, 20), "two answers aren't enough");
+        put(p, 12, 23, Direction.NORTH, named("BOW"));
+        assertTrue(map.isPassable(13, 20), "three answers open the door");
+        assertEquals(-1, map.wallOrnament(13, 19, Direction.WEST));
+
+        put(p, 9, 23, Direction.NORTH, named("BLUE GEM"));
+        assertTrue(DungeonMap.isAlcove(map.wallOrnament(13, 19, Direction.WEST)), "four bring out the alcove");
+        p.setHeld(null);
+        map.clickWall(13, 19, Direction.WEST, p, i -> 0);
+        assertEquals("IRON KEY", p.held().name());
+    }
+
     /** #64: Level 3's buttons along (13,24)-(0,24), pressed in the right order, bring the chest to the corridor. */
     @Test
     void theButtonsTeleportTheChestToTheCorridor() {

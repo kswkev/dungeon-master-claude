@@ -446,6 +446,9 @@ public final class CreatureAI implements Serializable {
             return;
         }
         boolean archenemy = info.archenemy();
+        if (archenemy && party.endgame() != null) { // F209: once the game is won he ignores every event (#77)
+            return;
+        }
         int ticksSinceLastMove = (int) ((now - g.lastMoveTime) & 0xFF);
         int movementTicks = info.movementTicks() == CreatureType.IMMOBILE ? 100 : info.movementTicks();
         if (party.lifeFrozen() && !archenemy) { // DM 1.2: frozen, it ignores reactions and tries again in 4 ticks

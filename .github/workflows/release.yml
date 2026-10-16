@@ -1,0 +1,59 @@
+# Publishes a GitHub release when a merge into main brings a new version.
+# Only PRs reach main, so a push to main is a PR being merged.
+# A version is released when it isn't a -SNAPSHOT and has no v<version> tag yet:
+# set e.g. <version>0.2.0</version> in pom.xml on develop before merging.
+# The release gets the jar and the Windows zip (mvn package -Pdist), and is tagged v<version>.
+
+name: Release
+
+on:
+  push:
+    branches: [main]
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+
+    runs-on: windows-latest   # jpackage builds the exe for the OS it runs on
+
+    steps:
+    - uses: actions/checkout@v4
+    - name: Set up JDK 17
+      uses: actions/setup-java@v4
+      with:
+        java-version: '17'
+        distribution: 'temurin'
+        cache: maven
+    - name: Check for a new version
+      id: version
+      shell: bash
+      run: |
+        version=$(mvn -B -q help:evaluate -Dexpression=project.version -DforceStdout)
+        echo "version=$version" >> "$GITHUB_OUTPUT"
+        if [[ "$version" == *-SNAPSHOT ]]; then
+          echo "::notice::$version is a SNAPSHOT: no release."
+          echo "release=false" >> "$GITHUB_OUTPUT"
+        elif git ls-remote --exit-code --tags origin "refs/tags/v$version" > /dev/null; then
+          echo "::notice::v$version is already released."
+          echo "release=false" >> "$GITHUB_OUTPUT"
+        else
+          echo "release=true" >> "$GITHUB_OUTPUT"
+        fi
+    - name: Build the jar and the Windows zip
+      if: steps.version.outputs.release == 'true'
+      run: mvn -B package -Pdist
+    - name: Publish the release
+      if: steps.version.outputs.release == 'true'
+      shell: bash
+      env:
+        GH_TOKEN: ${{ github.token }}
+        VERSION: ${{ steps.version.outputs.version }}
+      run: |
+        gh release create "v$VERSION" \
+          "target/dungeon-master-$VERSION.jar" \
+          "target/DungeonMaster-$VERSION-windows.zip" \
+          --target "$GITHUB_SHA" \
+          --title "Dungeon Master $VERSION" \
+          --generate-notes

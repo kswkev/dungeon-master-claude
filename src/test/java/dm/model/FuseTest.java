@@ -75,6 +75,31 @@ class FuseTest {
         }
     }
 
+    /** #77: once fused he ignores his events (F209) and fluxcages stay (TIMELINE.C), so it all plays out ahead. */
+    @Test
+    void heStaysAheadForTheWholeSequence() {
+        map = DungeonMap.fromAscii(0, "######", "#....#", "######");
+        party = new Party(map, 1, 1, Direction.EAST);
+        party.setRandom(new Random(11));
+        Champion elija = Champion.parse(ChampionTest.ELIJA, 0);
+        party.recruit(new ChampionMirror(0, 0, Direction.SOUTH, elija));
+        elija.replace(Slot.ACTION_HAND, ItemCatalog.item(Item.Category.WEAPON, 45));
+        map.addGroup(chaos);
+        Flight.fluxcage(party, map, 1, 1);
+        map.explosionList().add(new Explosion(Explosion.FLUXCAGE, 3, 1, 0, 0, party.time() + 5)); // nearly spent
+        fuse();
+        Endgame end = party.endgame();
+        assertNotNull(end);
+        for (int i = 0; i < 2000 && !end.won(); i++) {
+            if (end.next()) {
+                party.tick();
+            }
+            assertSame(chaos, map.groupAt(2, 1), "he is still straight ahead");
+        }
+        assertTrue(end.won());
+        assertTrue(map.explosionsAt(3, 1).stream().anyMatch(e -> e.type() == Explosion.FLUXCAGE));
+    }
+
     @Test
     void theFuseSequenceTurnsHimIntoTheGreyLordAndWins() {
         map.addGroup(new Group(CreatureType.MUMMY, 3, 1, Group.CENTRED, new int[] {50, 0, 0, 0}, 1,
@@ -97,12 +122,12 @@ class FuseTest {
         assertFalse(end.won());
         play(Endgame::won);
         assertTrue(end.won());
-        assertEquals(List.of("FIRST\nLINE", "SECOND"), printed);
+        assertEquals(List.of("FIRST LINE", "SECOND"), printed);
     }
 
     @Test
     void theClosingTextsComeInLetterOrder() {
-        assertEquals(List.of("FIRST\nLINE", "SECOND"),
+        assertEquals(List.of("FIRST LINE", "SECOND"),
                 Endgame.closingTexts(List.of("BSECOND", "AFIRST\nLINE", "DNEVER")));
         assertEquals(List.of(), Endgame.closingTexts(List.of("BNO A")));
     }

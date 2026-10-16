@@ -60,4 +60,89 @@
             </plugin>
         </plugins>
     </build>
+
+    <profiles>
+        <!--
+            mvn package -Pdist: a Windows zip with DungeonMaster.exe and its own trimmed Java runtime
+            (jpackage app-image, java.base + java.desktop), empty data\ and saves\ folders and readme.txt.
+            Needs a JDK with jpackage (14+) on Windows. The launcher points the game at data\ and saves\
+            beside the exe ($APPDIR is the image's app\ folder), wherever it is started from.
+        -->
+        <profile>
+            <id>dist</id>
+            <properties>
+                <dist.name>DungeonMaster</dist.name>
+                <dist.dir>${project.build.directory}/dist</dist.dir>
+            </properties>
+            <build>
+                <plugins>
+                    <plugin>
+                        <!-- parsedVersion.*: the project version without -SNAPSHOT, as jpackage wants it -->
+                        <groupId>org.codehaus.mojo</groupId>
+                        <artifactId>build-helper-maven-plugin</artifactId>
+                        <version>3.6.0</version>
+                        <executions>
+                            <execution>
+                                <id>parse-version</id>
+                                <goals>
+                                    <goal>parse-version</goal>
+                                </goals>
+                            </execution>
+                        </executions>
+                    </plugin>
+                    <plugin>
+                        <groupId>org.apache.maven.plugins</groupId>
+                        <artifactId>maven-antrun-plugin</artifactId>
+                        <version>3.1.0</version>
+                        <executions>
+                            <execution>
+                                <id>dist-zip</id>
+                                <phase>package</phase>
+                                <goals>
+                                    <goal>run</goal>
+                                </goals>
+                                <configuration>
+                                    <target>
+                                        <property name="dist.version"
+                                                  value="${parsedVersion.majorVersion}.${parsedVersion.minorVersion}.${parsedVersion.incrementalVersion}"/>
+                                        <delete dir="${dist.dir}"/>
+                                        <copy file="${project.build.directory}/${project.build.finalName}.jar"
+                                              todir="${dist.dir}/input"/>
+                                        <exec executable="${java.home}/bin/jpackage" failonerror="true">
+                                            <arg value="--type"/>
+                                            <arg value="app-image"/>
+                                            <arg value="--name"/>
+                                            <arg value="${dist.name}"/>
+                                            <arg value="--app-version"/>
+                                            <arg value="${dist.version}"/>
+                                            <arg value="--input"/>
+                                            <arg value="${dist.dir}/input"/>
+                                            <arg value="--main-jar"/>
+                                            <arg value="${project.build.finalName}.jar"/>
+                                            <arg value="--main-class"/>
+                                            <arg value="${main.class}"/>
+                                            <arg value="--add-modules"/>
+                                            <arg value="java.base,java.desktop"/>
+                                            <arg value="--java-options"/>
+                                            <arg value="-Ddm.dungeon=$APPDIR\..\data\DUNGEON.DAT"/>
+                                            <arg value="--java-options"/>
+                                            <arg value="-Ddm.saves=$APPDIR\..\saves"/>
+                                            <arg value="--dest"/>
+                                            <arg value="${dist.dir}/image"/>
+                                        </exec>
+                                        <mkdir dir="${dist.dir}/image/${dist.name}/data"/>
+                                        <mkdir dir="${dist.dir}/image/${dist.name}/saves"/>
+                                        <copy file="${project.basedir}/src/dist/readme.txt"
+                                              todir="${dist.dir}/image/${dist.name}"/>
+                                        <zip destfile="${project.build.directory}/${dist.name}-${dist.version}-windows.zip"
+                                             basedir="${dist.dir}/image"/>
+                                    </target>
+                                </configuration>
+                            </execution>
+                        </executions>
+                    </plugin>
+                </plugins>
+            </build>
+        </profile>
+    </profiles>
 </project>
