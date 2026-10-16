@@ -71,13 +71,25 @@
         <profile>
             <id>dist</id>
             <properties>
-                <!-- jpackage wants a plain numeric version -->
-                <dist.version>0.1.0</dist.version>
                 <dist.name>DungeonMaster</dist.name>
                 <dist.dir>${project.build.directory}/dist</dist.dir>
             </properties>
             <build>
                 <plugins>
+                    <plugin>
+                        <!-- parsedVersion.*: the project version without -SNAPSHOT, as jpackage wants it -->
+                        <groupId>org.codehaus.mojo</groupId>
+                        <artifactId>build-helper-maven-plugin</artifactId>
+                        <version>3.6.0</version>
+                        <executions>
+                            <execution>
+                                <id>parse-version</id>
+                                <goals>
+                                    <goal>parse-version</goal>
+                                </goals>
+                            </execution>
+                        </executions>
+                    </plugin>
                     <plugin>
                         <groupId>org.apache.maven.plugins</groupId>
                         <artifactId>maven-antrun-plugin</artifactId>
@@ -91,6 +103,8 @@
                                 </goals>
                                 <configuration>
                                     <target>
+                                        <property name="dist.version"
+                                                  value="${parsedVersion.majorVersion}.${parsedVersion.minorVersion}.${parsedVersion.incrementalVersion}"/>
                                         <delete dir="${dist.dir}"/>
                                         <copy file="${project.build.directory}/${project.build.finalName}.jar"
                                               todir="${dist.dir}/input"/>

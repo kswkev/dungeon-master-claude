@@ -65,6 +65,10 @@ mvn package -Pdist
 
 This builds `target/DungeonMaster-0.1.0-windows.zip` (about 22 MB). It holds `DungeonMaster.exe` with its own Java runtime, so players don't need Java installed. It also has empty `data` and `saves` folders and a `readme.txt` that explains where to put the DAT files. The exe always uses the `data` and `saves` folders next to it, wherever it is started from. The build needs a Windows JDK with `jpackage` (JDK 14 or newer).
 
+### Releases
+
+When a pull request is merged into `main` and `pom.xml` has a new release version (one that isn't a `-SNAPSHOT` and hasn't been released yet), GitHub Actions builds the jar and the Windows zip. It publishes them as a GitHub release tagged `v<version>`. Merges that keep the same version, or a SNAPSHOT, don't release anything.
+
 ## Tests
 
 ```
