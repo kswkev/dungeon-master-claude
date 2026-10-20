@@ -2,6 +2,8 @@
 
 A Java remake of FTL's *Dungeon Master* (1988), built one sprint at a time.
 
+![alt text](http://dmweb.free.fr/files/Game,Dungeon_Master,Sample_Screenshot,Screenshot.png)
+
 ## Status
 
 Sprints 1-28 are done. The whole game can be played from the entrance to the end, with the original's levels, art, sounds, creatures, combat and magic, ported from the reverse-engineered original (ReDMCSB). A few things aren't in the original, such as a map, spell lists, difficulty options and some extra descriptions.
